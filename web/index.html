@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Stream Deck</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #000; color: #fff;
+    font-family: "Roboto", "Droid Sans", Arial, sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: rgba(0,0,0,0); }
+  #bar { position: absolute; left: 0; right: 0; top: 0; height: 38px;
+    line-height: 38px; padding: 0 14px; font-size: 14px; color: #8b949e; white-space: nowrap; }
+  #bar b { color: #fff; font-weight: normal; }
+  #tools { position: absolute; right: 34px; top: 0; }
+  .tb { display: inline-block; height: 28px; line-height: 28px; margin: 5px 0 0 6px;
+    padding: 0 12px; border-radius: 14px; background: #21262d; color: #fff; font-size: 13px; }
+  .tb.hi { background: #1f6feb; }
+  .tb.red { background: #8e1519; }
+  #conn { position: absolute; right: 14px; top: 14px; width: 10px; height: 10px;
+    border-radius: 5px; background: #2da44e; }
+  #conn.off { background: #cf222e; }
+  .key { position: absolute; border-radius: 18%; background: #161b22; overflow: hidden; text-align: center;
+    -webkit-box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+    -webkit-transition: -webkit-transform 80ms; transition: transform 80ms; }
+  .key.empty { background: #0d1117; -webkit-box-shadow: none; box-shadow: none; }
+  .key.down { -webkit-transform: scale(0.92); transform: scale(0.92); }
+  .editing .key { -webkit-box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35); }
+  .editing .key.empty { background: #0d1117; -webkit-box-shadow: inset 0 0 0 2px #30363d; box-shadow: inset 0 0 0 2px #30363d; }
+  .editing .key.from { -webkit-box-shadow: inset 0 0 0 4px #fff; box-shadow: inset 0 0 0 4px #fff; }
+  .key .ic { position: absolute; left: 0; right: 0; }
+  .key .ic svg { display: block; margin: 0 auto; }
+  .key .lb { position: absolute; left: 4px; right: 4px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+  .key .fl { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 18%; opacity: 0;
+    -webkit-transition: opacity 300ms; transition: opacity 300ms; }
+  .key .fl.ok { background: rgba(255,255,255,0.35); opacity: 1; }
+  .key .fl.err { background: rgba(207,34,46,0.8); opacity: 1; }
+  #dots { position: absolute; left: 0; right: 0; height: 26px; text-align: center; }
+  #dots span { display: inline-block; padding: 9px 6px; }
+  #dots i { display: block; width: 8px; height: 8px; border-radius: 4px; background: #30363d; }
+  #dots span.on i { background: #fff; }
+  #msg { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: #8b949e; font-size: 16px; padding: 0 20px; }
+  #toast { position: absolute; left: 50%; bottom: 34px; width: 360px; margin-left: -180px; text-align: center;
+    background: #21262d; color: #fff; padding: 10px; border-radius: 8px; font-size: 14px; display: none; }
+  #toast.err { background: #8e1519; }
+
+  /* painel de edicao */
+  #panel { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: none; }
+  #sheet { position: absolute; left: 50%; top: 8px; bottom: 8px; width: 640px; margin-left: -320px;
+    background: #161b22; border-radius: 12px; overflow: auto; -webkit-overflow-scrolling: touch;
+    -webkit-user-select: text; user-select: text; }
+  #sheet .in { padding: 14px 18px 18px; }
+  #sheet h3 { margin: 0 0 10px; font-size: 17px; font-weight: normal; }
+  #sheet label { display: block; color: #8b949e; font-size: 13px; margin: 12px 0 5px; }
+  #sheet input[type=text], #sheet select, #sheet textarea { width: 100%; box-sizing: border-box; -webkit-box-sizing: border-box;
+    background: #0d1117; color: #fff; border: 1px solid #30363d; border-radius: 6px; padding: 8px; font-size: 15px; }
+  #sheet textarea { height: 90px; font-family: monospace; font-size: 13px; }
+  #sheet .help { color: #6e7681; font-size: 12px; margin-top: 4px; line-height: 16px; }
+  .icons span, .colors span { display: inline-block; width: 40px; height: 40px; margin: 0 6px 6px 0;
+    border-radius: 8px; background: #21262d; vertical-align: top; text-align: center; line-height: 40px; font-size: 11px; color: #8b949e; }
+  .icons span svg { margin-top: 8px; }
+  .icons span.sel, .colors span.sel { -webkit-box-shadow: 0 0 0 2px #fff; box-shadow: 0 0 0 2px #fff; }
+  @media (max-width: 660px) { #sheet { left: 8px; right: 8px; width: auto; margin-left: 0; } }
+  .row { margin-top: 18px; text-align: right; }
+  .row .tb { height: 36px; line-height: 36px; padding: 0 16px; border-radius: 18px; font-size: 14px; }
+  .row .left { float: left; }
+</style>
+</head>
+<body>
+<div id="bar"><b id="title">Stream Deck</b> &nbsp;·&nbsp; <span id="pname"></span>
+  <div id="tools"></div><div id="conn"></div></div>
+<div id="grid"></div>
+<div id="dots"></div>
+<div id="msg">Carregando…</div>
+<div id="toast"></div>
+<div id="panel"><div id="sheet"><div class="in" id="form"></div></div></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var S = ' stroke="#fff" stroke-width="2" fill="none" ';
+  var ICONS = {
+    playpause: '<path d="M3 5v14l9-7z M14 5h3v14h-3z M19 5h2v14h-2z" fill="#fff"/>',
+    prev: '<path d="M6 6h2v12H6z M9.5 12L18 18V6z" fill="#fff"/>',
+    next: '<path d="M16 6h2v12h-2z M6 18l8.5-6L6 6z" fill="#fff"/>',
+    volup: '<path d="M3 9v6h4l5 5V4L7 9H3z" fill="#fff"/><path d="M15 12h7M18.5 8.5v7"' + S + '/>',
+    voldown: '<path d="M3 9v6h4l5 5V4L7 9H3z" fill="#fff"/><path d="M15 12h7"' + S + '/>',
+    mute: '<path d="M3 9v6h4l5 5V4L7 9H3z" fill="#fff"/><path d="M15 9l6 6M21 9l-6 6"' + S + '/>',
+    globe: '<circle cx="12" cy="12" r="9"' + S + '/><path d="M3 12h18M12 3c3.5 3.5 3.5 14.5 0 18M12 3c-3.5 3.5-3.5 14.5 0 18"' + S + '/>',
+    folder: '<path d="M3 6h7l2 2h9v11H3z" fill="#fff"/>',
+    calc: '<rect x="5" y="3" width="14" height="18" rx="2"' + S + '/><rect x="8" y="6" width="8" height="3" fill="#fff"/><path d="M8 12h2v2H8zM14 12h2v2h-2zM8 16h2v2H8zM14 16h2v2h-2z" fill="#fff"/>',
+    camera: '<path d="M4 7h4l2-2h4l2 2h4v12H4z" fill="#fff"/><circle cx="12" cy="13" r="3.5" fill="rgba(0,0,0,0.45)"/>',
+    desktop: '<rect x="3" y="4" width="18" height="12" rx="1"' + S + '/><path d="M8 20h8M12 16v4"' + S + '/>',
+    chart: '<path d="M4 20V10h3v10zM10.5 20V4h3v16zM17 20v-7h3v7z" fill="#fff"/>',
+    lock: '<rect x="5" y="10" width="14" height="11" rx="2" fill="#fff"/><path d="M8 10V7a4 4 0 0 1 8 0v3"' + S + '/>',
+    keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"' + S + '/><path d="M5 9h2v2H5zM9 9h2v2H9zM13 9h2v2h-2zM17 9h2v2h-2zM7 14h10v2H7z" fill="#fff"/>',
+    record: '<circle cx="12" cy="12" r="7" fill="#fff"/>',
+    copy: '<rect x="8" y="8" width="12" height="13" rx="1"' + S + '/><path d="M4 16V4h12"' + S + '/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="1"' + S + '/><rect x="9" y="2" width="6" height="4" rx="1" fill="#fff"/>',
+    cut: '<circle cx="6" cy="18" r="3"' + S + '/><circle cx="18" cy="18" r="3"' + S + '/><path d="M8 16L18 3M16 16L6 3"' + S + '/>',
+    undo: '<path d="M9 4L4 9l5 5"' + S + '/><path d="M4 9h10a5.5 5.5 0 0 1 0 11h-3"' + S + '/>',
+    redo: '<path d="M15 4l5 5-5 5"' + S + '/><path d="M20 9H10a5.5 5.5 0 0 0 0 11h3"' + S + '/>',
+    save: '<path d="M4 4h13l3 3v13H4z"' + S + '/><rect x="7" y="4" width="8" height="5" fill="#fff"/><rect x="7" y="13" width="10" height="7" fill="#fff"/>',
+    select: '<rect x="4" y="4" width="16" height="16" stroke-dasharray="3 2"' + S + '/>',
+    apps: '<rect x="3" y="3" width="8" height="8" fill="#fff"/><rect x="13" y="3" width="8" height="8" fill="#fff"/><rect x="3" y="13" width="8" height="8" fill="#fff"/><rect x="13" y="13" width="8" height="8" fill="#fff"/>',
+    close: '<path d="M5 5l14 14M19 5L5 19"' + S + '/>',
+    plus: '<path d="M12 4v16M4 12h16"' + S + '/>',
+    mic: '<rect x="9" y="2" width="6" height="12" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"' + S + '/>',
+    smile: '<circle cx="12" cy="12" r="9"' + S + '/><path d="M8 14a5 5 0 0 0 8 0"' + S + '/><circle cx="9" cy="9.5" r="1.3" fill="#fff"/><circle cx="15" cy="9.5" r="1.3" fill="#fff"/>',
+    gear: '<circle cx="12" cy="12" r="3.5"' + S + '/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"' + S + '/>',
+    back: '<path d="M15 4l-8 8 8 8"' + S + '/>',
+    forward: '<path d="M9 4l8 8-8 8"' + S + '/>',
+    scene: '<rect x="3" y="5" width="18" height="14" rx="1"' + S + '/><path d="M6 16l4-5 3 3 2-2 3 4z" fill="#fff"/>',
+    play: '<path d="M7 4v16l13-8z" fill="#fff"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" fill="#fff"/>',
+    star: '<path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1 6.2L12 17.4 6.5 20.3l1-6.2L3 9.7l6.2-.9z" fill="#fff"/>',
+    heart: '<path d="M12 20s-8-5-8-10.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8 2.5C20 15 12 20 12 20z" fill="#fff"/>',
+    bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="#fff"/>',
+    home: '<path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"' + S + '/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="1"' + S + '/><path d="M3 6l9 7 9-7"' + S + '/>',
+    music: '<path d="M9 18V5l11-2v13" ' + S + '/><circle cx="6.5" cy="18" r="2.5" fill="#fff"/><circle cx="17.5" cy="16" r="2.5" fill="#fff"/>',
+    code: '<path d="M8 6l-6 6 6 6M16 6l6 6-6 6"' + S + '/>',
+    power: '<path d="M12 2v10"' + S + '/><path d="M6.3 5.7a8 8 0 1 0 11.4 0"' + S + '/>'
+  };
+  var COLORS = ["#1f6feb", "#0a3069", "#8250df", "#bf3989", "#cf222e", "#d1490b",
+                "#bf8700", "#2da44e", "#1b7c83", "#57606a", "#24292f", "#000000"];
+  var ACTIONS = [["none", "Nada (espaço vazio)"], ["hotkey", "Atalho de teclado"],
+                 ["open", "Abrir site, arquivo ou programa"], ["command", "Rodar comando"],
+                 ["page", "Ir para outra página"], ["multi", "Sequência de ações (avançado)"]];
+
+  function qs(name) {
+    var m = new RegExp("[?&]" + name + "=([^&]*)").exec(location.search);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  var TOKEN = qs("k");
+  var cfg = null, page = 0, keys = [], editing = false, moveFrom = -1;
+  var grid = $("grid"), dots = $("dots"), msg = $("msg"), conn = $("conn");
+
+  /* ------------------------------------------------------------ rede --- */
+  function req(method, url, body, cb) {
+    var x = new XMLHttpRequest();
+    x.open(method, url + (url.indexOf("?") < 0 ? "?" : "&") + "k=" + encodeURIComponent(TOKEN) + "&t=" + new Date().getTime(), true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      var data = null;
+      try { data = JSON.parse(x.responseText); } catch (e) {}
+      conn.className = x.status === 0 ? "off" : "";
+      cb(x.status === 200 && data && data.ok !== false, data, x.status);
+    };
+    if (body) x.setRequestHeader("Content-Type", "application/json");
+    x.send(body || null);
+  }
+
+  var toastT = null;
+  function toast(text, err) {
+    var t = $("toast");
+    t.innerHTML = esc(text);
+    t.className = err ? "err" : "";
+    t.style.display = "block";
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { t.style.display = "none"; }, err ? 4000 : 1500);
+  }
+
+  function saveCfg(newCfg, done) {
+    req("POST", "/api/config", JSON.stringify(newCfg), function (ok, data) {
+      if (ok) {
+        cfg = newCfg;
+        if (page >= cfg.pages.length) page = cfg.pages.length - 1;
+        render();
+        toast("Salvo");
+        if (done) done(true);
+      } else {
+        toast("Não salvou: " + ((data && data.error) || "sem conexão com o PC"), true);
+        if (done) done(false);
+      }
+    });
+  }
+
+  /* ----------------------------------------------------------- grade --- */
+  function svg(name, size) {
+    var body = ICONS[name];
+    if (!body) return "";
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
+      '" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">' + body + "</svg>";
+  }
+
+  function flash(el, ok) {
+    var f = el.querySelector(".fl");
+    f.className = "fl " + (ok ? "ok" : "err");
+    setTimeout(function () { f.className = "fl"; }, ok ? 150 : 600);
+  }
+
+  function goPage(to) {
+    if (cfg.pages[to]) { page = to; moveFrom = -1; render(); }
+  }
+
+  function press(i, el) {
+    if (editing) return editTap(i);
+    var b = cfg.pages[page].buttons[i];
+    if (!b || !b.action || b.action.type === "none") return;
+    if (b.action.type === "page") return goPage(b.action.to);
+    req("GET", "/api/press?p=" + page + "&b=" + i, null, function (ok) { flash(el, ok); });
+  }
+
+  function tap(el, fn) {
+    var touched = false;
+    el.addEventListener("touchstart", function (e) {
+      touched = true; el.className += " down"; e.preventDefault();
+    }, false);
+    el.addEventListener("touchend", function (e) {
+      el.className = el.className.replace(/ down/g, ""); e.preventDefault(); fn();
+    }, false);
+    el.addEventListener("touchcancel", function () {
+      el.className = el.className.replace(/ down/g, "");
+    }, false);
+    el.addEventListener("click", function () { if (!touched) fn(); }, false);
+  }
+
+  function renderBar() {
+    var pg = cfg.pages[page];
+    $("title").innerHTML = esc(cfg.title || "Stream Deck");
+    $("pname").innerHTML = esc(pg.name || "");
+    var t = $("tools");
+    t.innerHTML = "";
+    var items = editing
+      ? [["Renomear", renamePage, ""], ["+ Página", addPage, ""], ["Excluir página", delPage, "red"],
+         ["Grade " + cfg.columns + "×" + cfg.rows, gridSize, ""], ["Concluir", toggleEdit, "hi"]]
+      : [["✎ Editar", toggleEdit, ""]];
+    for (var i = 0; i < items.length; i++) {
+      var s = document.createElement("span");
+      s.className = "tb " + items[i][2];
+      s.innerHTML = esc(items[i][0]);
+      tap(s, items[i][1]);
+      t.appendChild(s);
+    }
+  }
+
+  function render() {
+    renderBar();
+    var pg = cfg.pages[page];
+    grid.className = editing ? "editing" : "";
+    grid.innerHTML = "";
+    keys = [];
+    var n = cfg.columns * cfg.rows;
+    for (var i = 0; i < n; i++) {
+      var b = pg.buttons[i];
+      var el = document.createElement("div");
+      var empty = !b || !b.action || b.action.type === "none";
+      el.className = "key" + (empty ? " empty" : "") + (i === moveFrom ? " from" : "");
+      if (!empty && b.color) el.style.background = b.color;
+      el.innerHTML = '<div class="ic"></div><div class="lb"></div><div class="fl"></div>';
+      if (!empty) el.querySelector(".lb").innerHTML = esc(b.label || "");
+      if (!empty || editing) (function (idx, e) { tap(e, function () { press(idx, e); }); })(i, el);
+      grid.appendChild(el);
+      keys.push({ el: el, b: b, empty: empty });
+    }
+    var d = "";
+    if (cfg.pages.length > 1 || editing) {
+      for (var j = 0; j < cfg.pages.length; j++) d += '<span class="' + (j === page ? "on" : "") + '"><i></i></span>';
+    }
+    dots.innerHTML = d;
+    var sp = dots.getElementsByTagName("span");
+    for (var k = 0; k < sp.length; k++) (function (idx) { tap(sp[idx], function () { goPage(idx); }); })(k);
+    layout();
+  }
+
+  function layout() {
+    if (!cfg) return;
+    var W = window.innerWidth, H = window.innerHeight;
+    var top = 38, bottom = 26;
+    var cols = cfg.columns, rows = cfg.rows;
+    var gap = Math.round(Math.min(W, H) * 0.025);
+    var size = Math.floor(Math.min((W - gap * (cols + 1)) / cols, (H - top - bottom - gap * (rows + 1)) / rows));
+    var gw = size * cols + gap * (cols - 1), gh = size * rows + gap * (rows - 1);
+    var x0 = Math.round((W - gw) / 2), y0 = top + Math.round((H - top - bottom - gh) / 2);
+    var iconSize = Math.round(size * 0.42), font = Math.max(10, Math.round(size * 0.13));
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i], c = i % cols, r = Math.floor(i / cols), s = k.el.style;
+      s.left = (x0 + c * (size + gap)) + "px"; s.top = (y0 + r * (size + gap)) + "px";
+      s.width = size + "px"; s.height = size + "px";
+      var ic = k.el.querySelector(".ic"), lb = k.el.querySelector(".lb");
+      ic.style.top = Math.round(size * 0.17) + "px";
+      if (k.empty) {
+        ic.innerHTML = editing ? svg("plus", iconSize).replace(/#fff/g, "#30363d") : "";
+        ic.style.top = Math.round((size - iconSize) / 2) + "px";
+        continue;
+      }
+      var hasIcon = k.b.icon && ICONS[k.b.icon];
+      ic.innerHTML = hasIcon ? svg(k.b.icon, iconSize) : "";
+      lb.style.fontSize = (hasIcon ? font : Math.round(font * 1.4)) + "px";
+      lb.style.top = (hasIcon ? Math.round(size * 0.68) : Math.round(size / 2 - font * 0.8)) + "px";
+      lb.style.whiteSpace = hasIcon ? "nowrap" : "normal";
+    }
+    dots.style.top = (H - bottom) + "px";
+  }
+
+  /* ---------------------------------------------------------- edicao --- */
+  function toggleEdit() {
+    editing = !editing;
+    moveFrom = -1;
+    render();
+  }
+
+  function editTap(i) {
+    if (moveFrom >= 0) {
+      if (i !== moveFrom) {
+        var c = clone(cfg), bs = c.pages[page].buttons;
+        while (bs.length <= Math.max(i, moveFrom)) bs.push({ label: "", icon: "", color: "", action: { type: "none" } });
+        var tmp = bs[i]; bs[i] = bs[moveFrom]; bs[moveFrom] = tmp;
+        moveFrom = -1;
+        saveCfg(c);
+      } else { moveFrom = -1; render(); }
+      return;
+    }
+    openEditor(i);
+  }
+
+  function renamePage() {
+    var n = window.prompt("Nome da página:", cfg.pages[page].name || "");
+    if (n === null) return;
+    var c = clone(cfg); c.pages[page].name = n; saveCfg(c);
+  }
+
+  function addPage() {
+    var n = window.prompt("Nome da nova página:", "Página " + (cfg.pages.length + 1));
+    if (n === null) return;
+    var c = clone(cfg), bs = [], total = c.columns * c.rows;
+    for (var i = 0; i < total; i++) bs.push({ label: "", icon: "", color: "", action: { type: "none" } });
+    bs[total - 1] = { label: "Voltar", icon: "back", color: "#0a3069", action: { type: "page", to: 0 } };
+    c.pages.push({ name: n, buttons: bs });
+    page = c.pages.length - 1;
+    saveCfg(c);
+  }
+
+  function fixPageRefs(a, removed) {
+    if (!a) return a;
+    if (a.type === "page") {
+      if (a.to === removed) return { type: "none" };
+      if (a.to > removed) a.to -= 1;
+    }
+    return a;
+  }
+
+  function delPage() {
+    if (cfg.pages.length < 2) return toast("Precisa ficar ao menos uma página.", true);
+    if (!window.confirm('Excluir a página "' + (cfg.pages[page].name || "") + '" e todos os botões dela?')) return;
+    var c = clone(cfg), removed = page;
+    c.pages.splice(removed, 1);
+    for (var p = 0; p < c.pages.length; p++) {
+      var bs = c.pages[p].buttons;
+      for (var i = 0; i < bs.length; i++) {
+        bs[i].action = fixPageRefs(bs[i].action, removed);
+        if (bs[i].action.type === "none") { bs[i].label = ""; bs[i].icon = ""; bs[i].color = ""; }
+      }
+    }
+    page = Math.max(0, removed - 1);
+    saveCfg(c);
+  }
+
+  function gridSize() {
+    var v = window.prompt("Colunas x linhas (ex.: 5x3). Máximo 10x8.", cfg.columns + "x" + cfg.rows);
+    if (v === null) return;
+    var m = /^\s*(\d+)\s*[x×*]\s*(\d+)\s*$/i.exec(v);
+    if (!m) return toast("Use o formato 5x3.", true);
+    var c = clone(cfg);
+    c.columns = parseInt(m[1], 10); c.rows = parseInt(m[2], 10);
+    saveCfg(c);
+  }
+
+  /* formulario de um botao */
+  var draft = null, draftIdx = -1;
+
+  function openEditor(i) {
+    var b = cfg.pages[page].buttons[i];
+    draft = clone(b || { label: "", icon: "", color: "#1f6feb", action: { type: "none" } });
+    if (!draft.action) draft.action = { type: "none" };
+    if (draft.action.type === "none" && !draft.color) draft.color = "#1f6feb";
+    draftIdx = i;
+    drawForm();
+    $("panel").style.display = "block";
+    $("sheet").scrollTop = 0;
+  }
+
+  function closeEditor() {
+    $("panel").style.display = "none";
+    $("form").innerHTML = "";
+    draft = null;
+  }
+
+  function keysToText(a) { return (a.keys || []).join("+"); }
+
+  function drawForm() {
+    var a = draft.action, h = [];
+    h.push("<h3>Botão " + (draftIdx + 1) + " · " + esc(cfg.pages[page].name || "") + "</h3>");
+
+    h.push('<label>O que ele faz</label><select id="f_type">');
+    for (var i = 0; i < ACTIONS.length; i++) {
+      h.push('<option value="' + ACTIONS[i][0] + '"' + (a.type === ACTIONS[i][0] ? " selected" : "") + ">" + ACTIONS[i][1] + "</option>");
+    }
+    h.push("</select>");
+
+    if (a.type === "hotkey") {
+      h.push('<label>Teclas (separe com +)</label><input type="text" id="f_keys" value="' + esc(keysToText(a)) + '" placeholder="ctrl+shift+m" autocapitalize="off" autocorrect="off">');
+      h.push('<div class="help">Letras, números, ctrl, shift, alt, win, enter, esc, tab, space, backspace, delete, home, end, pageup, pagedown, left, up, right, down, printscreen, f1…f24, playpause, next, prev, stop, mute, volumeup, volumedown, e . , - = ; /</div>');
+    } else if (a.type === "open") {
+      h.push('<label>Endereço ou caminho</label><input type="text" id="f_target" value="' + esc(a.target || "") + '" placeholder="https://… ou C:\\Pasta\\programa.exe" autocapitalize="off" autocorrect="off">');
+    } else if (a.type === "command") {
+      h.push('<label>Comando do Windows</label><input type="text" id="f_command" value="' + esc(a.command || "") + '" placeholder="notepad" autocapitalize="off" autocorrect="off">');
+    } else if (a.type === "page") {
+      h.push('<label>Página</label><select id="f_to">');
+      for (var p = 0; p < cfg.pages.length; p++) {
+        h.push('<option value="' + p + '"' + (a.to === p ? " selected" : "") + ">" + (p + 1) + ". " + esc(cfg.pages[p].name || "") + "</option>");
+      }
+      h.push("</select>");
+    } else if (a.type === "multi") {
+      var steps = a.steps || [{ type: "hotkey", keys: ["ctrl", "c"] }, { type: "hotkey", keys: ["ctrl", "v"] }];
+      h.push('<label>Passos (JSON)</label><textarea id="f_steps" autocapitalize="off" autocorrect="off">' + esc(JSON.stringify(steps, null, 1)) + "</textarea>");
+      h.push('<label>Pausa entre passos (segundos)</label><input type="text" id="f_delay" value="' + esc(a.delay == null ? 0.2 : a.delay) + '">');
+      h.push('<div class="help">Cada passo é uma ação: {"type":"hotkey","keys":["ctrl","c"]}, {"type":"open","target":"…"} ou {"type":"command","command":"…"}.</div>');
+    }
+
+    if (a.type !== "none") {
+      h.push('<label>Texto</label><input type="text" id="f_label" value="' + esc(draft.label || "") + '" maxlength="40">');
+      h.push('<label>Ícone</label><div class="icons" id="f_icons"><span data-v=""' + (!draft.icon ? ' class="sel"' : "") + ">sem</span>");
+      for (var name in ICONS) {
+        if (ICONS.hasOwnProperty(name)) h.push('<span data-v="' + name + '"' + (draft.icon === name ? ' class="sel"' : "") + ">" + svg(name, 24) + "</span>");
+      }
+      h.push("</div>");
+      h.push('<label>Cor</label><div class="colors" id="f_colors">');
+      for (var c = 0; c < COLORS.length; c++) {
+        h.push('<span data-v="' + COLORS[c] + '" style="background:' + COLORS[c] + '"' + (draft.color === COLORS[c] ? ' class="sel"' : "") + "></span>");
+      }
+      h.push('</div><input type="text" id="f_color" value="' + esc(draft.color || "") + '" placeholder="#1f6feb" style="width:140px" autocapitalize="off">');
+    }
+
+    h.push('<div class="row"><span class="tb left" id="b_move">Mover</span>');
+    if (a.type !== "none") h.push('<span class="tb red left" id="b_clear">Limpar</span>');
+    h.push('<span class="tb" id="b_cancel">Cancelar</span><span class="tb hi" id="b_save">Salvar</span></div>');
+    $("form").innerHTML = h.join("");
+
+    $("f_type").onchange = function () {
+      readForm();
+      var t = this.value;
+      draft.action = { type: t };
+      if (t === "page") draft.action.to = 0;
+      drawForm();
+    };
+    pick("f_icons", function (v) { draft.icon = v; });
+    pick("f_colors", function (v) { draft.color = v; if ($("f_color")) $("f_color").value = v; });
+    tap($("b_cancel"), closeEditor);
+    tap($("b_save"), saveDraft);
+    tap($("b_move"), function () { moveFrom = draftIdx; closeEditor(); render(); toast("Toque no lugar para onde ele vai"); });
+    if ($("b_clear")) tap($("b_clear"), function () {
+      draft = { label: "", icon: "", color: "", action: { type: "none" } }; commitDraft();
+    });
+  }
+
+  function pick(id, fn) {
+    var box = $(id);
+    if (!box) return;
+    var sp = box.getElementsByTagName("span");
+    for (var i = 0; i < sp.length; i++) {
+      (function (s) {
+        s.onclick = function () {
+          for (var j = 0; j < sp.length; j++) sp[j].className = "";
+          s.className = "sel";
+          fn(s.getAttribute("data-v"));
+        };
+      })(sp[i]);
+    }
+  }
+
+  function val(id) { var e = $(id); return e ? e.value : null; }
+
+  /* le os campos para o rascunho; devolve mensagem de erro ou "" */
+  function readForm() {
+    var a = draft.action;
+    if (val("f_label") !== null) draft.label = val("f_label");
+    if (val("f_color") !== null) draft.color = val("f_color").replace(/^\s+|\s+$/g, "");
+    if (a.type === "hotkey") {
+      var parts = (val("f_keys") || "").toLowerCase().split("+"), ks = [];
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i].replace(/^\s+|\s+$/g, "");
+        if (p) ks.push(p);
+      }
+      a.keys = ks;
+      if (!ks.length) return "Informe as teclas.";
+    } else if (a.type === "open") {
+      a.target = (val("f_target") || "").replace(/^\s+|\s+$/g, "");
+      if (!a.target) return "Informe o que abrir.";
+    } else if (a.type === "command") {
+      a.command = (val("f_command") || "").replace(/^\s+|\s+$/g, "");
+      if (!a.command) return "Informe o comando.";
+    } else if (a.type === "page") {
+      a.to = parseInt(val("f_to"), 10) || 0;
+    } else if (a.type === "multi") {
+      try { a.steps = JSON.parse(val("f_steps")); } catch (e) { return "Os passos não são um JSON válido."; }
+      a.delay = parseFloat(val("f_delay")) || 0;
+    }
+    if (draft.color && !/^#[0-9a-fA-F]{3,6}$/.test(draft.color)) return "Cor inválida (use #rrggbb).";
+    return "";
+  }
+
+  function saveDraft() {
+    var err = readForm();
+    if (err) return toast(err, true);
+    if (draft.action.type === "none") draft = { label: "", icon: "", color: "", action: { type: "none" } };
+    commitDraft();
+  }
+
+  function commitDraft() {
+    var c = clone(cfg), bs = c.pages[page].buttons;
+    while (bs.length <= draftIdx) bs.push({ label: "", icon: "", color: "", action: { type: "none" } });
+    bs[draftIdx] = draft;
+    saveCfg(c, function (ok) { if (ok) closeEditor(); });
+  }
+
+  /* ----------------------------------------------------------- inicio --- */
+  function load() {
+    req("GET", "/api/config", null, function (ok, data, status) {
+      if (ok && data && data.pages) {
+        cfg = data;
+        msg.style.display = "none";
+        if (page >= cfg.pages.length) page = 0;
+        render();
+      } else {
+        msg.style.display = "block";
+        msg.innerHTML = status === 403
+          ? "Código de acesso inválido. Abra o endereço exatamente como aparece na janela do servidor no PC."
+          : "Sem conexão com o PC. Verifique se o servidor está aberto e se os dois estão na mesma rede.";
+        setTimeout(load, 3000);
+      }
+    });
+  }
+
+  window.addEventListener("resize", layout, false);
+  window.addEventListener("orientationchange", function () { setTimeout(layout, 300); }, false);
+  document.addEventListener("touchmove", function (e) {
+    if ($("panel").style.display !== "block") e.preventDefault();
+  }, false);
+  setInterval(function () { if (!editing) req("GET", "/api/config", null, function () {}); }, 10000);
+
+  load();
+})();
+</script>
+</body>
+</html>

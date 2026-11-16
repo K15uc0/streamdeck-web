@@ -1,0 +1,59 @@
+STREAM DECK CASEIRO
+===================
+
+O PC roda um pequeno servidor; o tablet abre a pagina no navegador e cada
+botao dispara um atalho, abre um programa ou roda um comando no PC.
+
+REQUISITOS
+- Python 3.7 ou mais novo no PC (python.org; na instalacao marque
+  "Add python.exe to PATH"). Nao precisa instalar mais nada.
+- PC e tablet na mesma rede Wi-Fi.
+
+USO
+1. De dois cliques em "Iniciar Stream Deck.bat".
+   Na primeira vez o Windows pergunta sobre o firewall: permita em "Redes privadas".
+2. A janela mostra um endereco como  http://192.168.0.10:8765/?k=1a2b3c4d
+   Abra esse endereco EXATO no navegador do tablet.
+3. No tablet, adicione a pagina aos favoritos / tela inicial para abrir rapido.
+   Para a tela nao apagar: Configuracoes > Tela > Suspensao no maximo,
+   ou "Permanecer ativo" nas Opcoes do desenvolvedor (com o tablet carregando).
+
+O codigo depois de "k=" protege o servidor: sem ele ninguem na rede aciona os botoes.
+Ele fica salvo em token.txt (apague o arquivo para gerar outro).
+
+EDITAR NO PROPRIO APP
+- Toque em "Editar" no topo. Toque em qualquer botao (ou num espaco com +)
+  para mudar o que ele faz, texto, icone e cor. "Salvar" grava na hora.
+- "Mover": toque em Mover e depois no lugar de destino (troca os dois).
+- No topo: renomear, criar e excluir paginas e mudar a grade (ex.: 4x3).
+- Toque nas bolinhas embaixo para trocar de pagina. "Concluir" sai da edicao.
+- Fica mais confortavel editar pelo PC: abra o mesmo endereco no navegador do PC.
+- A versao anterior fica salva em config.bak.json.
+
+PERSONALIZAR (config.json, opcional)
+- "columns" / "rows": tamanho da grade.
+- Cada pagina tem uma lista "buttons", na ordem da esquerda para a direita,
+  de cima para baixo. Cada botao:
+    "label"  texto
+    "icon"   playpause prev next volup voldown mute globe folder calc camera
+             desktop chart lock keyboard record copy paste cut undo redo save
+             select apps close plus mic smile gear back scene
+             (vazio = so texto)
+    "color"  cor de fundo, ex. "#1f6feb"
+    "action" uma das opcoes:
+      {"type":"hotkey","keys":["ctrl","shift","m"]}
+      {"type":"open","target":"https://site.com"}  ou caminho de programa/arquivo
+      {"type":"command","command":"notepad"}
+      {"type":"multi","delay":0.2,"steps":[ {acao1}, {acao2} ]}
+      {"type":"page","to":1}      (troca de pagina; 0 = primeira)
+      {"type":"none"}             (espaco vazio)
+- Teclas aceitas: letras, numeros, ctrl shift alt win enter esc tab space
+  backspace delete insert home end pageup pagedown left up right down
+  printscreen capslock f1..f24 mute volumeup volumedown next prev stop
+  playpause . , - = ; /
+- Depois de salvar o config.json, basta recarregar a pagina no tablet.
+
+OBS STUDIO
+Os botoes da pagina OBS enviam Ctrl+Alt+F1 ... F7. No OBS, va em
+Configuracoes > Teclas de atalho e associe cada combinacao a acao desejada
+(iniciar transmissao, gravar, trocar cena, mutar microfone...).
