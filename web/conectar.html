@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream Deck · Conectar aparelho</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0d1117; color: #e6edf3; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 24px 48px; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: #8b949e; margin: 0 0 28px; }
+  .grid { display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 22px; }
+  #qr { background: #fff; border-radius: 10px; padding: 14px; display: flex; justify-content: center; }
+  #qr svg, #qr img { display: block; width: 100%; height: auto; }
+  .url { font-family: Consolas, monospace; font-size: 15px; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 8px; padding: 10px 12px; margin-top: 14px; word-break: break-all; user-select: all; }
+  ol { margin: 0; padding-left: 20px; line-height: 1.6; }
+  ol li { margin-bottom: 12px; }
+  ol b { color: #fff; }
+  .tip { margin-top: 18px; padding: 14px 16px; border-radius: 10px; background: #1c2128; border-left: 4px solid #d29922;
+    color: #c9d1d9; font-size: 14px; line-height: 1.5; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 8px; padding: 9px 16px;
+    font-size: 14px; cursor: pointer; }
+  button:hover { background: #30363d; }
+  button.primary { background: #1f6feb; border-color: #1f6feb; }
+  button.primary:hover { background: #388bfd; }
+  label.sw { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
+  label.sw input { width: 18px; height: 18px; }
+  #upd { font-size: 14px; color: #c9d1d9; line-height: 1.6; }
+  #upd .new { color: #3fb950; font-weight: 600; }
+  #notes { white-space: pre-wrap; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
+    font-size: 13px; color: #c9d1d9; margin-top: 10px; display: none; max-height: 220px; overflow: auto; }
+  .muted { color: #8b949e; font-size: 13px; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Conectar um aparelho</h1>
+  <p class="sub">Use o celular ou tablet como painel de botões deste PC (<span id="pcname">…</span>).</p>
+
+  <div class="grid">
+    <div class="card">
+      <div id="qr"></div>
+      <div class="url" id="first">…</div>
+    </div>
+    <div class="card">
+      <ol>
+        <li>Conecte o celular ou tablet <b>no mesmo Wi-Fi</b> deste PC.</li>
+        <li><b>Aponte a câmera para o QR code</b> e abra o link. Se o aparelho não lê QR code, digite o endereço que aparece embaixo dele no navegador.</li>
+        <li>Pronto. Depois do primeiro acesso, basta abrir <b id="short">…</b>. Salve nos favoritos ou na tela inicial.</li>
+      </ol>
+      <div class="tip">
+        <b>Não abriu no aparelho?</b> Na primeira vez, o Windows pergunta sobre o firewall: marque
+        <b>Redes privadas e Redes públicas</b> e clique em Permitir. Se você já respondeu, procure por
+        “Permitir um aplicativo pelo Firewall do Windows” no menu Iniciar e libere o Stream Deck (ou Python) nas duas colunas.
+      </div>
+    </div>
+  </div>
+
+  <h2>Opções</h2>
+  <div class="card">
+    <div class="row" style="justify-content: space-between">
+      <label class="sw" id="autoWrap"><input type="checkbox" id="auto"> Iniciar o Stream Deck junto com o Windows</label>
+      <div class="row">
+        <button id="sounds">Abrir pasta de sons</button>
+        <button id="data">Abrir pasta de dados</button>
+      </div>
+    </div>
+    <p class="muted" style="margin:14px 0 0">Seus botões, abas e sons ficam em <span id="datapath">…</span>. Eles são mantidos nas atualizações.</p>
+  </div>
+
+  <h2>Atualizações</h2>
+  <div class="card">
+    <div id="upd">Verificando…</div>
+    <div id="notes"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="check">Verificar agora</button>
+      <button id="apply" class="primary" style="display:none">Atualizar agora</button>
+    </div>
+  </div>
+</main>
+
+<script src="/qrcode.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let info = null;
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+function showUpdate(u) {
+  const box = $("upd");
+  let html = "Versão instalada: <b>" + esc(u.version) + "</b>";
+  if (u.latest) html += " &nbsp;·&nbsp; última publicada: <b>" + esc(u.latest) + "</b>";
+  if (u.available) html += '<br><span class="new">Nova versão disponível!</span>';
+  else if (u.latest) html += "<br>Você está na versão mais recente.";
+  if (u.state === "downloading") html += "<br>Baixando a atualização…";
+  if (u.state === "restarting") html += "<br>Reiniciando com a versão nova…";
+  if (u.error) html += '<br><span class="muted">Não foi possível verificar: ' + esc(u.error) + "</span>";
+  if (u.checked) html += '<br><span class="muted">Última verificação: ' + esc(u.checked) + "</span>";
+  if (u.available && !u.auto && u.page) html += '<br>Baixe a versão nova em <a style="color:#58a6ff" href="' + esc(u.page) + '" target="_blank">' + esc(u.page) + "</a>";
+  box.innerHTML = html;
+  $("notes").style.display = u.available && u.notes ? "block" : "none";
+  $("notes").textContent = u.notes || "";
+  $("apply").style.display = u.available && u.auto ? "" : "none";
+}
+
+async function load() {
+  info = await api("/api/local/info");
+  $("pcname").textContent = info.name;
+  $("first").textContent = info.first;
+  $("short").textContent = info.base;
+  $("datapath").textContent = info.data;
+  $("auto").checked = info.autostart;
+  $("autoWrap").style.display = info.windows ? "" : "none";
+  const qr = qrcode(0, "M");
+  qr.addData(info.first);
+  qr.make();
+  $("qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  showUpdate(info.update);
+}
+
+$("auto").onchange = async (e) => {
+  const r = await api("/api/local/autostart", { on: e.target.checked });
+  if (!r.ok) { alert("Não foi possível: " + r.error); e.target.checked = !e.target.checked; }
+};
+$("sounds").onclick = () => api("/api/local/sounds", {});
+$("data").onclick = () => api("/api/local/data", {});
+$("check").onclick = async () => { $("upd").textContent = "Verificando…"; showUpdate(await api("/api/update/check", {})); };
+$("apply").onclick = async () => {
+  if (!confirm("Atualizar agora? O Stream Deck reinicia sozinho e seus botões são mantidos.")) return;
+  const r = await api("/api/update/apply", {});
+  if (!r.ok) return alert(r.error);
+  $("upd").textContent = "Baixando e instalando… a página recarrega sozinha.";
+  const from = info.update.version;
+  const t = setInterval(async () => {
+    try {
+      const u = await api("/api/update");
+      if (u.version !== from) { clearInterval(t); location.reload(); }
+      else showUpdate(u);
+    } catch (e) { /* reiniciando */ }
+  }, 2000);
+};
+
+load();
+</script>
+</body>
+</html>

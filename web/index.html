@@ -30,6 +30,10 @@
     padding: 0 12px; border-radius: 14px; background: #21262d; color: #fff; font-size: 13px; }
   .tb.hi { background: #1f6feb; }
   .tb.red { background: #8e1519; }
+  .tb.new { background: #238636; }
+  #sheet .notes { white-space: pre-wrap; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 8px; font-size: 13px; color: #c9d1d9; max-height: 220px; overflow: auto; }
+  #sheet p { color: #c9d1d9; font-size: 14px; line-height: 20px; margin: 6px 0; }
   #conn { position: absolute; right: 14px; top: 14px; width: 10px; height: 10px;
     border-radius: 5px; background: #2da44e; }
   #conn.off { background: #cf222e; }
@@ -253,7 +257,8 @@
     var items = editing
       ? [["Renomear", renamePage, ""], ["+ Página", addPage, ""], ["Excluir página", delPage, "red"],
          ["Grade " + cfg.columns + "×" + cfg.rows, gridSize, ""], ["Concluir", toggleEdit, "hi"]]
-      : [["✎ Editar", toggleEdit, ""]];
+      : [[updAvail() ? "● Atualização" : "Atualizações", openUpdates, updAvail() ? "new" : ""],
+         ["✎ Editar", toggleEdit, ""]];
     for (var i = 0; i < items.length; i++) {
       var s = document.createElement("span");
       s.className = "tb " + items[i][2];
@@ -587,6 +592,62 @@
     saveCfg(c, function (ok) { if (ok) closeEditor(); });
   }
 
+  /* ---------------------------------------------------- atualizacoes --- */
+  var updToastShown = false, updPoll = null;
+  function updAvail() { return !!(info && info.update && info.update.available); }
+
+  function openUpdates() {
+    drawUpdates(info && info.update);
+    $("panel").style.display = "block";
+    $("sheet").scrollTop = 0;
+    req("GET", "/api/update", null, function (ok, u) { if (ok && u) { info.update = u; drawUpdates(u); } });
+  }
+
+  function drawUpdates(u) {
+    var h = ["<h3>Atualizações</h3>"];
+    if (!u) {
+      h.push("<p>Verificando…</p>");
+    } else {
+      h.push("<p>Versão instalada: <b>" + esc(u.version) + "</b>" + (u.latest ? " · última publicada: <b>" + esc(u.latest) + "</b>" : "") + "</p>");
+      if (u.state === "downloading") h.push("<p>Baixando a atualização no PC…</p>");
+      else if (u.state === "restarting") h.push("<p>Reiniciando com a versão nova…</p>");
+      else if (u.available) h.push('<p style="color:#3fb950">Há uma versão nova. Seus botões, abas e sons são mantidos.</p>');
+      else if (u.latest) h.push("<p>Você está na versão mais recente.</p>");
+      if (u.error) h.push('<p style="color:#8b949e">Não foi possível verificar: ' + esc(u.error) + "</p>");
+      if (u.checked) h.push('<p style="color:#8b949e">Última verificação: ' + esc(u.checked) + "</p>");
+      if (u.available && u.notes) h.push('<label>O que mudou</label><div class="notes">' + esc(u.notes) + "</div>");
+      if (u.available && !u.auto) h.push("<p>Para atualizar, baixe a versão nova no PC: " + esc(u.page || "") + "</p>");
+    }
+    h.push('<div class="row"><span class="tb left" id="u_check">Verificar agora</span><span class="tb" id="u_close">Fechar</span>');
+    if (u && u.available && u.auto && u.state !== "downloading" && u.state !== "restarting") h.push('<span class="tb hi" id="u_apply">Atualizar agora</span>');
+    h.push("</div>");
+    $("form").innerHTML = h.join("");
+    tap($("u_close"), closeEditor);
+    tap($("u_check"), function () {
+      $("form").innerHTML = "<h3>Atualizações</h3><p>Verificando…</p>";
+      req("POST", "/api/update/check", "{}", function (ok, r) {
+        if (ok && r) { info.update = r; renderBar(); }
+        drawUpdates(info.update);
+      });
+    });
+    if ($("u_apply")) tap($("u_apply"), function () {
+      if (!window.confirm("Atualizar o Stream Deck no PC agora? Ele reinicia sozinho e seus botões são mantidos.")) return;
+      req("POST", "/api/update/apply", "{}", function (ok, r) {
+        if (!ok) return toast("Não atualizou: " + ((r && r.error) || "sem conexão"), true);
+        var from = info.update.version;
+        info.update.state = "downloading";
+        drawUpdates(info.update);
+        clearInterval(updPoll);
+        updPoll = setInterval(function () {
+          req("GET", "/api/update", null, function (ok2, u2) {
+            if (ok2 && u2 && u2.version !== from) { clearInterval(updPoll); location.reload(); }
+            else if (ok2 && u2) { info.update = u2; if ($("panel").style.display === "block") drawUpdates(u2); }
+          });
+        }, 3000);
+      });
+    });
+  }
+
   /* ------------------------------------------- abas (um PC por aba) --- */
   var CONNS_KEY = "sd_conns", conns = [], here = location.host, info = null, alive = {}, synced = null;
 
@@ -628,7 +689,11 @@
         if (!found) conns.unshift({ name: data.name || here, host: here, code: data.code });
         else found.code = data.code;
         saveConns();
-        renderTabs();
+        if (cfg) renderBar(); else renderTabs();
+        if (updAvail() && !updToastShown) {
+          updToastShown = true;
+          toast("Nova versão " + data.update.latest + " disponível. Toque em “Atualização”.");
+        }
       }
       if (cb) cb();
     });

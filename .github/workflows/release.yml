@@ -1,0 +1,41 @@
+name: Publicar versão
+
+# Para publicar: atualize VERSION em server.py e o CHANGELOG.md,
+# depois crie e envie a tag:  git tag v1.2.0 && git push origin v1.2.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Conferir versão
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $ver = (Select-String -Path server.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
+          if ($tag -ne $ver) { Write-Error "A tag ($tag) não bate com VERSION em server.py ($ver)"; exit 1 }
+
+      - name: Gerar StreamDeck.exe
+        run: |
+          pip install pyinstaller
+          pyinstaller --onefile --console --name StreamDeck --icon icon.ico --add-data "web;web" --add-data "config.padrao.json;." server.py
+
+      - name: Notas da versão
+        run: python tools/notas.py "${{ github.ref_name }}" > notas.md
+
+      - name: Publicar
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/StreamDeck.exe
+          body_path: notas.md

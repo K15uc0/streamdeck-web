@@ -18,18 +18,54 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+VERSION = "1.0.0"
+REPO = "K15uc0/streamdeck-web"          # de onde vem as atualizacoes
+IS_WINDOWS = sys.platform.startswith("win")
+FROZEN = getattr(sys, "frozen", False)   # True quando roda como StreamDeck.exe
+
+# Arquivos do programa (pagina, config padrao): dentro do .exe ou ao lado do .py
+APP_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+WEB_DIR = os.path.join(APP_DIR, "web")
+DEFAULT_CONFIG = os.path.join(APP_DIR, "config.padrao.json")
+EXE_PATH = sys.executable if FROZEN else None
+
+
+def documents_dir():
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            from ctypes import wintypes
+            import uuid
+            fid = uuid.UUID("{FDD39AD0-238F-46AF-ADB4-6C85480369C7}")  # Documentos
+            buf = ctypes.c_wchar_p()
+            guid = (ctypes.c_byte * 16).from_buffer_copy(fid.bytes_le)
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(buf)) == 0:
+                path = buf.value
+                ctypes.windll.ole32.CoTaskMemFree(buf)
+                return path
+        except Exception:
+            pass
+    return os.path.join(os.path.expanduser("~"), "Documents")
+
+
+# Dados do usuario (botoes, abas, codigo, sons): ficam fora do programa,
+# por isso continuam intactos quando o programa e atualizado.
+if os.environ.get("STREAMDECK_DATA"):
+    BASE = os.environ["STREAMDECK_DATA"]
+elif FROZEN:
+    BASE = os.path.join(documents_dir(), "StreamDeck")
+else:
+    BASE = os.path.dirname(os.path.abspath(__file__))
+os.makedirs(BASE, exist_ok=True)
+
 CONFIG_PATH = os.path.join(BASE, "config.json")
 TOKEN_PATH = os.path.join(BASE, "token.txt")
 TABS_PATH = os.path.join(BASE, "abas.json")
 FILE_LOCK = threading.Lock()
 LOG_PATH = os.path.join(BASE, "streamdeck.log")
-WEB_DIR = os.path.join(BASE, "web")
 SOUNDS_DIR = os.path.join(BASE, "sons")
 SOUND_EXT = (".mp3", ".wav", ".wma", ".m4a")
 PORTS = (8765, 8766, 8767)  # usa a primeira livre
-
-IS_WINDOWS = sys.platform.startswith("win")
 
 # ---------------------------------------------------------------- teclado ---
 VK = {
@@ -231,6 +267,142 @@ def http_request(method, url, body=""):
         r.read(1024)
         print("  http %s %s -> %d" % (method, url, r.status))
 
+# ------------------------------------------------------------ atualizacoes ---
+UPDATE = {"available": False, "latest": None, "notes": "", "page": None, "asset": None,
+          "error": None, "checked": None, "state": "idle"}
+
+
+def parse_ver(v):
+    out = []
+    for part in str(v).lstrip("vV").split("."):
+        digits = "".join(ch for ch in part if ch.isdigit())
+        out.append(int(digits or 0))
+    return tuple(out + [0] * (3 - len(out)))
+
+
+def check_updates():
+    url = os.environ.get("STREAMDECK_UPDATE_URL") or "https://api.github.com/repos/%s/releases/latest" % REPO
+    req = urllib.request.Request(url, headers={"User-Agent": "StreamDeck/" + VERSION,
+                                               "Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        tag = data.get("tag_name", "")
+        asset = None
+        for a in data.get("assets", []):
+            if a.get("name", "").lower().endswith(".exe"):
+                asset = a.get("browser_download_url")
+        was = UPDATE["available"]
+        UPDATE.update(latest=tag.lstrip("vV"), notes=data.get("body") or "", page=data.get("html_url"),
+                      asset=asset, error=None, checked=time.strftime("%d/%m %H:%M"),
+                      available=parse_ver(tag) > parse_ver(VERSION))
+        if UPDATE["available"] and not was:
+            print("* nova versao disponivel: %s (instalada: %s)" % (UPDATE["latest"], VERSION))
+    except Exception as e:
+        code = getattr(e, "code", None)
+        UPDATE.update(error="nenhuma versao publicada ainda" if code == 404 else str(e),
+                      checked=time.strftime("%d/%m %H:%M"))
+    return UPDATE
+
+
+def update_loop():
+    time.sleep(3)
+    while True:
+        check_updates()
+        time.sleep(6 * 3600)
+
+
+def cleanup_old_exe():
+    if not FROZEN:
+        return
+    old = EXE_PATH + ".old"
+    for _ in range(30):
+        if not os.path.exists(old):
+            return
+        try:
+            os.remove(old)
+            return
+        except OSError:
+            time.sleep(2)
+
+
+def apply_update():
+    """Baixa o novo StreamDeck.exe, troca pelo atual e reinicia.
+    Os dados (Documentos\\StreamDeck) nao sao tocados."""
+    try:
+        UPDATE["state"] = "downloading"
+        print("* baixando versao %s..." % UPDATE["latest"])
+        new = EXE_PATH + ".new"
+        req = urllib.request.Request(UPDATE["asset"], headers={"User-Agent": "StreamDeck/" + VERSION})
+        with urllib.request.urlopen(req, timeout=120) as r, open(new, "wb") as f:
+            while True:
+                chunk = r.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
+        with open(new, "rb") as f:
+            head = f.read(2)
+        if head != b"MZ" or os.path.getsize(new) < 1_000_000:
+            os.remove(new)
+            raise RuntimeError("arquivo baixado invalido")
+        old = EXE_PATH + ".old"
+        if os.path.exists(old):
+            os.remove(old)
+        os.replace(EXE_PATH, old)      # o Windows permite renomear o .exe em uso
+        os.replace(new, EXE_PATH)
+        UPDATE["state"] = "restarting"
+        print("* atualizado para %s, reiniciando..." % UPDATE["latest"])
+        subprocess.Popen([EXE_PATH], cwd=os.path.dirname(EXE_PATH), creationflags=0x00000010)
+        time.sleep(1.5)
+        os._exit(0)
+    except Exception as e:
+        UPDATE["state"] = "error"
+        UPDATE["error"] = "falha ao atualizar: %s" % e
+        print("! " + UPDATE["error"])
+
+
+def update_status():
+    st = dict(UPDATE)
+    st.update(ok=True, version=VERSION, auto=bool(FROZEN and UPDATE["asset"]))
+    return st
+
+
+# ------------------------------------------------------- iniciar com o Windows ---
+def startup_file():
+    appdata = os.environ.get("APPDATA", "")
+    return os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "StreamDeck.cmd")
+
+
+def autostart_enabled():
+    return IS_WINDOWS and os.path.exists(startup_file())
+
+
+def set_autostart(on):
+    if not IS_WINDOWS:
+        raise RuntimeError("so no Windows")
+    path = startup_file()
+    if on:
+        if FROZEN:
+            line = '@start "Stream Deck" /min "%s"\r\n' % EXE_PATH
+        else:
+            line = '@cd /d "%s"\r\n@start "Stream Deck" /min "%s" "%s"\r\n' % (
+                APP_DIR, sys.executable, os.path.abspath(__file__))
+        with open(path, "w", encoding="mbcs") as f:
+            f.write(line)
+    elif os.path.exists(path):
+        os.remove(path)
+
+
+def open_folder(path):
+    os.makedirs(path, exist_ok=True)
+    if IS_WINDOWS:
+        os.startfile(path)
+    else:
+        print("  [simulado] abrir pasta:", path)
+
+
+ACTIVE_PORT = [None]
+
 
 # ----------------------------------------------------------------- acoes ---
 def run_action(action):
@@ -271,6 +443,15 @@ def run_action(action):
 
 
 # ---------------------------------------------------------------- config ---
+def ensure_config():
+    """Na primeira execucao cria o config.json a partir do padrao."""
+    if not os.path.exists(CONFIG_PATH):
+        import shutil
+        shutil.copyfile(DEFAULT_CONFIG, CONFIG_PATH)
+        return True
+    return False
+
+
 def load_config():
     with FILE_LOCK:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -464,6 +645,23 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, code, obj):
         self._send(code, json.dumps(obj, ensure_ascii=False))
 
+    def _local(self):
+        return self.client_address[0] in ("127.0.0.1", "::1")
+
+    def _body_json(self):
+        n = int(self.headers.get("Content-Length", "0") or 0)
+        if n <= 0:
+            return {}
+        if n > 2_000_000:
+            raise ValueError("tamanho invalido (%d)" % n)
+        raw = b""
+        while len(raw) < n:
+            chunk = self.rfile.read(n - len(raw))
+            if not chunk:
+                break
+            raw += chunk
+        return json.loads(raw.decode("utf-8"))
+
     def _authed(self, q):
         if (q.get("k") or [""])[0] == TOKEN:
             return True
@@ -476,22 +674,41 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._note_client()
         url = urlparse(self.path)
+        # funcoes so do proprio PC (tela de conexao)
+        if url.path.startswith("/api/local/"):
+            if not self._local():
+                return self._json(403, {"ok": False, "error": "so no proprio PC"})
+            try:
+                body = self._body_json()
+                if url.path == "/api/local/autostart":
+                    set_autostart(bool(body.get("on")))
+                    return self._json(200, {"ok": True, "autostart": autostart_enabled()})
+                if url.path == "/api/local/sounds":
+                    open_folder(SOUNDS_DIR)
+                    return self._json(200, {"ok": True})
+                if url.path == "/api/local/data":
+                    open_folder(BASE)
+                    return self._json(200, {"ok": True})
+            except Exception as e:
+                return self._json(400, {"ok": False, "error": str(e)})
+            return self._json(404, {"ok": False})
+        if url.path.startswith("/api/update") and (self._local() or self._authed(parse_qs(url.query))):
+            if url.path == "/api/update/check":
+                check_updates()
+                return self._json(200, update_status())
+            if url.path == "/api/update/apply":
+                if not (FROZEN and UPDATE["available"] and UPDATE["asset"]):
+                    return self._json(400, {"ok": False, "error": "atualizacao automatica indisponivel"})
+                if UPDATE["state"] not in ("downloading", "restarting"):
+                    threading.Thread(target=apply_update, daemon=True).start()
+                return self._json(200, {"ok": True})
         if not self._authed(parse_qs(url.query)):
             print("! salvamento recusado: codigo de acesso ausente ou errado")
             return self._json(403, {"ok": False, "error": "codigo de acesso invalido"})
         if url.path not in ("/api/config", "/api/tabs"):
             return self._json(404, {"ok": False})
         try:
-            n = int(self.headers.get("Content-Length", "0"))
-            if n <= 0 or n > 2_000_000:
-                raise ValueError("tamanho invalido (%d)" % n)
-            raw = b""
-            while len(raw) < n:
-                chunk = self.rfile.read(n - len(raw))
-                if not chunk:
-                    break
-                raw += chunk
-            data = json.loads(raw.decode("utf-8"))
+            data = self._body_json()
             if url.path == "/api/tabs":
                 save_tabs(data)
                 return self._json(200, {"ok": True})
@@ -507,6 +724,22 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         q = parse_qs(url.query)
         k = (q.get("k") or [""])[0]
+
+        # tela de conexao: so no proprio PC
+        if url.path in ("/conectar", "/api/local/info") and not self._local():
+            return self._send(403, "Abra esta pagina no proprio PC.", "text/plain; charset=utf-8")
+        if url.path == "/conectar":
+            url = url._replace(path="/conectar.html")
+            self.path = "/conectar.html"
+        if url.path == "/api/local/info":
+            base = "http://%s:%d" % (lan_ip(), ACTIVE_PORT[0])
+            return self._json(200, {"ok": True, "base": base, "first": "%s/?k=%s" % (base, TOKEN),
+                                    "code": TOKEN, "name": socket.gethostname(), "autostart": autostart_enabled(),
+                                    "windows": IS_WINDOWS, "data": BASE, "update": update_status()})
+        if url.path == "/api/update":
+            if self._local() or self._authed(q):
+                return self._json(200, update_status())
+            return self._json(403, {"ok": False})
 
         # sinal de vida para as abas de outros aparelhos (imagem 1x1)
         if url.path == "/ping.gif":
@@ -536,7 +769,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/info":
                 return self._json(200, {"ok": True, "name": socket.gethostname(),
                                         "code": TOKEN, "sounds": list_sounds(),
-                                        "tabs": load_tabs()})
+                                        "tabs": load_tabs(), "version": VERSION,
+                                        "update": update_status()})
             if url.path == "/api/press":
                 try:
                     p = int(q["p"][0])
@@ -653,6 +887,8 @@ def main():
     sys.stdout = Tee(sys.stdout, LOG_PATH)
     sys.stderr = sys.stdout
     print("Iniciando em %s" % time.strftime("%d/%m/%Y %H:%M:%S"))
+    print("Stream Deck %s | dados em %s" % (VERSION, BASE))
+    first_run = ensure_config()
     load_config()  # valida o JSON antes de subir
     os.makedirs(SOUNDS_DIR, exist_ok=True)
     stop_old_instances()
@@ -666,6 +902,7 @@ def main():
     if srv is None:
         print("Nenhuma porta livre (%s)." % ", ".join(map(str, PORTS)))
         sys.exit(1)
+    ACTIVE_PORT[0] = port
     base = "http://%s%s" % (lan_ip(), "" if port == 80 else ":%d" % port)
     print("=" * 56)
     print(" Stream Deck rodando.")
@@ -676,8 +913,15 @@ def main():
     print(" Depois disso, basta abrir:")
     print("   %s" % base)
     print()
+    print(" Tela de conexao com QR code (neste PC):")
+    print("   http://127.0.0.1:%d/conectar" % port)
+    print()
     print(" Deixe esta janela aberta. Ctrl+C para parar.")
     print("=" * 56)
+    threading.Thread(target=update_loop, daemon=True).start()
+    threading.Thread(target=cleanup_old_exe, daemon=True).start()
+    if first_run or "--conectar" in sys.argv:
+        threading.Timer(1.0, webbrowser.open, ["http://127.0.0.1:%d/conectar" % port]).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

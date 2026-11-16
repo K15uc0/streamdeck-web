@@ -4,28 +4,38 @@ STREAM DECK CASEIRO
 O PC roda um pequeno servidor; o tablet abre a pagina no navegador e cada
 botao dispara um atalho, abre um programa ou roda um comando no PC.
 
-REQUISITOS
-- Python 3.7 ou mais novo no PC (python.org; na instalacao marque
-  "Add python.exe to PATH"). Nao precisa instalar mais nada.
-- PC e tablet na mesma rede Wi-Fi.
+COMO COMECAR
+1. Baixe o StreamDeck.exe:
+   https://github.com/K15uc0/streamdeck-web/releases/latest/download/StreamDeck.exe
+2. Abra o StreamDeck.exe (pode deixar em qualquer pasta).
+   - Se aparecer "O Windows protegeu o computador": clique em
+     "Mais informacoes" > "Executar assim mesmo".
+   - Na pergunta do firewall: marque Redes privadas E Redes publicas > Permitir.
+3. Abre no PC a tela "Conectar um aparelho" com um QR code. Aponte a camera do
+   celular ou tablet (no mesmo Wi-Fi) e abra o link. Pronto.
+   Para abrir essa tela de novo: http://127.0.0.1:8765/conectar no PC.
+Deixe a janela do Stream Deck aberta (pode minimizar). Na tela de conexao da
+para marcar "Iniciar junto com o Windows".
 
-USO
-1. De dois cliques em "Iniciar Stream Deck.bat".
-   Na primeira vez o Windows pergunta sobre o firewall: permita em "Redes privadas".
-2. A janela mostra dois enderecos, por exemplo:
-     Primeiro acesso:  http://192.168.0.10:8765/?k=1a2b3c4d
-     Depois:           http://192.168.0.10:8765
-   Abra o primeiro UMA vez no tablet. O navegador guarda o codigo e, dali em
-   diante, basta o endereco curto. Salve-o nos favoritos / tela inicial.
-   (Se a porta 8765 estiver ocupada, o servidor usa a 8766 ou 8767; a janela
-   sempre mostra o endereco certo.)
-   Para a tela nao apagar: Configuracoes > Tela > Suspensao no maximo,
-   ou "Permanecer ativo" nas Opcoes do desenvolvedor (com o tablet carregando).
-   Para o IP nao mudar, reserve o IP do PC nas configuracoes do roteador (DHCP).
+Seus dados (botoes, abas, codigo de acesso e sons) ficam em
+Documentos\StreamDeck e sao mantidos nas atualizacoes.
 
-O codigo protege o servidor: sem ele ninguem na rede aciona os botoes.
-Ele fica salvo em token.txt (apague o arquivo para gerar outro; ai todos os
-aparelhos precisam abrir o endereco com o codigo de novo).
+ATUALIZACOES
+- Quando sai versao nova, aparece "Atualizacao" em verde no topo do app (e na
+  tela de conexao do PC). Toque, veja o que mudou e toque em "Atualizar agora".
+  O programa baixa a versao nova, reinicia sozinho e mantem tudo o que voce fez.
+
+DICAS
+- Para a tela do tablet nao apagar: Configuracoes > Tela > Suspensao no maximo,
+  ou "Permanecer ativo" nas Opcoes do desenvolvedor (com o tablet carregando).
+- Para o endereco nao mudar, reserve o IP do PC no roteador (DHCP).
+- O codigo de acesso protege o PC: sem ele ninguem na rede aciona os botoes.
+  Fica em token.txt (apague para gerar outro; os aparelhos precisam ler o QR de novo).
+- Se a porta 8765 estiver ocupada, o programa usa a 8766 ou 8767.
+
+RODAR PELO CODIGO-FONTE (opcional)
+Com Python 3.8+ instalado: de dois cliques em "Iniciar Stream Deck.bat".
+Nesse modo os dados ficam na propria pasta do programa e a atualizacao e manual.
 
 EDITAR NO PROPRIO APP
 - Toque em "Editar" no topo. Toque em qualquer botao (ou num espaco com +)
