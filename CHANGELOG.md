@@ -1,5 +1,18 @@
 # Novidades
 
+## 1.2.0
+
+Mais fluido e adaptado a qualquer aparelho:
+- O botão responde na hora ao toque; se a ação falhar, pisca em vermelho e mostra o motivo.
+- Segurar Volume +/− ou as setas repete a ação.
+- Arrastar o dedo para fora do botão cancela o toque.
+- Celular em pé: a grade se reorganiza sozinha para os botões ficarem maiores.
+- Em telas estreitas, as abas e os botões de edição quebram linha em vez de sumir.
+- Abre na hora com os botões guardados, mesmo antes de o PC responder.
+- Edições feitas em um aparelho aparecem sozinhas nos outros em poucos segundos.
+- Opção "Tela cheia" no modo de edição.
+- Servidor mais rápido: respostas sem atraso de rede, configuração em memória e consultas mais leves.
+
 ## 1.1.0
 
 Segurança reforçada:

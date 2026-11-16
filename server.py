@@ -21,7 +21,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 REPO = "K15uc0/streamdeck-web"          # de onde vem as atualizacoes
 IS_WINDOWS = sys.platform.startswith("win")
 FROZEN = getattr(sys, "frozen", False)   # True quando roda como StreamDeck.exe
@@ -460,10 +460,27 @@ def ensure_config():
     return False
 
 
+CONFIG_CACHE = {"key": None, "data": None}
+
+
+def config_version():
+    """Muda sempre que o config.json muda (os aparelhos usam para se atualizar)."""
+    try:
+        st = os.stat(CONFIG_PATH)
+        return "%d-%d" % (st.st_mtime_ns, st.st_size)
+    except OSError:
+        return "0"
+
+
 def load_config():
+    """Le o config.json; relido do disco so quando o arquivo muda."""
     with FILE_LOCK:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+        key = config_version()
+        if CONFIG_CACHE["key"] != key or CONFIG_CACHE["data"] is None:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                CONFIG_CACHE["data"] = json.load(f)
+            CONFIG_CACHE["key"] = key
+        return CONFIG_CACHE["data"]
 
 
 def write_json(path, data):
@@ -782,8 +799,15 @@ class Handler(BaseHTTPRequestHandler):
     # que o navegador antigo do Android usa. timeout evita conexoes presas.
     protocol_version = "HTTP/1.1"
     timeout = 30
+    disable_nagle_algorithm = True   # resposta sai na hora (sem atraso de ate 200 ms por toque)
+    wbufsize = 65536                 # cabecalhos e corpo no mesmo pacote
     server_version = "StreamDeck"
     sys_version = ""
+
+    def handle_expect_100(self):
+        ok = super().handle_expect_100()
+        self.wfile.flush()   # o "pode enviar" precisa sair ja (navegador antigo do Android)
+        return ok
 
     def log_message(self, fmt, *args):
         pass
@@ -798,7 +822,7 @@ class Handler(BaseHTTPRequestHandler):
         path = (getattr(self, "path", "") or "").split("?")[0]
         if not path:
             return
-        if path in ("/ping.gif",) or (path == "/api/config" and self.command == "GET" and code == 200):
+        if path in ("/ping.gif", "/api/state") or (path == "/api/config" and self.command == "GET" and code == 200):
             return
         print("  %s %s %s -> %s" % (self.client_address[0], self.command, path, code))
 
@@ -816,7 +840,7 @@ class Handler(BaseHTTPRequestHandler):
         if html:
             self.send_header("Content-Security-Policy", CSP)
 
-    def _send(self, code, body, ctype="application/json; charset=utf-8", cors_img=False):
+    def _send(self, code, body, ctype="application/json; charset=utf-8", cors_img=False, extra=None):
         if isinstance(body, str):
             body = body.encode("utf-8")
         self.send_response(code)
@@ -824,6 +848,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close" if self.close_connection else "keep-alive")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if extra:
+            for name, value in extra.items():
+                self.send_header(name, value)
         if cors_img:   # ping.gif precisa ser carregado pelas abas de outros PCs
             self.send_header("X-Content-Type-Options", "nosniff")
         else:
@@ -831,9 +858,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
+        self.wfile.flush()
 
-    def _json(self, code, obj):
-        self._send(code, json.dumps(obj, ensure_ascii=False))
+    def _json(self, code, obj, extra=None):
+        self._send(code, json.dumps(obj, ensure_ascii=False, separators=(",", ":")), extra=extra)
 
     def _local(self):
         return self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
@@ -961,7 +989,7 @@ class Handler(BaseHTTPRequestHandler):
                 check_remote_edit(data)
             save_config(data)
             print("* configuracao salva")
-            return self._json(200, {"ok": True})
+            return self._json(200, {"ok": True, "v": config_version()})
         except PermissionError as e:
             print("! edicao recusada de %s: botao de comando/programa criado fora do PC" % self.client_address[0])
             return self._json(403, {"ok": False, "error": str(e)})
@@ -1009,6 +1037,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self._security_headers()
             self.end_headers()
+            self.wfile.flush()
             return
 
         if url.path.startswith("/api/"):
@@ -1025,9 +1054,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._deny_auth()
             if url.path == "/api/update":
                 return self._json(200, update_status())
+            if url.path == "/api/state":   # consulta leve e frequente dos aparelhos
+                return self._json(200, {"ok": True, "v": config_version(),
+                                        "update": bool(UPDATE["available"])})
             if url.path == "/api/config":
                 try:
-                    return self._json(200, load_config())
+                    return self._json(200, load_config(), extra={"X-Config-Version": config_version()})
                 except Exception as e:
                     return self._json(500, {"ok": False, "error": str(e)})
             if url.path == "/api/info":

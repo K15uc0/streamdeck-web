@@ -2,7 +2,8 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Stream Deck</title>
 <style>
@@ -10,12 +11,15 @@
     background: #000; color: #fff;
     font-family: "Roboto", "Droid Sans", Arial, sans-serif;
     -webkit-user-select: none; user-select: none;
-    -webkit-tap-highlight-color: rgba(0,0,0,0); }
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+    -ms-touch-action: manipulation; touch-action: manipulation;
+    -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
   #bar { position: absolute; left: 0; right: 0; top: 0; height: 38px;
     line-height: 38px; padding: 0 14px; font-size: 14px; color: #8b949e; white-space: nowrap; }
-  #tabs { position: absolute; left: 10px; top: 0; right: 34px; overflow: hidden; white-space: nowrap; }
+  #tabs { position: absolute; left: 10px; top: 0; right: 34px; white-space: normal; line-height: 0; padding-bottom: 5px; }
   .tab { display: inline-block; height: 28px; line-height: 28px; margin: 5px 6px 0 0; padding: 0 12px;
-    border-radius: 6px; background: #161b22; color: #8b949e; font-size: 13px; }
+    border-radius: 6px; background: #161b22; color: #8b949e; font-size: 13px;
+    max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
   .tab.on { background: #30363d; color: #fff; }
   .tab i { display: inline-block; width: 7px; height: 7px; border-radius: 4px; margin-right: 7px;
     background: #6e7681; vertical-align: 1px; }
@@ -25,9 +29,12 @@
   #dots .pn { display: inline-block; color: #6e7681; font-size: 12px; vertical-align: top; line-height: 26px; margin-right: 4px; }
   #sheet .chk { display: block; color: #c9d1d9; font-size: 14px; margin-top: 12px; }
   #sheet .chk input { width: 20px; height: 20px; vertical-align: middle; margin: 0 8px 0 0; }
-  #tools { position: absolute; right: 34px; top: 0; }
+  #tools { position: absolute; right: 34px; top: 0; line-height: 0; padding-bottom: 5px; }
+  #tools.row2 { left: 4px; right: 4px; text-align: center; white-space: normal; }
   .tb { display: inline-block; height: 28px; line-height: 28px; margin: 5px 0 0 6px;
-    padding: 0 12px; border-radius: 14px; background: #21262d; color: #fff; font-size: 13px; }
+    padding: 0 12px; border-radius: 14px; background: #21262d; color: #fff; font-size: 13px;
+    white-space: nowrap; vertical-align: top; }
+  .tb.down, .tab.down { opacity: 0.6; }
   .tb.hi { background: #1f6feb; }
   .tb.red { background: #8e1519; }
   .tb.new { background: #238636; }
@@ -39,7 +46,7 @@
   #conn.off { background: #cf222e; }
   .key { position: absolute; border-radius: 18%; background: #161b22; overflow: hidden; text-align: center;
     -webkit-box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
-    -webkit-transition: -webkit-transform 80ms; transition: transform 80ms; }
+    -webkit-transition: -webkit-transform 70ms; transition: transform 70ms; cursor: pointer; }
   .key.empty { background: #0d1117; -webkit-box-shadow: none; box-shadow: none; }
   .key.down { -webkit-transform: scale(0.92); transform: scale(0.92); }
   .editing .key { -webkit-box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35); }
@@ -71,7 +78,7 @@
   #sheet h3 { margin: 0 0 10px; font-size: 17px; font-weight: normal; }
   #sheet label { display: block; color: #8b949e; font-size: 13px; margin: 12px 0 5px; }
   #sheet input[type=text], #sheet select, #sheet textarea { width: 100%; box-sizing: border-box; -webkit-box-sizing: border-box;
-    background: #0d1117; color: #fff; border: 1px solid #30363d; border-radius: 6px; padding: 8px; font-size: 15px; }
+    background: #0d1117; color: #fff; border: 1px solid #30363d; border-radius: 6px; padding: 8px; font-size: 16px; }
   #sheet textarea { height: 90px; font-family: monospace; font-size: 13px; }
   #sheet .help { color: #6e7681; font-size: 12px; margin-top: 4px; line-height: 16px; }
   .icons span, .colors span { display: inline-block; width: 40px; height: 40px; margin: 0 6px 6px 0;
@@ -174,21 +181,25 @@
 
   /* ------------------------------------------------------------ rede --- */
   function req(method, url, body, cb) {
-    var x = new XMLHttpRequest();
-    x.open(method, url + (url.indexOf("?") < 0 ? "?" : "&") + "k=" + encodeURIComponent(TOKEN) + "&t=" + new Date().getTime(), true);
-    x.onreadystatechange = function () {
-      if (x.readyState !== 4) return;
-      var data = null;
-      try { data = JSON.parse(x.responseText); } catch (e) {}
-      conn.className = x.status === 0 ? "off" : "";
-      if (x.status === 403 && data && data.error === "codigo de acesso invalido") denied = true;
-      cb(x.status === 200 && data && data.ok !== false, data, x.status);
-    };
+    var x = new XMLHttpRequest(), done = false;
+    x.open(method, url + (url.indexOf("?") < 0 ? "?" : "&") + (TOKEN ? "k=" + encodeURIComponent(TOKEN) + "&" : "") + "t=" + new Date().getTime(), true);
+    var timer = setTimeout(function () { try { x.abort(); } catch (e) {} finish(); }, 8000);
+    function finish() {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      var data = null, status = 0;
+      try { status = x.status; data = JSON.parse(x.responseText); } catch (e) {}
+      conn.className = status === 0 ? "off" : "";
+      if (status === 403 && data && data.error === "codigo de acesso invalido") denied = true;
+      cb(status === 200 && data && data.ok !== false, data, status, x);
+    }
+    x.onreadystatechange = function () { if (x.readyState === 4) finish(); };
+    x.onerror = finish;
     x.setRequestHeader("X-StreamDeck", "1");
     if (body) x.setRequestHeader("Content-Type", "application/json");
     x.send(body || null);
   }
-
   var toastT = null;
   function toast(text, err) {
     var t = $("toast");
@@ -203,6 +214,8 @@
     req("POST", "/api/config", JSON.stringify(newCfg), function (ok, data) {
       if (ok) {
         cfg = newCfg;
+        if (data && data.v) cfgV = data.v;
+        cacheCfg();
         if (page >= cfg.pages.length) page = cfg.pages.length - 1;
         render();
         toast("Salvo");
@@ -232,26 +245,80 @@
     if (cfg.pages[to]) { page = to; moveFrom = -1; render(); }
   }
 
-  function press(i, el) {
+  var REPEAT = { volumeup: 1, volumedown: 1, left: 1, right: 1, up: 1, down: 1, pageup: 1, pagedown: 1 };
+  var pending = 0;
+
+  /* segurar o botao repete (so volume e setas: repetir outros atalhos seria perigoso) */
+  function canRepeat(i) {
+    if (editing || !cfg) return false;
+    var b = cfg.pages[page].buttons[i], a = b && b.action;
+    return !!(a && a.type === "hotkey" && a.keys && a.keys.length === 1 && REPEAT[String(a.keys[0]).toLowerCase()]);
+  }
+
+  function press(i, el, repeating) {
     if (editing) return editTap(i);
     var b = cfg.pages[page].buttons[i];
     if (!b || !b.action || b.action.type === "none") return;
     if (b.action.type === "page") return goPage(b.action.to);
-    req("GET", "/api/press?p=" + page + "&b=" + i, null, function (ok) { flash(el, ok); });
+    if (repeating && pending > 0) return;       /* nao empilha pedidos se a rede estiver lenta */
+    flash(el, true);                            /* resposta visual na hora */
+    pending++;
+    req("GET", "/api/press?p=" + page + "&b=" + i, null, function (ok, data, status) {
+      pending--;
+      if (ok) return;
+      flash(el, false);
+      toast(status === 0 ? "Sem conexão com o PC" : ((data && data.error) || "Não funcionou"), true);
+    });
   }
 
-  function tap(el, fn) {
-    var touched = false;
+  function tap(el, fn, repeatable) {
+    var touched = false, sx = 0, sy = 0, cancelled = false, repeated = false, holdT = null, repT = null;
+    function up() {
+      el.className = el.className.replace(/ down/g, "");
+      clearTimeout(holdT); clearInterval(repT);
+    }
     el.addEventListener("touchstart", function (e) {
-      touched = true; el.className += " down"; e.preventDefault();
+      var t = e.touches[0];
+      touched = true; cancelled = false; repeated = false;
+      sx = t.clientX; sy = t.clientY;
+      up();
+      el.className += " down";
+      e.preventDefault();
+      if (repeatable && repeatable()) {
+        holdT = setTimeout(function () {
+          repeated = true;
+          fn(true);
+          repT = setInterval(function () { fn(true); }, 130);
+        }, 450);
+      }
+    }, false);
+    el.addEventListener("touchmove", function (e) {
+      var t = e.touches[0], lim = Math.max(30, el.offsetWidth * 0.6);
+      if (!cancelled && (Math.abs(t.clientX - sx) > lim || Math.abs(t.clientY - sy) > lim)) { cancelled = true; up(); }
     }, false);
     el.addEventListener("touchend", function (e) {
-      el.className = el.className.replace(/ down/g, ""); e.preventDefault(); fn();
+      up(); e.preventDefault();
+      if (!cancelled && !repeated) fn(false);
     }, false);
-    el.addEventListener("touchcancel", function () {
-      el.className = el.className.replace(/ down/g, "");
-    }, false);
-    el.addEventListener("click", function () { if (!touched) fn(); }, false);
+    el.addEventListener("touchcancel", function () { cancelled = true; up(); }, false);
+    el.addEventListener("mousedown", function () { if (!touched) el.className += " down"; }, false);
+    el.addEventListener("mouseup", up, false);
+    el.addEventListener("mouseleave", up, false);
+    el.addEventListener("click", function () { if (!touched) fn(false); }, false);
+  }
+
+  function canFullscreen() {
+    var d = document.documentElement;
+    return !!(d.requestFullscreen || d.webkitRequestFullscreen);
+  }
+  function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function toggleFullscreen() {
+    var d = document.documentElement;
+    try {
+      if (isFullscreen()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
+    } catch (e) {}
+    setTimeout(function () { if (cfg) render(); }, 400);
   }
 
   function renderBar() {
@@ -259,9 +326,11 @@
     t.innerHTML = "";
     var items = editing
       ? [["Renomear", renamePage, ""], ["+ Página", addPage, ""], ["Excluir página", delPage, "red"],
-         ["Grade " + cfg.columns + "×" + cfg.rows, gridSize, ""], ["Concluir", toggleEdit, "hi"]]
-      : [[updAvail() ? "● Atualização" : "Atualizações", openUpdates, updAvail() ? "new" : ""],
-         ["✎ Editar", toggleEdit, ""]];
+         ["Grade " + cfg.columns + "×" + cfg.rows, gridSize, ""]]
+      : [];
+    if (editing && canFullscreen()) items.push([isFullscreen() ? "Sair da tela cheia" : "Tela cheia", toggleFullscreen, ""]);
+    if (editing || updAvail()) items.push([updAvail() ? "● Atualização" : "Atualizações", openUpdates, updAvail() ? "new" : ""]);
+    items.push(editing ? ["Concluir", toggleEdit, "hi"] : ["✎ Editar", toggleEdit, ""]);
     for (var i = 0; i < items.length; i++) {
       var s = document.createElement("span");
       s.className = "tb " + items[i][2];
@@ -287,9 +356,11 @@
       if (!empty && b.color) el.style.background = b.color;
       el.innerHTML = '<div class="ic"></div><div class="lb"></div><div class="fl"></div>';
       if (!empty) el.querySelector(".lb").innerHTML = esc(b.label || "");
-      if (!empty || editing) (function (idx, e) { tap(e, function () { press(idx, e); }); })(i, el);
+      if (!empty || editing) (function (idx, e) {
+        tap(e, function (rep) { press(idx, e, rep); }, function () { return canRepeat(idx); });
+      })(i, el);
       grid.appendChild(el);
-      keys.push({ el: el, b: b, empty: empty });
+      keys.push({ el: el, b: b, empty: empty, ic: el.firstChild, lb: el.childNodes[1], drawn: null });
     }
     var d = '<b class="pn">' + esc(pg.name || "") + "</b>";
     if (cfg.pages.length > 1 || editing) {
@@ -301,35 +372,57 @@
     layout();
   }
 
+  /* altura da barra: abas e botoes quebram linha em telas estreitas */
+  function barHeight(W) {
+    var tools = $("tools"), tabs = $("tabs");
+    var narrow = editing && W < 760;
+    tools.className = narrow ? "row2" : "";
+    tabs.style.right = narrow ? "34px" : (tools.offsetWidth + 44) + "px";
+    var th = tabs.offsetHeight || 38;
+    tools.style.top = narrow ? th + "px" : "0";
+    return Math.max(38, narrow ? th + tools.offsetHeight : Math.max(th, tools.offsetHeight));
+  }
+
+  function fit(W, H, cols, rows, gap) {
+    return Math.floor(Math.min((W - gap * (cols + 1)) / cols, (H - gap * (rows + 1)) / rows));
+  }
+
   function layout() {
     if (!cfg) return;
     var W = window.innerWidth, H = window.innerHeight;
-    var top = 38, bottom = 26;
-    var cols = cfg.columns, rows = cfg.rows;
+    var top = barHeight(W), bottom = 26;
     var gap = Math.round(Math.min(W, H) * 0.025);
-    var size = Math.floor(Math.min((W - gap * (cols + 1)) / cols, (H - top - bottom - gap * (rows + 1)) / rows));
+    /* em pe (celular), inverte colunas e linhas se os botoes ficarem maiores */
+    var cols = cfg.columns, rows = cfg.rows;
+    if (fit(W, H - top - bottom, rows, cols, gap) > fit(W, H - top - bottom, cols, rows, gap)) { cols = cfg.rows; rows = cfg.columns; }
+    var size = Math.max(24, fit(W, H - top - bottom, cols, rows, gap));
     var gw = size * cols + gap * (cols - 1), gh = size * rows + gap * (rows - 1);
     var x0 = Math.round((W - gw) / 2), y0 = top + Math.round((H - top - bottom - gh) / 2);
-    var iconSize = Math.round(size * 0.42), font = Math.max(10, Math.round(size * 0.13));
+    var iconSize = Math.round(size * 0.42), font = Math.max(9, Math.round(size * 0.13));
     for (var i = 0; i < keys.length; i++) {
-      var k = keys[i], c = i % cols, r = Math.floor(i / cols), s = k.el.style;
-      s.left = (x0 + c * (size + gap)) + "px"; s.top = (y0 + r * (size + gap)) + "px";
-      s.width = size + "px"; s.height = size + "px";
-      var ic = k.el.querySelector(".ic"), lb = k.el.querySelector(".lb");
-      ic.style.top = Math.round(size * 0.17) + "px";
+      var k = keys[i], c = i % cols, r = Math.floor(i / cols), st = k.el.style;
+      st.left = (x0 + c * (size + gap)) + "px"; st.top = (y0 + r * (size + gap)) + "px";
+      st.width = size + "px"; st.height = size + "px";
+      var ic = k.ic, lb = k.lb;
       if (k.empty) {
-        ic.innerHTML = editing ? svg("plus", iconSize).replace(/#fff/g, "#30363d") : "";
+        var plus = editing ? "+" + iconSize : "";
+        if (k.drawn !== plus) { ic.innerHTML = editing ? svg("plus", iconSize).replace(/#fff/g, "#30363d") : ""; k.drawn = plus; }
         ic.style.top = Math.round((size - iconSize) / 2) + "px";
         continue;
       }
       var hasIcon = k.b.icon && ICONS[k.b.icon];
-      ic.innerHTML = hasIcon ? svg(k.b.icon, iconSize) : "";
+      var want = hasIcon ? k.b.icon + iconSize : "";
+      if (k.drawn !== want) { ic.innerHTML = hasIcon ? svg(k.b.icon, iconSize) : ""; k.drawn = want; }   /* so redesenha se mudou */
+      ic.style.top = Math.round(size * 0.17) + "px";
       lb.style.fontSize = (hasIcon ? font : Math.round(font * 1.4)) + "px";
       lb.style.top = (hasIcon ? Math.round(size * 0.68) : Math.round(size / 2 - font * 0.8)) + "px";
       lb.style.whiteSpace = hasIcon ? "nowrap" : "normal";
     }
     dots.style.top = (H - bottom) + "px";
   }
+
+  var layoutT = null;
+  function layoutSoon() { clearTimeout(layoutT); layoutT = setTimeout(layout, 60); }
 
   /* ---------------------------------------------------------- edicao --- */
   function toggleEdit() {
@@ -733,8 +826,7 @@
     add.innerHTML = "+";
     tap(add, function () { openConnForm(-1); });
     box.appendChild(add);
-    /* espaco para os botoes de edicao a direita */
-    box.style.right = ($("tools").offsetWidth + 40) + "px";
+    if (cfg) layoutSoon();   /* a barra pode ter mudado de altura */
   }
 
   function pingAll() {
@@ -742,7 +834,7 @@
       (function (h) {
         if (h === here) return;
         var img = new Image(), done = false;
-        function fin(v) { if (done) return; done = true; alive[h] = v; renderTabs(); }
+        function fin(v) { if (done) return; done = true; if (alive[h] !== v) { alive[h] = v; renderTabs(); } }
         img.onload = function () { fin(true); };
         img.onerror = function () { fin(false); };
         setTimeout(function () { fin(false); }, 3000);
@@ -802,37 +894,66 @@
   }
 
   /* ----------------------------------------------------------- inicio --- */
+  var cfgV = null, CFG_KEY = "sd_cfg_" + here, offlineToast = false;
+  function cacheCfg() { try { window.localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {} }
+  function cachedCfg() {
+    try { var c = JSON.parse(window.localStorage.getItem(CFG_KEY)); return c && c.pages && c.pages.length ? c : null; }
+    catch (e) { return null; }
+  }
+  function panelOpen() { return $("panel").style.display === "block"; }
+
   function load() {
-    req("GET", "/api/config", null, function (ok, data, status) {
+    req("GET", "/api/config", null, function (ok, data, status, x) {
       if (ok && data && data.pages) {
         cfg = data;
+        try { cfgV = x.getResponseHeader("X-Config-Version"); } catch (e) {}
+        cacheCfg();
+        offlineToast = false;
         msg.style.display = "none";
         if (page >= cfg.pages.length) page = 0;
         render();
-        loadInfo(pingAll);
-      } else {
-        if (!conns.length) conns = synced || lsGet();
-        renderTabs();
-        pingAll();
+        if (!info) loadInfo(pingAll);
+      } else if (status === 403 || status === 429) {
+        cfg = null; keys = [];
+        grid.innerHTML = ""; dots.innerHTML = ""; $("tools").innerHTML = "";
+        try { window.localStorage.removeItem(CFG_KEY); } catch (e) {}
         msg.style.display = "block";
         msg.innerHTML = status === 403
           ? "Este aparelho ainda não tem o código de acesso (ou ele foi trocado). No PC, abra a tela Conectar e leia o QR code."
-          : status === 429
-          ? "Muitas tentativas com código errado. Aguarde 10 minutos e leia o QR code de novo na tela do PC."
-          : "Sem conexão com o PC. Verifique se o servidor está aberto e se os dois estão na mesma rede.";
-        if (!denied && status !== 429) setTimeout(load, 3000);
+          : "Muitas tentativas com código errado. Aguarde 10 minutos e leia o QR code de novo na tela do PC.";
+      } else {
+        if (!conns.length) { conns = synced || lsGet(); renderTabs(); pingAll(); }
+        if (cfg) {              /* mostra os botoes guardados e continua tentando */
+          if (!offlineToast) { offlineToast = true; toast("Sem conexão com o PC. Tentando de novo…", true); }
+        } else {
+          msg.style.display = "block";
+          msg.innerHTML = "Sem conexão com o PC. Verifique se o Stream Deck está aberto no PC e se os dois estão na mesma rede.";
+        }
+        setTimeout(load, 3000);
       }
     });
   }
 
-  window.addEventListener("resize", layout, false);
-  window.addEventListener("orientationchange", function () { setTimeout(layout, 300); }, false);
-  document.addEventListener("touchmove", function (e) {
-    if ($("panel").style.display !== "block") e.preventDefault();
-  }, false);
-  setInterval(function () { if (!editing && !denied) req("GET", "/api/config", null, function () {}); }, 10000);
-  setInterval(pingAll, 15000);
+  /* consulta leve: detecta edicoes feitas em outro aparelho e versoes novas */
+  function poll() {
+    if (denied || !cfg || !cfgV || document.hidden) return;
+    req("GET", "/api/state", null, function (ok, st, status) {
+      if (!ok) { if (status === 403) load(); return; }
+      if (offlineToast) { offlineToast = false; toast("Conectado"); }
+      if (st.v !== cfgV && !editing && !panelOpen()) load();
+      if (info && info.update && st.update !== !!info.update.available) loadInfo();
+    });
+  }
 
+  window.addEventListener("resize", layoutSoon, false);
+  window.addEventListener("orientationchange", function () { setTimeout(layout, 300); }, false);
+  document.addEventListener("touchmove", function (e) { if (!panelOpen()) e.preventDefault(); }, false);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { poll(); pingAll(); } }, false);
+  setInterval(poll, 5000);
+  setInterval(function () { if (!document.hidden) pingAll(); }, 20000);
+
+  cfg = cachedCfg();
+  if (cfg) { msg.style.display = "none"; render(); }   /* abre na hora com o que estava guardado */
   readSync();
   load();
 })();
