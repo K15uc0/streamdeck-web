@@ -588,13 +588,20 @@
   }
 
   /* ------------------------------------------- abas (um PC por aba) --- */
-  var CONNS_KEY = "sd_conns", conns = [], here = location.host, info = null, alive = {};
+  var CONNS_KEY = "sd_conns", conns = [], here = location.host, info = null, alive = {}, synced = null;
 
   function lsGet() {
     try { var l = JSON.parse(window.localStorage.getItem(CONNS_KEY)); return l && l.length != null ? l : []; }
     catch (e) { return []; }
   }
   function lsSet(l) { try { window.localStorage.setItem(CONNS_KEY, JSON.stringify(l)); } catch (e) {} }
+  /* guarda no navegador e tambem no PC (abas.json), para nao depender so do navegador */
+  function saveConns() {
+    lsSet(conns);
+    req("POST", "/api/tabs", JSON.stringify(conns), function (ok, data) {
+      if (!ok) toast("Abas não salvas no PC: " + ((data && data.error) || "sem conexão"), true);
+    });
+  }
 
   /* lista de abas que veio de outro PC no endereco (#sync=...) */
   function readSync() {
@@ -602,7 +609,7 @@
     if (!m) return;
     try {
       var l = JSON.parse(decodeURIComponent(m[1]));
-      if (l && l.length != null) lsSet(l);
+      if (l && l.length != null) { synced = l; lsSet(l); }
     } catch (e) {}
     if (window.history && history.replaceState) history.replaceState(null, "", location.pathname);
     else location.hash = "";
@@ -612,12 +619,15 @@
     req("GET", "/api/info", null, function (ok, data) {
       if (ok && data) {
         info = data;
-        conns = lsGet();
+        /* prioridade: lista que veio de outro PC > salva no navegador > salva neste PC */
+        if (!conns.length) conns = synced || lsGet();
+        if (!conns.length && data.tabs && data.tabs.length) conns = data.tabs;
+        synced = null;
         var found = null;
         for (var i = 0; i < conns.length; i++) if (conns[i].host === here) found = conns[i];
         if (!found) conns.unshift({ name: data.name || here, host: here, code: data.code });
         else found.code = data.code;
-        lsSet(conns);
+        saveConns();
         renderTabs();
       }
       if (cb) cb();
@@ -625,7 +635,6 @@
   }
 
   function renderTabs() {
-    conns = lsGet();
     var box = $("tabs");
     box.innerHTML = "";
     var hasHere = false;
@@ -700,7 +709,7 @@
     tap($("c_cancel"), closeEditor);
     if ($("c_del")) tap($("c_del"), function () {
       if (!window.confirm('Excluir a aba "' + (c.name || c.host) + '"?')) return;
-      conns.splice(idx, 1); lsSet(conns); closeEditor(); renderTabs();
+      conns.splice(idx, 1); saveConns(); closeEditor(); renderTabs();
     });
     tap($("c_save"), function () {
       var n = { name: (val("c_name") || "").replace(/^\s+|\s+$/g, ""), host: c.host, code: c.code };
@@ -715,7 +724,7 @@
       }
       if (!n.name) n.name = n.host;
       if (idx >= 0) conns[idx] = n; else conns.push(n);
-      lsSet(conns); closeEditor(); renderTabs(); pingAll();
+      saveConns(); closeEditor(); renderTabs(); pingAll();
       toast("Aba salva");
     });
   }
@@ -730,6 +739,7 @@
         render();
         loadInfo(pingAll);
       } else {
+        if (!conns.length) conns = synced || lsGet();
         renderTabs();
         pingAll();
         msg.style.display = "block";

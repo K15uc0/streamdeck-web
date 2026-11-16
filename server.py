@@ -21,6 +21,8 @@ from urllib.parse import urlparse, parse_qs
 BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE, "config.json")
 TOKEN_PATH = os.path.join(BASE, "token.txt")
+TABS_PATH = os.path.join(BASE, "abas.json")
+FILE_LOCK = threading.Lock()
 WEB_DIR = os.path.join(BASE, "web")
 SOUNDS_DIR = os.path.join(BASE, "sons")
 SOUND_EXT = (".mp3", ".wav", ".wma", ".m4a")
@@ -269,8 +271,31 @@ def run_action(action):
 
 # ---------------------------------------------------------------- config ---
 def load_config():
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with FILE_LOCK:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+
+def write_json(path, data):
+    """Grava com seguranca. No Windows o arquivo pode estar momentaneamente
+    preso (antivirus, indexador, OneDrive): tenta de novo e, se preciso,
+    grava direto por cima."""
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    for _ in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            time.sleep(0.1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
 
 
 ACTION_TYPES = {"hotkey", "open", "command", "multi", "page", "none",
@@ -336,15 +361,38 @@ def validate_config(cfg):
 
 def save_config(cfg):
     validate_config(cfg)
-    if os.path.exists(CONFIG_PATH):
-        with open(CONFIG_PATH, "rb") as f:
-            old = f.read()
-        with open(os.path.join(BASE, "config.bak.json"), "wb") as f:
-            f.write(old)
-    tmp = CONFIG_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, CONFIG_PATH)
+    with FILE_LOCK:
+        if os.path.exists(CONFIG_PATH):
+            try:
+                with open(CONFIG_PATH, "rb") as f:
+                    old = f.read()
+                with open(os.path.join(BASE, "config.bak.json"), "wb") as f:
+                    f.write(old)
+            except OSError as e:
+                print("  aviso: sem copia de seguranca (%s)" % e)
+        write_json(CONFIG_PATH, cfg)
+
+
+def load_tabs():
+    try:
+        with open(TABS_PATH, "r", encoding="utf-8") as f:
+            tabs = json.load(f)
+        return tabs if isinstance(tabs, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def save_tabs(tabs):
+    if not isinstance(tabs, list) or len(tabs) > 30:
+        raise ValueError("lista de abas invalida")
+    clean = []
+    for t in tabs:
+        if not isinstance(t, dict) or not str(t.get("host", "")).strip():
+            raise ValueError("aba invalida")
+        clean.append({"name": str(t.get("name", ""))[:40], "host": str(t["host"])[:100],
+                      "code": str(t.get("code", ""))[:64]})
+    with FILE_LOCK:
+        write_json(TABS_PATH, clean)
 
 
 def find_button(cfg, page_idx, btn_idx):
@@ -402,18 +450,29 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         url = urlparse(self.path)
         if not self._authed(parse_qs(url.query)):
-            return self._json(403, {"ok": False, "error": "codigo invalido"})
-        if url.path != "/api/config":
+            print("! salvamento recusado: codigo de acesso ausente ou errado")
+            return self._json(403, {"ok": False, "error": "codigo de acesso invalido"})
+        if url.path not in ("/api/config", "/api/tabs"):
             return self._json(404, {"ok": False})
         try:
             n = int(self.headers.get("Content-Length", "0"))
             if n <= 0 or n > 2_000_000:
-                raise ValueError("tamanho invalido")
-            cfg = json.loads(self.rfile.read(n).decode("utf-8"))
-            save_config(cfg)
+                raise ValueError("tamanho invalido (%d)" % n)
+            raw = b""
+            while len(raw) < n:
+                chunk = self.rfile.read(n - len(raw))
+                if not chunk:
+                    break
+                raw += chunk
+            data = json.loads(raw.decode("utf-8"))
+            if url.path == "/api/tabs":
+                save_tabs(data)
+                return self._json(200, {"ok": True})
+            save_config(data)
             print("* configuracao salva")
             return self._json(200, {"ok": True})
         except Exception as e:
+            print("! erro ao salvar:", e)
             return self._json(400, {"ok": False, "error": str(e)})
 
     def do_GET(self):
@@ -448,7 +507,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(500, {"ok": False, "error": str(e)})
             if url.path == "/api/info":
                 return self._json(200, {"ok": True, "name": socket.gethostname(),
-                                        "code": TOKEN, "sounds": list_sounds()})
+                                        "code": TOKEN, "sounds": list_sounds(),
+                                        "tabs": load_tabs()})
             if url.path == "/api/press":
                 try:
                     p = int(q["p"][0])
