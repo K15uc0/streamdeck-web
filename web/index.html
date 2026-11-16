@@ -168,6 +168,7 @@
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
   var TOKEN = qs("k");
+  var denied = false;   /* codigo recusado: para de tentar (evita bloqueio por tentativas) */
   var cfg = null, page = 0, keys = [], editing = false, moveFrom = -1;
   var grid = $("grid"), dots = $("dots"), msg = $("msg"), conn = $("conn");
 
@@ -180,8 +181,10 @@
       var data = null;
       try { data = JSON.parse(x.responseText); } catch (e) {}
       conn.className = x.status === 0 ? "off" : "";
+      if (x.status === 403 && data && data.error === "codigo de acesso invalido") denied = true;
       cb(x.status === 200 && data && data.ok !== false, data, x.status);
     };
+    x.setRequestHeader("X-StreamDeck", "1");
     if (body) x.setRequestHeader("Content-Type", "application/json");
     x.send(body || null);
   }
@@ -434,6 +437,10 @@
     }
     h.push("</select>");
 
+    if ((a.type === "command" || a.type === "open" || a.type === "http" || a.type === "multi") &&
+        info && !info.local && !info.remote_admin) {
+      h.push('<div class="help" style="color:#d29922">Por segurança, botões que rodam comandos, abrem programas/arquivos ou chamam APIs só podem ser criados ou alterados no próprio PC (abra o Stream Deck no navegador do PC) ou se você liberar em Conectar &gt; Segurança, no PC. Abrir sites (http/https) é permitido.</div>');
+    }
     if (a.type === "hotkey") {
       h.push('<label>Teclas (separe com +)</label><input type="text" id="f_keys" value="' + esc(keysToText(a)) + '" placeholder="ctrl+shift+m" autocapitalize="off" autocorrect="off">');
       h.push('<div class="help">Letras, números, ctrl, shift, alt, win, enter, esc, tab, space, backspace, delete, home, end, pageup, pagedown, left, up, right, down, printscreen, f1…f24, playpause, next, prev, stop, mute, volumeup, volumedown, e . , - = ; /</div>');
@@ -809,9 +816,11 @@
         pingAll();
         msg.style.display = "block";
         msg.innerHTML = status === 403
-          ? "Este navegador ainda não tem o código de acesso. Abra uma vez o endereço com ?k=… que aparece na janela do servidor no PC."
+          ? "Este aparelho ainda não tem o código de acesso (ou ele foi trocado). No PC, abra a tela Conectar e leia o QR code."
+          : status === 429
+          ? "Muitas tentativas com código errado. Aguarde 10 minutos e leia o QR code de novo na tela do PC."
           : "Sem conexão com o PC. Verifique se o servidor está aberto e se os dois estão na mesma rede.";
-        setTimeout(load, 3000);
+        if (!denied && status !== 429) setTimeout(load, 3000);
       }
     });
   }
@@ -821,7 +830,7 @@
   document.addEventListener("touchmove", function (e) {
     if ($("panel").style.display !== "block") e.preventDefault();
   }, false);
-  setInterval(function () { if (!editing) req("GET", "/api/config", null, function () {}); }, 10000);
+  setInterval(function () { if (!editing && !denied) req("GET", "/api/config", null, function () {}); }, 10000);
   setInterval(pingAll, 15000);
 
   readSync();

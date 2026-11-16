@@ -74,6 +74,21 @@
     <p class="muted" style="margin:14px 0 0">Seus botões, abas e sons ficam em <span id="datapath">…</span>. Eles são mantidos nas atualizações.</p>
   </div>
 
+  <h2>Segurança</h2>
+  <div class="card">
+    <p class="muted" style="margin:0 0 14px">O Stream Deck só aceita aparelhos da sua rede local, exige o código de acesso
+      e bloqueia sites que tentem usar o seu navegador para acionar botões.</p>
+    <div id="weak" class="tip" style="display:none;margin:0 0 14px">Seu código de acesso é curto (de uma versão antiga).
+      Gere um novo para mais segurança. Depois, leia o QR code de novo em cada aparelho.</div>
+    <label class="sw"><input type="checkbox" id="remote"> Permitir que os aparelhos criem botões que rodam comandos, abrem programas/arquivos ou chamam APIs</label>
+    <p class="muted" style="margin:6px 0 14px 28px">Desligado é mais seguro: esses botões só são criados aqui no PC.
+      Botões assim que já existem continuam funcionando.</p>
+    <div class="row">
+      <button id="newcode">Gerar novo código de acesso</button>
+      <span class="muted">Desconecta todos os aparelhos. Use se achar que alguém pegou o código.</span>
+    </div>
+  </div>
+
   <h2>Atualizações</h2>
   <div class="card">
     <div id="upd">Verificando…</div>
@@ -92,8 +107,8 @@ const esc = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": 
 let info = null;
 
 async function api(path, body) {
-  const r = await fetch(path, body === undefined ? {} : {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+  const r = await fetch(path, body === undefined ? { headers: { "X-StreamDeck": "1" } } : {
+    method: "POST", headers: { "Content-Type": "application/json", "X-StreamDeck": "1" }, body: JSON.stringify(body)
   });
   return r.json();
 }
@@ -128,7 +143,23 @@ async function load() {
   qr.make();
   $("qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
   showUpdate(info.update);
+  $("remote").checked = !!(info.settings && info.settings.remote_admin);
+  $("weak").style.display = info.weak ? "" : "none";
 }
+
+$("remote").onchange = async (e) => {
+  if (e.target.checked && !confirm("Liberar? Quem tiver o código de acesso poderá criar botões que rodam comandos neste PC.")) {
+    e.target.checked = false; return;
+  }
+  const r = await api("/api/local/settings", { remote_admin: e.target.checked });
+  if (!r.ok) { alert("Não foi possível: " + r.error); e.target.checked = !e.target.checked; }
+};
+$("newcode").onclick = async () => {
+  if (!confirm("Gerar um novo código? Todos os aparelhos precisarão ler o QR code de novo.")) return;
+  const r = await api("/api/local/newcode", {});
+  if (!r.ok) return alert(r.error);
+  load();
+};
 
 $("auto").onchange = async (e) => {
   const r = await api("/api/local/autostart", { on: e.target.checked });

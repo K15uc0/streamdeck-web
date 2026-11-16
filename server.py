@@ -4,7 +4,10 @@ Stream Deck caseiro: servidor que roda no PC (Windows).
 O tablet abre a pagina no navegador e cada botao dispara uma acao aqui.
 Sem dependencias: so a biblioteca padrao do Python 3.7+.
 """
+import hmac
+import ipaddress
 import json
+import re
 import os
 import secrets
 import socket
@@ -18,7 +21,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 REPO = "K15uc0/streamdeck-web"          # de onde vem as atualizacoes
 IS_WINDOWS = sys.platform.startswith("win")
 FROZEN = getattr(sys, "frozen", False)   # True quando roda como StreamDeck.exe
@@ -61,6 +64,7 @@ os.makedirs(BASE, exist_ok=True)
 CONFIG_PATH = os.path.join(BASE, "config.json")
 TOKEN_PATH = os.path.join(BASE, "token.txt")
 TABS_PATH = os.path.join(BASE, "abas.json")
+SETTINGS_PATH = os.path.join(BASE, "seguranca.json")
 FILE_LOCK = threading.Lock()
 LOG_PATH = os.path.join(BASE, "streamdeck.log")
 SOUNDS_DIR = os.path.join(BASE, "sons")
@@ -290,8 +294,10 @@ def check_updates():
         tag = data.get("tag_name", "")
         asset = None
         for a in data.get("assets", []):
-            if a.get("name", "").lower().endswith(".exe"):
-                asset = a.get("browser_download_url")
+            link = a.get("browser_download_url") or ""
+            if a.get("name", "").lower().endswith(".exe") and \
+                    link.startswith("https://github.com/%s/releases/download/" % REPO):
+                asset = link
         was = UPDATE["available"]
         UPDATE.update(latest=tag.lstrip("vV"), notes=data.get("body") or "", page=data.get("html_url"),
                       asset=asset, error=None, checked=time.strftime("%d/%m %H:%M"),
@@ -424,6 +430,8 @@ def run_action(action):
         else:
             print("  [simulado] comando:", action["command"])
     elif t == "sound":
+        if is_unc(action["file"]):
+            raise ValueError("caminho de rede nao permitido para sons")
         path = sound_path(action["file"])
         if not os.path.isfile(path):
             raise ValueError("arquivo de som nao encontrado: %s" % action["file"])
@@ -531,9 +539,13 @@ def validate_config(cfg):
     pages = cfg.get("pages")
     if not isinstance(pages, list) or not pages:
         raise ValueError("precisa ter ao menos uma pagina")
+    if len(pages) > 50:
+        raise ValueError("no maximo 50 paginas")
     for pi, pg in enumerate(pages):
         if not isinstance(pg, dict) or not isinstance(pg.get("buttons"), list):
             raise ValueError("pagina %d invalida" % (pi + 1))
+        if len(pg["buttons"]) > 120:
+            raise ValueError("pagina %d: botoes demais" % (pi + 1))
         for bi, b in enumerate(pg["buttons"]):
             where = "Pagina %d, botao %d" % (pi + 1, bi + 1)
             if not isinstance(b, dict):
@@ -569,15 +581,168 @@ def save_tabs(tabs):
         raise ValueError("lista de abas invalida")
     clean = []
     for t in tabs:
-        if not isinstance(t, dict) or not str(t.get("host", "")).strip():
+        if not isinstance(t, dict):
             raise ValueError("aba invalida")
-        clean.append({"name": str(t.get("name", ""))[:40], "host": str(t["host"])[:100],
-                      "code": str(t.get("code", ""))[:64]})
+        host, code = str(t.get("host", "")).strip(), str(t.get("code", "")).strip()
+        if not HOST_RE.match(host) or not CODE_RE.match(code):
+            raise ValueError("aba invalida: %s" % host[:40])
+        clean.append({"name": str(t.get("name", ""))[:40], "host": host, "code": code})
     with FILE_LOCK:
         write_json(TABS_PATH, clean)
 
+# ---------------------------------------------------------------- seguranca ---
+# 1) So aceita aparelhos da rede local (nunca da internet, mesmo com porta aberta
+#    no roteador). 2) So aceita o nome/IP deste PC no cabecalho Host (bloqueia
+#    "DNS rebinding"). 3) Toda chamada da API exige o cabecalho X-StreamDeck,
+#    que sites de terceiros nao conseguem enviar (bloqueia CSRF). 4) Limite de
+#    tentativas com codigo errado. 5) Botoes que rodam comandos, abrem programas
+#    ou chamam APIs so podem ser criados no proprio PC (a menos que liberado).
+CGNAT = ipaddress.ip_network("100.64.0.0/10")   # Tailscale e similares
+
+
+def ip_allowed(ip):
+    try:
+        a = ipaddress.ip_address(ip.split("%")[0])
+    except ValueError:
+        return False
+    if getattr(a, "ipv4_mapped", None):
+        a = a.ipv4_mapped
+    return a.is_loopback or a.is_private or a.is_link_local or (a.version == 4 and a in CGNAT)
+
+
+def local_addresses():
+    names = {"127.0.0.1", "localhost", "::1", lan_ip()}
+    try:
+        host = socket.gethostname()
+        names.add(host.lower())
+        names.add(host.lower() + ".local")
+        names.update(socket.gethostbyname_ex(host)[2])
+    except OSError:
+        pass
+    return names
+
+
+ALLOWED_HOSTS = {"cache": set(), "at": 0.0}
+
+
+def host_allowed(host_header):
+    if not host_header:
+        return False
+    h = host_header.strip().lower()
+    if h.startswith("["):                      # [::1]:8765
+        h = h[1:].split("]")[0]
+    else:
+        h = h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+    if time.time() - ALLOWED_HOSTS["at"] > 30:   # IP pode mudar (DHCP)
+        ALLOWED_HOSTS["cache"] = local_addresses()
+        ALLOWED_HOSTS["at"] = time.time()
+    return h in ALLOWED_HOSTS["cache"]
+
+
+FAILS = {}
+FAILS_LOCK = threading.Lock()
+MAX_FAILS, FAIL_WINDOW = 10, 600
+
+
+def fail_blocked(ip):
+    with FAILS_LOCK:
+        now = time.time()
+        recent = [t for t in FAILS.get(ip, []) if now - t < FAIL_WINDOW]
+        FAILS[ip] = recent
+        return len(recent) >= MAX_FAILS
+
+
+def note_fail(ip):
+    with FAILS_LOCK:
+        FAILS.setdefault(ip, []).append(time.time())
+        n = len(FAILS[ip])
+    if n == MAX_FAILS:
+        print("! %s bloqueado por 10 minutos: muitas tentativas com codigo errado" % ip)
+
+
+def same_token(value):
+    return bool(value) and hmac.compare_digest(str(value).encode("utf-8"), TOKEN.encode("utf-8"))
+
+
+def load_settings():
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_settings(data):
+    with FILE_LOCK:
+        write_json(SETTINGS_PATH, data)
+
+
+def inside(path, folder):
+    try:
+        return os.path.commonpath([os.path.realpath(path), os.path.realpath(folder)]) == os.path.realpath(folder)
+    except ValueError:
+        return False
+
+
+def is_unc(path):
+    p = str(path).strip().strip('"')
+    return p.startswith("\\\\") or p.startswith("//")
+
+
+def is_dangerous(a):
+    """Acoes que dao controle amplo sobre o PC."""
+    if not isinstance(a, dict):
+        return False
+    t = a.get("type")
+    if t in ("command", "http"):
+        return True
+    if t == "open":
+        return not str(a.get("target", "")).startswith(("http://", "https://"))
+    if t == "sound":
+        f = str(a.get("file", "")).strip().strip('"')
+        absolute = bool(re.match(r"^[A-Za-z]:", f)) or f.startswith(("\\", "/"))
+        return is_unc(f) or absolute or ".." in re.split(r"[\\/]", f) or not inside(sound_path(f), SOUNDS_DIR)
+    if t == "multi":
+        return any(is_dangerous(x) for x in a.get("steps") or [])
+    return False
+
+
+def dangerous_actions(cfg):
+    out = set()
+    for pg in (cfg or {}).get("pages", []):
+        for b in pg.get("buttons", []):
+            a = b.get("action") if isinstance(b, dict) else None
+            if is_dangerous(a):
+                out.add(json.dumps(a, sort_keys=True, ensure_ascii=False))
+    return out
+
+
+def check_remote_edit(new_cfg):
+    """Vindo de um aparelho: nao deixa criar/alterar botoes perigosos,
+    a nao ser que o dono tenha liberado na tela de conexao do PC."""
+    if load_settings().get("remote_admin"):
+        return
+    try:
+        old = dangerous_actions(load_config())
+    except Exception:
+        old = set()
+    novos = dangerous_actions(new_cfg) - old
+    if novos:
+        raise PermissionError("Por seguranca, botoes que rodam comandos, abrem programas/arquivos ou "
+                              "chamam APIs so podem ser criados ou alterados no proprio PC "
+                              "(abra http://127.0.0.1:%s no PC) ou libere em Conectar > Seguranca."
+                              % (ACTIVE_PORT[0] or 8765))
+
+
+HOST_RE = re.compile(r"^[A-Za-z0-9.\-]{1,90}(:\d{1,5})?$")
+CODE_RE = re.compile(r"^[A-Za-z0-9]{0,64}$")
+SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
+
 
 def find_button(cfg, page_idx, btn_idx):
+    if page_idx < 0 or btn_idx < 0:
+        raise IndexError("botao inexistente")
     return cfg["pages"][page_idx]["buttons"][btn_idx]
 
 
@@ -587,7 +752,11 @@ def get_token():
             tok = f.read().strip()
             if tok:
                 return tok
-    tok = secrets.token_hex(4)
+    return new_token()
+
+
+def new_token():
+    tok = secrets.token_hex(8)   # 64 bits
     with open(TOKEN_PATH, "w") as f:
         f.write(tok)
     return tok
@@ -603,17 +772,25 @@ MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript",
         ".jpg": "image/jpeg", ".ico": "image/x-icon"}
 
 
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+       "img-src 'self' data: http:; connect-src 'self'; frame-ancestors 'none'; "
+       "base-uri 'none'; form-action 'none'")
+
+
 class Handler(BaseHTTPRequestHandler):
     # HTTP/1.1: atende "Expect: 100-continue" e conexoes mantidas abertas,
     # que o navegador antigo do Android usa. timeout evita conexoes presas.
     protocol_version = "HTTP/1.1"
     timeout = 30
+    server_version = "StreamDeck"
+    sys_version = ""
 
     def log_message(self, fmt, *args):
         pass
 
     def log_error(self, fmt, *args):
         raw = getattr(self, "raw_requestline", b"") or b""
+        raw = re.sub(rb"k=[^&\s]*", b"k=***", raw[:60])
         kind = " (tentativa de HTTPS: use http://)" if raw[:1] == b"\x16" else ""
         print("  pedido invalido de %s: %s%s %r" % (self.client_address[0], fmt % args, kind, raw[:30]))
 
@@ -631,7 +808,15 @@ class Handler(BaseHTTPRequestHandler):
             SEEN.add(ip)
             print("  novo aparelho conectado: %s  [%s]" % (ip, time.strftime("%H:%M:%S")))
 
-    def _send(self, code, body, ctype="application/json; charset=utf-8"):
+    def _security_headers(self, html=False):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        if html:
+            self.send_header("Content-Security-Policy", CSP)
+
+    def _send(self, code, body, ctype="application/json; charset=utf-8", cors_img=False):
         if isinstance(body, str):
             body = body.encode("utf-8")
         self.send_response(code)
@@ -639,14 +824,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close" if self.close_connection else "keep-alive")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if cors_img:   # ping.gif precisa ser carregado pelas abas de outros PCs
+            self.send_header("X-Content-Type-Options", "nosniff")
+        else:
+            self._security_headers(html=ctype.startswith("text/html"))
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _json(self, code, obj):
         self._send(code, json.dumps(obj, ensure_ascii=False))
 
     def _local(self):
-        return self.client_address[0] in ("127.0.0.1", "::1")
+        return self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
 
     def _body_json(self):
         n = int(self.headers.get("Content-Length", "0") or 0)
@@ -662,18 +852,60 @@ class Handler(BaseHTTPRequestHandler):
             raw += chunk
         return json.loads(raw.decode("utf-8"))
 
-    def _authed(self, q):
-        if (q.get("k") or [""])[0] == TOKEN:
-            return True
+    def _cookie_token(self):
         for part in self.headers.get("Cookie", "").split(";"):
             name, _, value = part.strip().partition("=")
-            if name == "sdk" and value == TOKEN:
-                return True
-        return False
+            if name == "sdk":
+                return value
+        return ""
 
-    def do_POST(self):
+    def _authed(self, q):
+        return same_token((q.get("k") or [""])[0]) or same_token(self._cookie_token())
+
+    def _deny_auth(self):
+        note_fail(self.client_address[0])
+        return self._json(403, {"ok": False, "error": "codigo de acesso invalido"})
+
+    def _api_header_ok(self):
+        """Sites de terceiros nao conseguem mandar cabecalhos proprios para ca
+        (o navegador bloqueia), e o Origin, quando vem, tem de ser este PC."""
+        if self.headers.get("X-StreamDeck") != "1":
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin != "null":
+            host = urlparse(origin).netloc
+            if not host_allowed(host) or host.lower() != (self.headers.get("Host") or "").lower():
+                return False
+        return True
+
+    def _guard(self):
+        """Barreiras aplicadas a todo pedido. Devolve False se ja respondeu."""
+        ip = self.client_address[0]
+        if not ip_allowed(ip):
+            print("! recusado: %s nao e da rede local" % ip)
+            self.close_connection = True
+            self._send(403, "Somente rede local.", "text/plain; charset=utf-8")
+            return False
+        if not host_allowed(self.headers.get("Host")):
+            self.close_connection = True
+            self._send(421, "Endereco nao reconhecido. Use o IP deste PC.", "text/plain; charset=utf-8")
+            return False
+        if fail_blocked(ip):
+            self.close_connection = True
+            self._send(429, "Muitas tentativas com codigo errado. Aguarde 10 minutos.", "text/plain; charset=utf-8")
+            return False
         self._note_client()
+        return True
+
+    # ------------------------------------------------------------ POST ---
+    def do_POST(self):
+        if not self._guard():
+            return
         url = urlparse(self.path)
+        q = parse_qs(url.query)
+        if not self._api_header_ok():
+            return self._json(403, {"ok": False, "error": "pedido recusado"})
+
         # funcoes so do proprio PC (tela de conexao)
         if url.path.startswith("/api/local/"):
             if not self._local():
@@ -689,22 +921,35 @@ class Handler(BaseHTTPRequestHandler):
                 if url.path == "/api/local/data":
                     open_folder(BASE)
                     return self._json(200, {"ok": True})
+                if url.path == "/api/local/settings":
+                    st = load_settings()
+                    st["remote_admin"] = bool(body.get("remote_admin"))
+                    save_settings(st)
+                    print("* seguranca: botoes de comando pelos aparelhos %s"
+                          % ("LIBERADOS" if st["remote_admin"] else "bloqueados"))
+                    return self._json(200, {"ok": True, "settings": st})
+                if url.path == "/api/local/newcode":
+                    global TOKEN
+                    TOKEN = new_token()
+                    print("* novo codigo de acesso gerado; os aparelhos precisam ler o QR de novo")
+                    return self._json(200, {"ok": True})
             except Exception as e:
                 return self._json(400, {"ok": False, "error": str(e)})
             return self._json(404, {"ok": False})
-        if url.path.startswith("/api/update") and (self._local() or self._authed(parse_qs(url.query))):
-            if url.path == "/api/update/check":
-                check_updates()
-                return self._json(200, update_status())
-            if url.path == "/api/update/apply":
-                if not (FROZEN and UPDATE["available"] and UPDATE["asset"]):
-                    return self._json(400, {"ok": False, "error": "atualizacao automatica indisponivel"})
-                if UPDATE["state"] not in ("downloading", "restarting"):
-                    threading.Thread(target=apply_update, daemon=True).start()
-                return self._json(200, {"ok": True})
-        if not self._authed(parse_qs(url.query)):
-            print("! salvamento recusado: codigo de acesso ausente ou errado")
-            return self._json(403, {"ok": False, "error": "codigo de acesso invalido"})
+
+        if not (self._local() or self._authed(q)):
+            print("! pedido recusado de %s: codigo de acesso ausente ou errado" % self.client_address[0])
+            return self._deny_auth()
+
+        if url.path == "/api/update/check":
+            check_updates()
+            return self._json(200, update_status())
+        if url.path == "/api/update/apply":
+            if not (FROZEN and UPDATE["available"] and UPDATE["asset"]):
+                return self._json(400, {"ok": False, "error": "atualizacao automatica indisponivel"})
+            if UPDATE["state"] not in ("downloading", "restarting"):
+                threading.Thread(target=apply_update, daemon=True).start()
+            return self._json(200, {"ok": True})
         if url.path not in ("/api/config", "/api/tabs"):
             return self._json(404, {"ok": False})
         try:
@@ -712,55 +957,74 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/tabs":
                 save_tabs(data)
                 return self._json(200, {"ok": True})
+            if not self._local():
+                check_remote_edit(data)
             save_config(data)
             print("* configuracao salva")
             return self._json(200, {"ok": True})
+        except PermissionError as e:
+            print("! edicao recusada de %s: botao de comando/programa criado fora do PC" % self.client_address[0])
+            return self._json(403, {"ok": False, "error": str(e)})
         except Exception as e:
             print("! erro ao salvar:", e)
             return self._json(400, {"ok": False, "error": str(e)})
 
+    # ------------------------------------------------------------- GET ---
+    def do_HEAD(self):
+        self.do_GET()
+
     def do_GET(self):
-        self._note_client()
+        if not self._guard():
+            return
         url = urlparse(self.path)
         q = parse_qs(url.query)
         k = (q.get("k") or [""])[0]
 
+        # sinal de vida para as abas de outros aparelhos (imagem 1x1, sem dados)
+        if url.path == "/ping.gif":
+            return self._send(200, PIXEL, "image/gif", cors_img=True)
+
         # tela de conexao: so no proprio PC
-        if url.path in ("/conectar", "/api/local/info") and not self._local():
-            return self._send(403, "Abra esta pagina no proprio PC.", "text/plain; charset=utf-8")
+        if url.path in ("/conectar", "/conectar.html") or url.path.startswith("/api/local/"):
+            if not self._local():
+                return self._send(403, "Abra esta pagina no proprio PC.", "text/plain; charset=utf-8")
         if url.path == "/conectar":
             url = url._replace(path="/conectar.html")
-            self.path = "/conectar.html"
-        if url.path == "/api/local/info":
-            base = "http://%s:%d" % (lan_ip(), ACTIVE_PORT[0])
-            return self._json(200, {"ok": True, "base": base, "first": "%s/?k=%s" % (base, TOKEN),
-                                    "code": TOKEN, "name": socket.gethostname(), "autostart": autostart_enabled(),
-                                    "windows": IS_WINDOWS, "data": BASE, "update": update_status()})
-        if url.path == "/api/update":
-            if self._local() or self._authed(q):
-                return self._json(200, update_status())
-            return self._json(403, {"ok": False})
-
-        # sinal de vida para as abas de outros aparelhos (imagem 1x1)
-        if url.path == "/ping.gif":
-            return self._send(200, PIXEL, "image/gif")
 
         # primeiro acesso com o codigo: guarda no navegador e limpa o endereco
-        if url.path == "/" and k == TOKEN:
+        if url.path == "/" and k:
+            if not same_token(k):
+                note_fail(self.client_address[0])
+                return self._send(403, "Codigo de acesso invalido. Leia o QR code de novo na tela do PC.",
+                                  "text/plain; charset=utf-8")
             sync = ""
             for part in url.query.split("&"):
                 if part.startswith("sync="):
                     sync = part[5:]
+            if not SYNC_RE.match(sync):
+                sync = ""
             self.send_response(302)
-            self.send_header("Set-Cookie", "sdk=%s; Max-Age=315360000; Path=/; HttpOnly" % TOKEN)
+            self.send_header("Set-Cookie", "sdk=%s; Max-Age=315360000; Path=/; HttpOnly; SameSite=Strict" % TOKEN)
             self.send_header("Location", "/#sync=" + sync if sync else "/")
             self.send_header("Content-Length", "0")
+            self._security_headers()
             self.end_headers()
             return
 
         if url.path.startswith("/api/"):
-            if not self._authed(q):
-                return self._json(403, {"ok": False, "error": "codigo invalido"})
+            if not self._api_header_ok():
+                return self._json(403, {"ok": False, "error": "pedido recusado"})
+            if url.path == "/api/local/info":
+                base = "http://%s:%d" % (lan_ip(), ACTIVE_PORT[0])
+                return self._json(200, {"ok": True, "base": base, "first": "%s/?k=%s" % (base, TOKEN),
+                                        "code": TOKEN, "weak": len(TOKEN) < 16,
+                                        "name": socket.gethostname(), "autostart": autostart_enabled(),
+                                        "windows": IS_WINDOWS, "data": BASE, "settings": load_settings(),
+                                        "update": update_status()})
+            if not (self._authed(q) or (self._local() and url.path == "/api/update")):
+                return self._deny_auth()
+            if url.path == "/api/update":
+                return self._json(200, update_status())
             if url.path == "/api/config":
                 try:
                     return self._json(200, load_config())
@@ -770,6 +1034,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": True, "name": socket.gethostname(),
                                         "code": TOKEN, "sounds": list_sounds(),
                                         "tabs": load_tabs(), "version": VERSION,
+                                        "local": self._local(),
+                                        "remote_admin": bool(load_settings().get("remote_admin")),
                                         "update": update_status()})
             if url.path == "/api/press":
                 try:
@@ -784,12 +1050,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(500, {"ok": False, "error": str(e)})
             return self._json(404, {"ok": False})
 
-        # arquivos estaticos
+        # arquivos estaticos (so de dentro da pasta web)
         path = url.path
         if path == "/":
             path = "/index.html"
-        full = os.path.normpath(os.path.join(WEB_DIR, path.lstrip("/")))
-        if not full.startswith(WEB_DIR) or not os.path.isfile(full):
+        full = os.path.join(WEB_DIR, path.lstrip("/").replace("\\", "/"))
+        if not inside(full, WEB_DIR) or not os.path.isfile(full):
             return self._send(404, "nao encontrado", "text/plain")
         with open(full, "rb") as f:
             data = f.read()
@@ -832,10 +1098,23 @@ def stop_old_instances():
                 pid = int(parts[4])
                 if pid != os.getpid():
                     pids.add(pid)
+    killed = 0
     for pid in pids:
+        try:
+            info = subprocess.run(["tasklist", "/FI", "PID eq %d" % pid, "/FO", "CSV", "/NH"],
+                                  capture_output=True, text=True, timeout=10,
+                                  creationflags=0x08000000).stdout.lower()
+        except Exception:
+            continue
+        # so encerra se for o proprio Stream Deck (python ou StreamDeck.exe)
+        if "python" not in info and "streamdeck" not in info:
+            print("  aviso: porta ocupada por outro programa (PID %d), nao foi encerrado" % pid)
+            continue
         subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True,
                        creationflags=0x08000000)
         print("  copia antiga encerrada (PID %d)" % pid)
+        killed += 1
+    pids = killed
     if pids:
         time.sleep(1)
 

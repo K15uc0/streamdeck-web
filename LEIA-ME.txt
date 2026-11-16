@@ -25,6 +25,17 @@ ATUALIZACOES
   tela de conexao do PC). Toque, veja o que mudou e toque em "Atualizar agora".
   O programa baixa a versao nova, reinicia sozinho e mantem tudo o que voce fez.
 
+SEGURANCA
+- So aparelhos da sua rede local conseguem acessar; nada vindo da internet.
+- E preciso o codigo de acesso (vem no QR code). 10 tentativas erradas
+  bloqueiam o aparelho por 10 minutos.
+- Botoes que rodam comandos, abrem programas/arquivos ou chamam APIs so podem
+  ser criados no proprio PC (abra o Stream Deck no navegador do PC). Para
+  liberar pelos aparelhos: Conectar > Seguranca.
+- Achou que alguem pegou o codigo? Conectar > "Gerar novo codigo de acesso".
+- A conexao e por http comum (o tablet antigo nao suporta https). Use em redes
+  confiaveis (sua casa, seu trabalho), nao em Wi-Fi publico.
+
 DICAS
 - Para a tela do tablet nao apagar: Configuracoes > Tela > Suspensao no maximo,
   ou "Permanecer ativo" nas Opcoes do desenvolvedor (com o tablet carregando).
