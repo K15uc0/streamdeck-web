@@ -25,4 +25,4 @@ Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão
 ## Para desenvolvedores
 
 - Rodar pelo código: Python 3.8+, `python server.py` (sem dependências).
-- Publicar versão: altere `VERSION` em `server.py`, adicione a seção no `CHANGELOG.md` e envie a tag (`git tag v1.1.0 && git push origin v1.1.0`). O GitHub Actions gera o `StreamDeck.exe` e publica a release; os programas instalados avisam os usuários.
+- Publicar versão: altere `VERSION` em `server.py`, adicione a seção no `CHANGELOG.md` e envie para a `main`. O GitHub Actions gera o `StreamDeck.exe` e publica a release; os programas instalados avisam os usuários.

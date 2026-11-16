@@ -1,10 +1,13 @@
 name: Publicar versão
 
-# Para publicar: atualize VERSION em server.py e o CHANGELOG.md,
-# depois crie e envie a tag:  git tag v1.2.0 && git push origin v1.2.0
+# Para publicar uma versão nova: altere VERSION em server.py, adicione a seção
+# correspondente no CHANGELOG.md e envie para a branch main. Se ainda não
+# existir release com esse número, o .exe é gerado e publicado sozinho.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["server.py", "CHANGELOG.md", "web/**", "config.padrao.json", ".github/workflows/release.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,27 +18,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Ler versão
+        id: ver
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ver = (Select-String -Path server.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          gh release view "v$ver" --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) { "exists=true" >> $env:GITHUB_OUTPUT; Write-Host "v$ver já publicada, nada a fazer." }
+          else { "exists=false" >> $env:GITHUB_OUTPUT }
+          exit 0
+
       - uses: actions/setup-python@v5
+        if: steps.ver.outputs.exists == 'false'
         with:
           python-version: "3.12"
 
-      - name: Conferir versão
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}".TrimStart("v")
-          $ver = (Select-String -Path server.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
-          if ($tag -ne $ver) { Write-Error "A tag ($tag) não bate com VERSION em server.py ($ver)"; exit 1 }
-
       - name: Gerar StreamDeck.exe
+        if: steps.ver.outputs.exists == 'false'
         run: |
           pip install pyinstaller
           pyinstaller --onefile --console --name StreamDeck --icon icon.ico --add-data "web;web" --add-data "config.padrao.json;." server.py
 
       - name: Notas da versão
-        run: python tools/notas.py "${{ github.ref_name }}" > notas.md
+        if: steps.ver.outputs.exists == 'false'
+        run: python tools/notas.py "${{ steps.ver.outputs.version }}" > notas.md
 
       - name: Publicar
+        if: steps.ver.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Stream Deck ${{ steps.ver.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: dist/StreamDeck.exe
           body_path: notas.md
+          make_latest: true
