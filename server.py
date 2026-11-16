@@ -12,6 +12,8 @@ import subprocess
 import sys
 import threading
 import time
+import queue
+import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -20,6 +22,8 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE, "config.json")
 TOKEN_PATH = os.path.join(BASE, "token.txt")
 WEB_DIR = os.path.join(BASE, "web")
+SOUNDS_DIR = os.path.join(BASE, "sons")
+SOUND_EXT = (".mp3", ".wav", ".wma", ".m4a")
 PORTS = (8765, 8766, 8767)  # usa a primeira livre
 
 IS_WINDOWS = sys.platform.startswith("win")
@@ -67,6 +71,164 @@ def send_keys(keys):
         time.sleep(0.01)
 
 
+# ----------------------------------------------------------- digitar texto ---
+def type_text(text, enter=False):
+    if not IS_WINDOWS:
+        print("  [simulado] digitar:", repr(text), "+ Enter" if enter else "")
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    ULONG_PTR = ctypes.c_size_t
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
+                    ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ULONG_PTR)]
+
+    class MOUSEINPUT(ctypes.Structure):
+        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
+                    ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ULONG_PTR)]
+
+    class _U(ctypes.Union):
+        _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT)]
+
+    class INPUT(ctypes.Structure):
+        _fields_ = [("type", wintypes.DWORD), ("u", _U)]
+
+    KEYUP, UNICODE = 0x0002, 0x0004
+    send = ctypes.windll.user32.SendInput
+
+    def press(vk=0, scan=0, flags=0):
+        arr = (INPUT * 2)()
+        for i, f in enumerate((flags, flags | KEYUP)):
+            arr[i].type = 1
+            arr[i].u.ki = KEYBDINPUT(vk, scan, f, 0, 0)
+        send(2, arr, ctypes.sizeof(INPUT))
+
+    data = text.replace("\r\n", "\n").encode("utf-16-le")
+    for i in range(0, len(data), 2):
+        unit = int.from_bytes(data[i:i + 2], "little")
+        if unit == 10:
+            press(vk=0x0D)
+        else:
+            press(scan=unit, flags=UNICODE)
+        time.sleep(0.005)
+    if enter:
+        time.sleep(0.05)
+        press(vk=0x0D)
+
+
+# ------------------------------------------------------------ efeitos sonoros ---
+def sound_path(name):
+    name = str(name).strip().strip('"')
+    if os.path.isabs(name):
+        return name
+    return os.path.join(SOUNDS_DIR, name)
+
+
+def list_sounds():
+    if not os.path.isdir(SOUNDS_DIR):
+        return []
+    out = []
+    for root, _dirs, files in os.walk(SOUNDS_DIR):
+        for f in files:
+            if f.lower().endswith(SOUND_EXT):
+                out.append(os.path.relpath(os.path.join(root, f), SOUNDS_DIR).replace("\\", "/"))
+    return sorted(out, key=str.lower)
+
+
+class SoundPlayer:
+    """Toca varios sons ao mesmo tempo pelo MCI do Windows (sem dependencias).
+    Todos os comandos rodam numa unica thread, como o MCI prefere."""
+
+    def __init__(self):
+        self.q = queue.Queue()
+        self.playing = []
+        self.n = 0
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def play(self, path, volume=100, exclusive=False):
+        self.q.put(("play", path, volume, exclusive))
+
+    def stop_all(self):
+        self.q.put(("stop",))
+
+    def _mci(self, cmd):
+        import ctypes
+        buf = ctypes.create_unicode_buffer(256)
+        err = ctypes.windll.winmm.mciSendStringW(cmd, buf, 255, 0)
+        if err:
+            ebuf = ctypes.create_unicode_buffer(256)
+            ctypes.windll.winmm.mciGetErrorStringW(err, ebuf, 255)
+            raise RuntimeError(ebuf.value or "erro MCI %d" % err)
+        return buf.value
+
+    def _close(self, alias):
+        try:
+            self._mci("close " + alias)
+        except Exception:
+            pass
+
+    def _loop(self):
+        while True:
+            try:
+                item = self.q.get(timeout=1)
+            except queue.Empty:
+                item = None
+            if IS_WINDOWS:
+                for alias in list(self.playing):  # libera sons que terminaram
+                    try:
+                        if self._mci("status %s mode" % alias) != "playing":
+                            self._close(alias)
+                            self.playing.remove(alias)
+                    except Exception:
+                        self.playing.remove(alias)
+            if item is None:
+                continue
+            if item[0] == "stop" or (item[0] == "play" and item[3]):
+                for alias in self.playing:
+                    if IS_WINDOWS:
+                        self._close(alias)
+                self.playing = []
+                if item[0] == "stop":
+                    print("  sons parados")
+                    continue
+            _, path, volume, _ = item
+            if not IS_WINDOWS:
+                print("  [simulado] tocar:", path, "vol", volume)
+                continue
+            self.n += 1
+            alias = "sd%d" % self.n
+            try:
+                self._mci('open "%s" type mpegvideo alias %s' % (path, alias))
+                try:
+                    self._mci("setaudio %s volume to %d" % (alias, max(0, min(100, int(volume))) * 10))
+                except Exception:
+                    pass
+                self._mci("play " + alias)
+                self.playing.append(alias)
+            except Exception as e:
+                print("  erro ao tocar %s: %s" % (path, e))
+                self._close(alias)
+
+
+PLAYER = SoundPlayer()
+
+
+# ---------------------------------------------------------- requisicao web ---
+def http_request(method, url, body=""):
+    data = body.encode("utf-8") if body and method == "POST" else None
+    req = urllib.request.Request(url, data=data, method=method)
+    if data is not None:
+        ctype = "application/json" if body.strip()[:1] in "{[" else "application/x-www-form-urlencoded"
+        req.add_header("Content-Type", ctype)
+    with urllib.request.urlopen(req, timeout=5) as r:
+        r.read(1024)
+        print("  http %s %s -> %d" % (method, url, r.status))
+
+
 # ----------------------------------------------------------------- acoes ---
 def run_action(action):
     t = action.get("type")
@@ -86,6 +248,17 @@ def run_action(action):
                              creationflags=0x08000000)  # sem janela de console
         else:
             print("  [simulado] comando:", action["command"])
+    elif t == "sound":
+        path = sound_path(action["file"])
+        if not os.path.isfile(path):
+            raise ValueError("arquivo de som nao encontrado: %s" % action["file"])
+        PLAYER.play(path, action.get("volume", 100), bool(action.get("exclusive")))
+    elif t == "stopsound":
+        PLAYER.stop_all()
+    elif t == "text":
+        type_text(action["text"], bool(action.get("enter")))
+    elif t == "http":
+        http_request(action.get("method", "GET").upper(), action["url"], action.get("body", ""))
     elif t == "multi":
         for step in action["steps"]:
             run_action(step)
@@ -100,7 +273,8 @@ def load_config():
         return json.load(f)
 
 
-ACTION_TYPES = {"hotkey", "open", "command", "multi", "page", "none"}
+ACTION_TYPES = {"hotkey", "open", "command", "multi", "page", "none",
+                "sound", "stopsound", "text", "http"}
 
 
 def validate_action(a, n_pages, where):
@@ -117,6 +291,15 @@ def validate_action(a, n_pages, where):
         raise ValueError("%s: informe o que abrir" % where)
     elif t == "command" and not str(a.get("command", "")).strip():
         raise ValueError("%s: informe o comando" % where)
+    elif t == "sound" and not str(a.get("file", "")).strip():
+        raise ValueError("%s: escolha o arquivo de som" % where)
+    elif t == "text" and not str(a.get("text", "")):
+        raise ValueError("%s: informe o texto" % where)
+    elif t == "http":
+        if not str(a.get("url", "")).startswith(("http://", "https://")):
+            raise ValueError("%s: o endereco deve comecar com http:// ou https://" % where)
+        if str(a.get("method", "GET")).upper() not in ("GET", "POST"):
+            raise ValueError("%s: metodo deve ser GET ou POST" % where)
     elif t == "page":
         to = a.get("to")
         if not isinstance(to, int) or not (0 <= to < n_pages):
@@ -182,6 +365,9 @@ def get_token():
 
 TOKEN = get_token()
 
+PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,"
+         b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+
 MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript",
         ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml",
         ".jpg": "image/jpeg", ".ico": "image/x-icon"}
@@ -235,11 +421,19 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(url.query)
         k = (q.get("k") or [""])[0]
 
+        # sinal de vida para as abas de outros aparelhos (imagem 1x1)
+        if url.path == "/ping.gif":
+            return self._send(200, PIXEL, "image/gif")
+
         # primeiro acesso com o codigo: guarda no navegador e limpa o endereco
         if url.path == "/" and k == TOKEN:
+            sync = ""
+            for part in url.query.split("&"):
+                if part.startswith("sync="):
+                    sync = part[5:]
             self.send_response(302)
             self.send_header("Set-Cookie", "sdk=%s; Max-Age=315360000; Path=/; HttpOnly" % TOKEN)
-            self.send_header("Location", "/")
+            self.send_header("Location", "/#sync=" + sync if sync else "/")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
@@ -252,6 +446,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, load_config())
                 except Exception as e:
                     return self._json(500, {"ok": False, "error": str(e)})
+            if url.path == "/api/info":
+                return self._json(200, {"ok": True, "name": socket.gethostname(),
+                                        "code": TOKEN, "sounds": list_sounds()})
             if url.path == "/api/press":
                 try:
                     p = int(q["p"][0])
@@ -291,6 +488,7 @@ def lan_ip():
 
 def main():
     load_config()  # valida o JSON antes de subir
+    os.makedirs(SOUNDS_DIR, exist_ok=True)
     srv = port = None
     for port in PORTS:
         try:

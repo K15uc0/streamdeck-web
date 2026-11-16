@@ -5,6 +5,8 @@ Transforma qualquer tablet ou celular (inclusive Android antigo) em um painel de
 - Atalhos de teclado, teclas de mídia, abrir sites e programas, rodar comandos e sequências de ações
 - Várias páginas, ícones e cores
 - Editor no próprio app (botão "Editar")
+- Abas para vários PCs (casa, trabalho...); só a aba aberta controla o PC dela
+- Funções para rádio: efeitos sonoros (MP3/WAV), parar sons, mensagens no chat e chamadas à API do programa
 - Sem dependências: só Python 3.7+
 - Acesso protegido por código (gerado em `token.txt` na primeira execução)
 

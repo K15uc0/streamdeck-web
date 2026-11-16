@@ -13,7 +13,18 @@
     -webkit-tap-highlight-color: rgba(0,0,0,0); }
   #bar { position: absolute; left: 0; right: 0; top: 0; height: 38px;
     line-height: 38px; padding: 0 14px; font-size: 14px; color: #8b949e; white-space: nowrap; }
-  #bar b { color: #fff; font-weight: normal; }
+  #tabs { position: absolute; left: 10px; top: 0; right: 34px; overflow: hidden; white-space: nowrap; }
+  .tab { display: inline-block; height: 28px; line-height: 28px; margin: 5px 6px 0 0; padding: 0 12px;
+    border-radius: 6px; background: #161b22; color: #8b949e; font-size: 13px; }
+  .tab.on { background: #30363d; color: #fff; }
+  .tab i { display: inline-block; width: 7px; height: 7px; border-radius: 4px; margin-right: 7px;
+    background: #6e7681; vertical-align: 1px; }
+  .tab i.up { background: #2da44e; }
+  .tab i.down { background: #cf222e; }
+  .tab.add { padding: 0 11px; color: #fff; }
+  #dots .pn { display: inline-block; color: #6e7681; font-size: 12px; vertical-align: top; line-height: 26px; margin-right: 4px; }
+  #sheet .chk { display: block; color: #c9d1d9; font-size: 14px; margin-top: 12px; }
+  #sheet .chk input { width: 20px; height: 20px; vertical-align: middle; margin: 0 8px 0 0; }
   #tools { position: absolute; right: 34px; top: 0; }
   .tb { display: inline-block; height: 28px; line-height: 28px; margin: 5px 0 0 6px;
     padding: 0 12px; border-radius: 14px; background: #21262d; color: #fff; font-size: 13px; }
@@ -70,7 +81,7 @@
 </style>
 </head>
 <body>
-<div id="bar"><b id="title">Stream Deck</b> &nbsp;·&nbsp; <span id="pname"></span>
+<div id="bar"><div id="tabs"></div>
   <div id="tools"></div><div id="conn"></div></div>
 <div id="grid"></div>
 <div id="dots"></div>
@@ -124,13 +135,22 @@
     mail: '<rect x="3" y="5" width="18" height="14" rx="1"' + S + '/><path d="M3 6l9 7 9-7"' + S + '/>',
     music: '<path d="M9 18V5l11-2v13" ' + S + '/><circle cx="6.5" cy="18" r="2.5" fill="#fff"/><circle cx="17.5" cy="16" r="2.5" fill="#fff"/>',
     code: '<path d="M8 6l-6 6 6 6M16 6l6 6-6 6"' + S + '/>',
-    power: '<path d="M12 2v10"' + S + '/><path d="M6.3 5.7a8 8 0 1 0 11.4 0"' + S + '/>'
+    power: '<path d="M12 2v10"' + S + '/><path d="M6.3 5.7a8 8 0 1 0 11.4 0"' + S + '/>',
+    sound: '<path d="M3 9v6h4l5 5V4L7 9H3z" fill="#fff"/><path d="M16 8.5a5 5 0 0 1 0 7M19 5.5a9 9 0 0 1 0 13"' + S + '/>',
+    chat: '<path d="M4 4h16v11H9l-5 4z"' + S + '/><path d="M8 8.5h8M8 11.5h5"' + S + '/>',
+    playlist: '<path d="M3 6h13M3 11h13M3 16h8"' + S + '/><path d="M15 14l6 3.5-6 3.5z" fill="#fff"/>',
+    radio: '<rect x="3" y="8" width="18" height="12" rx="2"' + S + '/><path d="M7 8l10-5M6 12h4M6 15.5h4"' + S + '/><circle cx="15.5" cy="14" r="2.5" fill="#fff"/>',
+    headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"' + S + '/><rect x="3" y="14" width="4" height="7" rx="1" fill="#fff"/><rect x="17" y="14" width="4" height="7" rx="1" fill="#fff"/>',
+    bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" fill="#fff"/><path d="M10 20.5a2 2 0 0 0 4 0"' + S + '/>'
   };
   var COLORS = ["#1f6feb", "#0a3069", "#8250df", "#bf3989", "#cf222e", "#d1490b",
                 "#bf8700", "#2da44e", "#1b7c83", "#57606a", "#24292f", "#000000"];
   var ACTIONS = [["none", "Nada (espaço vazio)"], ["hotkey", "Atalho de teclado"],
                  ["open", "Abrir site, arquivo ou programa"], ["command", "Rodar comando"],
-                 ["page", "Ir para outra página"], ["multi", "Sequência de ações (avançado)"]];
+                 ["page", "Ir para outra página"], ["multi", "Sequência de ações (avançado)"],
+                 ["sound", "Rádio: tocar efeito sonoro"], ["stopsound", "Rádio: parar efeitos sonoros"],
+                 ["text", "Rádio: digitar mensagem no chat"], ["http", "Rádio: chamar API do programa"]];
+  var DEFAULT_ICON = { sound: "sound", stopsound: "stop", text: "chat", http: "radio" };
 
   function qs(name) {
     var m = new RegExp("[?&]" + name + "=([^&]*)").exec(location.search);
@@ -228,9 +248,6 @@
   }
 
   function renderBar() {
-    var pg = cfg.pages[page];
-    $("title").innerHTML = esc(cfg.title || "Stream Deck");
-    $("pname").innerHTML = esc(pg.name || "");
     var t = $("tools");
     t.innerHTML = "";
     var items = editing
@@ -244,6 +261,7 @@
       tap(s, items[i][1]);
       t.appendChild(s);
     }
+    renderTabs();
   }
 
   function render() {
@@ -265,7 +283,7 @@
       grid.appendChild(el);
       keys.push({ el: el, b: b, empty: empty });
     }
-    var d = "";
+    var d = '<b class="pn">' + esc(pg.name || "") + "</b>";
     if (cfg.pages.length > 1 || editing) {
       for (var j = 0; j < cfg.pages.length; j++) d += '<span class="' + (j === page ? "on" : "") + '"><i></i></span>';
     }
@@ -390,6 +408,7 @@
     drawForm();
     $("panel").style.display = "block";
     $("sheet").scrollTop = 0;
+    loadInfo(function () { if (draft && draft.action.type === "sound") { readForm(); drawForm(); } });
   }
 
   function closeEditor() {
@@ -427,7 +446,31 @@
       var steps = a.steps || [{ type: "hotkey", keys: ["ctrl", "c"] }, { type: "hotkey", keys: ["ctrl", "v"] }];
       h.push('<label>Passos (JSON)</label><textarea id="f_steps" autocapitalize="off" autocorrect="off">' + esc(JSON.stringify(steps, null, 1)) + "</textarea>");
       h.push('<label>Pausa entre passos (segundos)</label><input type="text" id="f_delay" value="' + esc(a.delay == null ? 0.2 : a.delay) + '">');
-      h.push('<div class="help">Cada passo é uma ação: {"type":"hotkey","keys":["ctrl","c"]}, {"type":"open","target":"…"} ou {"type":"command","command":"…"}.</div>');
+      h.push('<div class="help">Cada passo é uma ação: {"type":"hotkey","keys":["ctrl","c"]}, {"type":"sound","file":"vinheta.mp3"}, {"type":"text","text":"Olá!","enter":true}, {"type":"open","target":"…"} ou {"type":"command","command":"…"}.</div>');
+    } else if (a.type === "sound") {
+      var snd = (info && info.sounds) || [];
+      if (snd.length) {
+        h.push('<label>Sons da pasta "sons"</label><select id="f_pick"><option value="">— escolher —</option>');
+        for (var si = 0; si < snd.length; si++) {
+          h.push('<option value="' + esc(snd[si]) + '"' + (a.file === snd[si] ? " selected" : "") + ">" + esc(snd[si]) + "</option>");
+        }
+        h.push("</select>");
+      }
+      h.push('<label>Arquivo</label><input type="text" id="f_file" value="' + esc(a.file || "") + '" placeholder="vinheta.mp3 ou C:\\Sons\\aplausos.wav" autocapitalize="off" autocorrect="off">');
+      h.push('<div class="help">Coloque os arquivos MP3 ou WAV na pasta <b>sons</b>, dentro da pasta StreamDeck do PC; eles aparecem na lista acima. Também aceita o caminho completo de qualquer arquivo.</div>');
+      h.push('<label>Volume (0 a 100)</label><input type="text" id="f_volume" value="' + esc(a.volume == null ? 100 : a.volume) + '" style="width:100px">');
+      h.push('<label class="chk"><input type="checkbox" id="f_excl"' + (a.exclusive ? " checked" : "") + '>Parar os outros sons antes de tocar este</label>');
+    } else if (a.type === "stopsound") {
+      h.push('<div class="help">Para na hora todos os efeitos sonoros tocados pelo Stream Deck.</div>');
+    } else if (a.type === "text") {
+      h.push('<label>Mensagem</label><textarea id="f_text">' + esc(a.text || "") + "</textarea>");
+      h.push('<label class="chk"><input type="checkbox" id="f_enter"' + (a.enter !== false ? " checked" : "") + '>Apertar Enter no final (enviar)</label>');
+      h.push('<div class="help">O texto é digitado onde o cursor estiver no PC. Deixe o campo de mensagem do chat selecionado.</div>');
+    } else if (a.type === "http") {
+      h.push('<label>Método</label><select id="f_method"><option' + (a.method !== "POST" ? " selected" : "") + '>GET</option><option' + (a.method === "POST" ? " selected" : "") + ">POST</option></select>");
+      h.push('<label>Endereço da API</label><input type="text" id="f_url" value="' + esc(a.url || "") + '" placeholder="http://127.0.0.1:porta/…" autocapitalize="off" autocorrect="off">');
+      h.push('<label>Corpo (só para POST, opcional)</label><textarea id="f_body" autocapitalize="off" autocorrect="off">' + esc(a.body || "") + "</textarea>");
+      h.push('<div class="help">Para programas de rádio que têm API web (veja no manual do programa o endereço e os comandos). A chamada sai do PC, então 127.0.0.1 aponta para o próprio PC. Se o programa não tiver API, use “Atalho de teclado” com as teclas de atalho configuradas nele.</div>');
     }
 
     if (a.type !== "none") {
@@ -454,8 +497,11 @@
       var t = this.value;
       draft.action = { type: t };
       if (t === "page") draft.action.to = 0;
+      if (t === "text") draft.action.enter = true;
+      if (!draft.icon && DEFAULT_ICON[t]) draft.icon = DEFAULT_ICON[t];
       drawForm();
     };
+    if ($("f_pick")) $("f_pick").onchange = function () { if (this.value) $("f_file").value = this.value; };
     pick("f_icons", function (v) { draft.icon = v; });
     pick("f_colors", function (v) { draft.color = v; if ($("f_color")) $("f_color").value = v; });
     tap($("b_cancel"), closeEditor);
@@ -507,6 +553,21 @@
     } else if (a.type === "multi") {
       try { a.steps = JSON.parse(val("f_steps")); } catch (e) { return "Os passos não são um JSON válido."; }
       a.delay = parseFloat(val("f_delay")) || 0;
+    } else if (a.type === "sound") {
+      a.file = (val("f_file") || "").replace(/^\s+|\s+$/g, "");
+      var vol = parseInt(val("f_volume"), 10);
+      a.volume = isNaN(vol) ? 100 : Math.max(0, Math.min(100, vol));
+      a.exclusive = !!($("f_excl") && $("f_excl").checked);
+      if (!a.file) return "Escolha o arquivo de som.";
+    } else if (a.type === "text") {
+      a.text = val("f_text") || "";
+      a.enter = !!($("f_enter") && $("f_enter").checked);
+      if (!a.text) return "Escreva a mensagem.";
+    } else if (a.type === "http") {
+      a.method = val("f_method") || "GET";
+      a.url = (val("f_url") || "").replace(/^\s+|\s+$/g, "");
+      a.body = val("f_body") || "";
+      if (!/^https?:\/\//.test(a.url)) return "O endereço deve começar com http:// ou https://";
     }
     if (draft.color && !/^#[0-9a-fA-F]{3,6}$/.test(draft.color)) return "Cor inválida (use #rrggbb).";
     return "";
@@ -526,6 +587,139 @@
     saveCfg(c, function (ok) { if (ok) closeEditor(); });
   }
 
+  /* ------------------------------------------- abas (um PC por aba) --- */
+  var CONNS_KEY = "sd_conns", conns = [], here = location.host, info = null, alive = {};
+
+  function lsGet() {
+    try { var l = JSON.parse(window.localStorage.getItem(CONNS_KEY)); return l && l.length != null ? l : []; }
+    catch (e) { return []; }
+  }
+  function lsSet(l) { try { window.localStorage.setItem(CONNS_KEY, JSON.stringify(l)); } catch (e) {} }
+
+  /* lista de abas que veio de outro PC no endereco (#sync=...) */
+  function readSync() {
+    var m = /[#&]sync=([^&]*)/.exec(location.hash);
+    if (!m) return;
+    try {
+      var l = JSON.parse(decodeURIComponent(m[1]));
+      if (l && l.length != null) lsSet(l);
+    } catch (e) {}
+    if (window.history && history.replaceState) history.replaceState(null, "", location.pathname);
+    else location.hash = "";
+  }
+
+  function loadInfo(cb) {
+    req("GET", "/api/info", null, function (ok, data) {
+      if (ok && data) {
+        info = data;
+        conns = lsGet();
+        var found = null;
+        for (var i = 0; i < conns.length; i++) if (conns[i].host === here) found = conns[i];
+        if (!found) conns.unshift({ name: data.name || here, host: here, code: data.code });
+        else found.code = data.code;
+        lsSet(conns);
+        renderTabs();
+      }
+      if (cb) cb();
+    });
+  }
+
+  function renderTabs() {
+    conns = lsGet();
+    var box = $("tabs");
+    box.innerHTML = "";
+    var hasHere = false;
+    for (var i = 0; i < conns.length; i++) {
+      var c = conns[i], isHere = c.host === here;
+      if (isHere) hasHere = true;
+      var st = isHere ? "up" : (alive[c.host] === true ? "up" : alive[c.host] === false ? "down" : "");
+      var el = document.createElement("span");
+      el.className = "tab" + (isHere ? " on" : "");
+      el.innerHTML = '<i class="' + st + '"></i>' + esc(c.name || c.host);
+      (function (idx) {
+        tap(el, function () {
+          if (editing || conns[idx].host === here) {
+            if (editing) openConnForm(idx);
+            return;
+          }
+          switchTo(idx);
+        });
+      })(i);
+      box.appendChild(el);
+    }
+    var add = document.createElement("span");
+    add.className = "tab add";
+    add.innerHTML = "+";
+    tap(add, function () { openConnForm(-1); });
+    box.appendChild(add);
+    /* espaco para os botoes de edicao a direita */
+    box.style.right = ($("tools").offsetWidth + 40) + "px";
+  }
+
+  function pingAll() {
+    for (var i = 0; i < conns.length; i++) {
+      (function (h) {
+        if (h === here) return;
+        var img = new Image(), done = false;
+        function fin(v) { if (done) return; done = true; alive[h] = v; renderTabs(); }
+        img.onload = function () { fin(true); };
+        img.onerror = function () { fin(false); };
+        setTimeout(function () { fin(false); }, 3000);
+        img.src = "http://" + h + "/ping.gif?t=" + new Date().getTime();
+      })(conns[i].host);
+    }
+  }
+
+  function switchTo(idx) {
+    var c = conns[idx];
+    if (alive[c.host] === false &&
+        !window.confirm('"' + (c.name || c.host) + '" não respondeu. Tentar abrir mesmo assim?')) return;
+    location.href = "http://" + c.host + "/?k=" + encodeURIComponent(c.code || "") +
+      "&sync=" + encodeURIComponent(JSON.stringify(conns));
+  }
+
+  function openConnForm(idx) {
+    var c = idx >= 0 ? conns[idx] : { name: "", host: "", code: "" };
+    var isHere = c.host === here && idx >= 0, h = [];
+    h.push("<h3>" + (idx >= 0 ? "Aba: " + esc(c.name || c.host) : "Nova aba (outro PC)") + "</h3>");
+    h.push('<label>Nome da aba</label><input type="text" id="c_name" value="' + esc(c.name || "") + '" placeholder="Casa, Trabalho, Rádio…" maxlength="30">');
+    if (isHere) {
+      h.push('<div class="help">Esta é a aba do PC aberto agora (' + esc(here) + "). Só o nome pode ser mudado.</div>");
+    } else {
+      h.push('<label>Endereço do PC (IP:porta)</label><input type="text" id="c_host" value="' + esc(c.host || "") + '" placeholder="192.168.0.20:8765" autocapitalize="off" autocorrect="off">');
+      h.push('<label>Código de acesso</label><input type="text" id="c_code" value="' + esc(c.code || "") + '" placeholder="o código depois de ?k= na janela do servidor" autocapitalize="off" autocorrect="off">');
+      h.push('<div class="help">Os dois aparecem na janela do servidor daquele PC: http://<b>IP:porta</b>/?k=<b>código</b>. Só a aba aberta controla o PC dela.</div>');
+    }
+    h.push('<div class="row">');
+    if (idx >= 0 && !isHere) h.push('<span class="tb red left" id="c_del">Excluir aba</span>');
+    h.push('<span class="tb" id="c_cancel">Cancelar</span><span class="tb hi" id="c_save">Salvar</span></div>');
+    $("form").innerHTML = h.join("");
+    $("panel").style.display = "block";
+    $("sheet").scrollTop = 0;
+
+    tap($("c_cancel"), closeEditor);
+    if ($("c_del")) tap($("c_del"), function () {
+      if (!window.confirm('Excluir a aba "' + (c.name || c.host) + '"?')) return;
+      conns.splice(idx, 1); lsSet(conns); closeEditor(); renderTabs();
+    });
+    tap($("c_save"), function () {
+      var n = { name: (val("c_name") || "").replace(/^\s+|\s+$/g, ""), host: c.host, code: c.code };
+      if (!isHere) {
+        n.host = (val("c_host") || "").replace(/^\s+|\s+$/g, "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+        n.code = (val("c_code") || "").replace(/^\s+|\s+$/g, "");
+        if (!/^[A-Za-z0-9.\-]+(:\d{1,5})?$/.test(n.host)) return toast("Endereço inválido. Ex.: 192.168.0.20:8765", true);
+        if (!n.code) return toast("Informe o código de acesso.", true);
+        for (var j = 0; j < conns.length; j++) {
+          if (j !== idx && conns[j].host === n.host) return toast("Já existe uma aba para esse endereço.", true);
+        }
+      }
+      if (!n.name) n.name = n.host;
+      if (idx >= 0) conns[idx] = n; else conns.push(n);
+      lsSet(conns); closeEditor(); renderTabs(); pingAll();
+      toast("Aba salva");
+    });
+  }
+
   /* ----------------------------------------------------------- inicio --- */
   function load() {
     req("GET", "/api/config", null, function (ok, data, status) {
@@ -534,7 +728,10 @@
         msg.style.display = "none";
         if (page >= cfg.pages.length) page = 0;
         render();
+        loadInfo(pingAll);
       } else {
+        renderTabs();
+        pingAll();
         msg.style.display = "block";
         msg.innerHTML = status === 403
           ? "Este navegador ainda não tem o código de acesso. Abra uma vez o endereço com ?k=… que aparece na janela do servidor no PC."
@@ -550,7 +747,9 @@
     if ($("panel").style.display !== "block") e.preventDefault();
   }, false);
   setInterval(function () { if (!editing) req("GET", "/api/config", null, function () {}); }, 10000);
+  setInterval(pingAll, 15000);
 
+  readSync();
   load();
 })();
 </script>

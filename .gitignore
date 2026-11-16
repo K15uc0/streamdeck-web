@@ -2,3 +2,4 @@ token.txt
 config.bak.json
 *.tmp
 __pycache__/
+sons/

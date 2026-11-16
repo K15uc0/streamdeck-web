@@ -36,6 +36,28 @@ EDITAR NO PROPRIO APP
 - Fica mais confortavel editar pelo PC: abra o mesmo endereco no navegador do PC.
 - A versao anterior fica salva em config.bak.json.
 
+ABAS (VARIOS PCs, EX.: CASA E TRABALHO)
+- Cada PC roda o seu proprio servidor. No topo da pagina aparecem as abas.
+- "+" adiciona outro PC: nome, endereco (IP:porta) e codigo de acesso
+  (os dois aparecem na janela do servidor daquele PC).
+- Toque numa aba para ir para aquele PC. So a aba aberta controla o PC dela.
+- A bolinha verde indica que o PC respondeu; vermelha, que nao esta acessivel
+  (por exemplo, o PC do trabalho quando voce esta em casa).
+- Para renomear ou excluir uma aba: "Editar" e toque na aba.
+
+RADIO (EFEITOS SONOROS, PLAYLIST E CHAT)
+No editor, em "O que ele faz":
+- Radio: tocar efeito sonoro  -> toca MP3/WAV pelo proprio PC. Coloque os
+  arquivos na pasta "sons" (dentro de StreamDeck); eles aparecem numa lista.
+  Da para ajustar o volume e escolher se para os outros sons antes.
+- Radio: parar efeitos sonoros -> para tudo o que o Stream Deck tocou.
+- Radio: digitar mensagem no chat -> digita o texto onde o cursor estiver
+  (deixe o campo do chat selecionado) e, se marcado, aperta Enter.
+- Radio: chamar API do programa -> para programas de radio com API web
+  (endereco e comandos estao no manual do programa).
+- Playlist (tocar, pausar, proxima, etc.): use "Atalho de teclado" com as
+  teclas configuradas no programa da radio, ou a API se ele tiver.
+
 PERSONALIZAR (config.json, opcional)
 - "columns" / "rows": tamanho da grade.
 - Cada pagina tem uma lista "buttons", na ordem da esquerda para a direita,
@@ -43,7 +65,9 @@ PERSONALIZAR (config.json, opcional)
     "label"  texto
     "icon"   playpause prev next volup voldown mute globe folder calc camera
              desktop chart lock keyboard record copy paste cut undo redo save
-             select apps close plus mic smile gear back scene
+             select apps close plus mic smile gear back forward scene play
+             stop star heart bolt home mail music code power sound chat
+             playlist radio headphones bell
              (vazio = so texto)
     "color"  cor de fundo, ex. "#1f6feb"
     "action" uma das opcoes:
@@ -52,6 +76,10 @@ PERSONALIZAR (config.json, opcional)
       {"type":"command","command":"notepad"}
       {"type":"multi","delay":0.2,"steps":[ {acao1}, {acao2} ]}
       {"type":"page","to":1}      (troca de pagina; 0 = primeira)
+      {"type":"sound","file":"vinheta.mp3","volume":80,"exclusive":true}
+      {"type":"stopsound"}
+      {"type":"text","text":"Bom dia!","enter":true}
+      {"type":"http","method":"GET","url":"http://127.0.0.1:9000/..."}
       {"type":"none"}             (espaco vazio)
 - Teclas aceitas: letras, numeros, ctrl shift alt win enter esc tab space
   backspace delete insert home end pageup pagedown left up right down
