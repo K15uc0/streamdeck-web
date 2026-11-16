@@ -20,7 +20,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE, "config.json")
 TOKEN_PATH = os.path.join(BASE, "token.txt")
 WEB_DIR = os.path.join(BASE, "web")
-PORTS = (80, 8765)  # tenta a 80 (endereco sem ":porta"); se ocupada, usa 8765
+PORTS = (8765, 8766, 8767)  # usa a primeira livre
 
 IS_WINDOWS = sys.platform.startswith("win")
 

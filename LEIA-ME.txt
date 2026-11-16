@@ -13,12 +13,12 @@ USO
 1. De dois cliques em "Iniciar Stream Deck.bat".
    Na primeira vez o Windows pergunta sobre o firewall: permita em "Redes privadas".
 2. A janela mostra dois enderecos, por exemplo:
-     Primeiro acesso:  http://192.168.0.10/?k=1a2b3c4d
-     Depois:           http://192.168.0.10
+     Primeiro acesso:  http://192.168.0.10:8765/?k=1a2b3c4d
+     Depois:           http://192.168.0.10:8765
    Abra o primeiro UMA vez no tablet. O navegador guarda o codigo e, dali em
    diante, basta o endereco curto. Salve-o nos favoritos / tela inicial.
-   (Se a porta 80 estiver ocupada no PC, o servidor usa a 8765 e o endereco
-   fica com ":8765" no final.)
+   (Se a porta 8765 estiver ocupada, o servidor usa a 8766 ou 8767; a janela
+   sempre mostra o endereco certo.)
    Para a tela nao apagar: Configuracoes > Tela > Suspensao no maximo,
    ou "Permanecer ativo" nas Opcoes do desenvolvedor (com o tablet carregando).
    Para o IP nao mudar, reserve o IP do PC nas configuracoes do roteador (DHCP).
