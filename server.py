@@ -423,8 +423,19 @@ MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript",
 
 
 class Handler(BaseHTTPRequestHandler):
+    # HTTP/1.1: atende "Expect: 100-continue" e conexoes mantidas abertas,
+    # que o navegador antigo do Android usa. timeout evita conexoes presas.
+    protocol_version = "HTTP/1.1"
+    timeout = 30
+
     def log_message(self, fmt, *args):
         pass
+
+    def log_request(self, code="-", size="-"):
+        path = self.path.split("?")[0]
+        if path in ("/ping.gif",) or (path == "/api/config" and self.command == "GET" and code == 200):
+            return
+        print("  %s %s %s -> %s" % (self.client_address[0], self.command, path, code))
 
     def _note_client(self):
         ip = self.client_address[0]
@@ -437,6 +448,7 @@ class Handler(BaseHTTPRequestHandler):
             body = body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        self.send_header("Connection", "close" if self.close_connection else "keep-alive")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -545,6 +557,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        print("  conexao com %s falhou: %s" % (client_address[0], sys.exc_info()[1]))
+
     """Nao deixa duas copias do servidor dividirem a mesma porta (no Windows
     isso acontece por padrao e uma delas 'engole' os acessos)."""
     allow_reuse_address = not IS_WINDOWS
