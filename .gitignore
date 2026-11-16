@@ -4,3 +4,4 @@ config.bak.json
 __pycache__/
 sons/
 abas.json
+streamdeck.log

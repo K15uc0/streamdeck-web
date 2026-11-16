@@ -23,6 +23,7 @@ CONFIG_PATH = os.path.join(BASE, "config.json")
 TOKEN_PATH = os.path.join(BASE, "token.txt")
 TABS_PATH = os.path.join(BASE, "abas.json")
 FILE_LOCK = threading.Lock()
+LOG_PATH = os.path.join(BASE, "streamdeck.log")
 WEB_DIR = os.path.join(BASE, "web")
 SOUNDS_DIR = os.path.join(BASE, "sons")
 SOUND_EXT = (".mp3", ".wav", ".wma", ".m4a")
@@ -425,6 +426,12 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def _note_client(self):
+        ip = self.client_address[0]
+        if ip not in SEEN:
+            SEEN.add(ip)
+            print("  novo aparelho conectado: %s  [%s]" % (ip, time.strftime("%H:%M:%S")))
+
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         if isinstance(body, str):
             body = body.encode("utf-8")
@@ -448,6 +455,7 @@ class Handler(BaseHTTPRequestHandler):
         return False
 
     def do_POST(self):
+        self._note_client()
         url = urlparse(self.path)
         if not self._authed(parse_qs(url.query)):
             print("! salvamento recusado: codigo de acesso ausente ou errado")
@@ -476,6 +484,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "error": str(e)})
 
     def do_GET(self):
+        self._note_client()
         url = urlparse(self.path)
         q = parse_qs(url.query)
         k = (q.get("k") or [""])[0]
@@ -535,6 +544,78 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, data, MIME.get(ext, "application/octet-stream"))
 
 
+class Server(ThreadingHTTPServer):
+    """Nao deixa duas copias do servidor dividirem a mesma porta (no Windows
+    isso acontece por padrao e uma delas 'engole' os acessos)."""
+    allow_reuse_address = not IS_WINDOWS
+    daemon_threads = True
+
+    def server_bind(self):
+        if IS_WINDOWS:
+            self.socket.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_EXCLUSIVEADDRUSE", -5), 1)
+        super().server_bind()
+
+
+def stop_old_instances():
+    """Encerra copias antigas do Stream Deck que ainda estejam escutando nas
+    nossas portas (so processos nessas portas, nada mais)."""
+    if not IS_WINDOWS:
+        return
+    try:
+        out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True,
+                             timeout=10, creationflags=0x08000000).stdout
+    except Exception as e:
+        print("  aviso: nao consegui verificar copias antigas (%s)" % e)
+        return
+    pids = set()
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[3].upper() in ("LISTENING", "ESCUTANDO"):
+            port = parts[1].rsplit(":", 1)[-1]
+            if port.isdigit() and int(port) in PORTS and parts[4].isdigit():
+                pid = int(parts[4])
+                if pid != os.getpid():
+                    pids.add(pid)
+    for pid in pids:
+        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True,
+                       creationflags=0x08000000)
+        print("  copia antiga encerrada (PID %d)" % pid)
+    if pids:
+        time.sleep(1)
+
+
+class Tee:
+    """Mostra na janela e grava em streamdeck.log."""
+
+    def __init__(self, stream, path):
+        self.stream = stream
+        try:
+            self.f = open(path, "w", encoding="utf-8", buffering=1)
+        except OSError:
+            self.f = None
+
+    def write(self, text):
+        try:
+            self.stream.write(text)
+            self.stream.flush()
+        except Exception:
+            pass
+        if self.f:
+            try:
+                self.f.write(text)
+            except Exception:
+                pass
+
+    def flush(self):
+        try:
+            self.stream.flush()
+        except Exception:
+            pass
+
+
+SEEN = set()
+
+
 def lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -547,12 +628,16 @@ def lan_ip():
 
 
 def main():
+    sys.stdout = Tee(sys.stdout, LOG_PATH)
+    sys.stderr = sys.stdout
+    print("Iniciando em %s" % time.strftime("%d/%m/%Y %H:%M:%S"))
     load_config()  # valida o JSON antes de subir
     os.makedirs(SOUNDS_DIR, exist_ok=True)
+    stop_old_instances()
     srv = port = None
     for port in PORTS:
         try:
-            srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+            srv = Server(("0.0.0.0", port), Handler)
             break
         except OSError:
             continue
