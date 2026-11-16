@@ -431,8 +431,15 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def log_error(self, fmt, *args):
+        raw = getattr(self, "raw_requestline", b"") or b""
+        kind = " (tentativa de HTTPS: use http://)" if raw[:1] == b"\x16" else ""
+        print("  pedido invalido de %s: %s%s %r" % (self.client_address[0], fmt % args, kind, raw[:30]))
+
     def log_request(self, code="-", size="-"):
-        path = self.path.split("?")[0]
+        path = (getattr(self, "path", "") or "").split("?")[0]
+        if not path:
+            return
         if path in ("/ping.gif",) or (path == "/api/config" and self.command == "GET" and code == 200):
             return
         print("  %s %s %s -> %s" % (self.client_address[0], self.command, path, code))
