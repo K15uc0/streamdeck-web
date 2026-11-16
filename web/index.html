@@ -537,7 +537,7 @@
       } else {
         msg.style.display = "block";
         msg.innerHTML = status === 403
-          ? "Código de acesso inválido. Abra o endereço exatamente como aparece na janela do servidor no PC."
+          ? "Este navegador ainda não tem o código de acesso. Abra uma vez o endereço com ?k=… que aparece na janela do servidor no PC."
           : "Sem conexão com o PC. Verifique se o servidor está aberto e se os dois estão na mesma rede.";
         setTimeout(load, 3000);
       }

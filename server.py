@@ -20,7 +20,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE, "config.json")
 TOKEN_PATH = os.path.join(BASE, "token.txt")
 WEB_DIR = os.path.join(BASE, "web")
-PORT = 8765
+PORTS = (80, 8765)  # tenta a 80 (endereco sem ":porta"); se ocupada, usa 8765
 
 IS_WINDOWS = sys.platform.startswith("win")
 
@@ -204,10 +204,18 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, code, obj):
         self._send(code, json.dumps(obj, ensure_ascii=False))
 
+    def _authed(self, q):
+        if (q.get("k") or [""])[0] == TOKEN:
+            return True
+        for part in self.headers.get("Cookie", "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == "sdk" and value == TOKEN:
+                return True
+        return False
+
     def do_POST(self):
         url = urlparse(self.path)
-        k = (parse_qs(url.query).get("k") or [""])[0]
-        if k != TOKEN:
+        if not self._authed(parse_qs(url.query)):
             return self._json(403, {"ok": False, "error": "codigo invalido"})
         if url.path != "/api/config":
             return self._json(404, {"ok": False})
@@ -227,8 +235,17 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(url.query)
         k = (q.get("k") or [""])[0]
 
+        # primeiro acesso com o codigo: guarda no navegador e limpa o endereco
+        if url.path == "/" and k == TOKEN:
+            self.send_response(302)
+            self.send_header("Set-Cookie", "sdk=%s; Max-Age=315360000; Path=/; HttpOnly" % TOKEN)
+            self.send_header("Location", "/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
         if url.path.startswith("/api/"):
-            if k != TOKEN:
+            if not self._authed(q):
                 return self._json(403, {"ok": False, "error": "codigo invalido"})
             if url.path == "/api/config":
                 try:
@@ -274,15 +291,28 @@ def lan_ip():
 
 def main():
     load_config()  # valida o JSON antes de subir
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print("=" * 52)
+    srv = port = None
+    for port in PORTS:
+        try:
+            srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+            break
+        except OSError:
+            continue
+    if srv is None:
+        print("Nenhuma porta livre (%s)." % ", ".join(map(str, PORTS)))
+        sys.exit(1)
+    base = "http://%s%s" % (lan_ip(), "" if port == 80 else ":%d" % port)
+    print("=" * 56)
     print(" Stream Deck rodando.")
-    print(" No navegador do tablet, abra:")
     print()
-    print("   http://%s:%d/?k=%s" % (lan_ip(), PORT, TOKEN))
+    print(" Primeiro acesso no tablet (so uma vez):")
+    print("   %s/?k=%s" % (base, TOKEN))
+    print()
+    print(" Depois disso, basta abrir:")
+    print("   %s" % base)
     print()
     print(" Deixe esta janela aberta. Ctrl+C para parar.")
-    print("=" * 52)
+    print("=" * 56)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

@@ -12,14 +12,20 @@ REQUISITOS
 USO
 1. De dois cliques em "Iniciar Stream Deck.bat".
    Na primeira vez o Windows pergunta sobre o firewall: permita em "Redes privadas".
-2. A janela mostra um endereco como  http://192.168.0.10:8765/?k=1a2b3c4d
-   Abra esse endereco EXATO no navegador do tablet.
-3. No tablet, adicione a pagina aos favoritos / tela inicial para abrir rapido.
+2. A janela mostra dois enderecos, por exemplo:
+     Primeiro acesso:  http://192.168.0.10/?k=1a2b3c4d
+     Depois:           http://192.168.0.10
+   Abra o primeiro UMA vez no tablet. O navegador guarda o codigo e, dali em
+   diante, basta o endereco curto. Salve-o nos favoritos / tela inicial.
+   (Se a porta 80 estiver ocupada no PC, o servidor usa a 8765 e o endereco
+   fica com ":8765" no final.)
    Para a tela nao apagar: Configuracoes > Tela > Suspensao no maximo,
    ou "Permanecer ativo" nas Opcoes do desenvolvedor (com o tablet carregando).
+   Para o IP nao mudar, reserve o IP do PC nas configuracoes do roteador (DHCP).
 
-O codigo depois de "k=" protege o servidor: sem ele ninguem na rede aciona os botoes.
-Ele fica salvo em token.txt (apague o arquivo para gerar outro).
+O codigo protege o servidor: sem ele ninguem na rede aciona os botoes.
+Ele fica salvo em token.txt (apague o arquivo para gerar outro; ai todos os
+aparelhos precisam abrir o endereco com o codigo de novo).
 
 EDITAR NO PROPRIO APP
 - Toque em "Editar" no topo. Toque em qualquer botao (ou num espaco com +)
