@@ -1,5 +1,15 @@
 # Novidades
 
+## 1.3.0
+
+Novo layout Mixer de DJ (página "Rádio"):
+- Deck A (playlist): disco giratório para rolar a lista, tocar/pausar, anterior, próxima, parar, CUE e AUTO DJ.
+- Mixer: faders de volume do PC (master), dos efeitos e do microfone, com medidor de LED e botões de mudo; botão ON AIR que acende em todos os aparelhos.
+- Deck B (efeitos): 4 bancos com 8 pads cada e mensagens rápidas para o chat.
+- No celular em pé, vira três abas: Pads, Deck e Mixer.
+- Tudo editável no modo Editar. Para criar outra página assim: Editar > + Página > Mixer.
+- Nova ação "Rádio: ligar/desligar mudo".
+
 ## 1.2.0
 
 Mais fluido e adaptado a qualquer aparelho:

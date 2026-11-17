@@ -21,7 +21,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 REPO = "K15uc0/streamdeck-web"          # de onde vem as atualizacoes
 IS_WINDOWS = sys.platform.startswith("win")
 FROZEN = getattr(sys, "frozen", False)   # True quando roda como StreamDeck.exe
@@ -188,9 +188,23 @@ class SoundPlayer:
 
     def __init__(self):
         self.q = queue.Queue()
-        self.playing = []
+        self.playing = []          # [(alias, volume do botao)]
         self.n = 0
+        self.level = 100           # fader EFEITOS
+        self.muted = False
         threading.Thread(target=self._loop, daemon=True).start()
+
+    def effective(self, volume):
+        if self.muted:
+            return 0
+        return int(max(0, min(100, int(volume))) * self.level / 100)
+
+    def set_level(self, level=None, muted=None):
+        if level is not None:
+            self.level = max(0, min(100, int(level)))
+        if muted is not None:
+            self.muted = bool(muted)
+        self.q.put(("vol",))
 
     def play(self, path, volume=100, exclusive=False):
         self.q.put(("play", path, volume, exclusive))
@@ -221,17 +235,25 @@ class SoundPlayer:
             except queue.Empty:
                 item = None
             if IS_WINDOWS:
-                for alias in list(self.playing):  # libera sons que terminaram
+                for entry in list(self.playing):  # libera sons que terminaram
                     try:
-                        if self._mci("status %s mode" % alias) != "playing":
-                            self._close(alias)
-                            self.playing.remove(alias)
+                        if self._mci("status %s mode" % entry[0]) != "playing":
+                            self._close(entry[0])
+                            self.playing.remove(entry)
                     except Exception:
-                        self.playing.remove(alias)
+                        self.playing.remove(entry)
             if item is None:
                 continue
+            if item[0] == "vol":           # fader mexeu: ajusta o que ja esta tocando
+                for alias, vol in self.playing:
+                    if IS_WINDOWS:
+                        try:
+                            self._mci("setaudio %s volume to %d" % (alias, self.effective(vol) * 10))
+                        except Exception:
+                            pass
+                continue
             if item[0] == "stop" or (item[0] == "play" and item[3]):
-                for alias in self.playing:
+                for alias, _vol in self.playing:
                     if IS_WINDOWS:
                         self._close(alias)
                 self.playing = []
@@ -240,24 +262,116 @@ class SoundPlayer:
                     continue
             _, path, volume, _ = item
             if not IS_WINDOWS:
-                print("  [simulado] tocar:", path, "vol", volume)
+                print("  [simulado] tocar:", path, "vol", self.effective(volume))
                 continue
             self.n += 1
             alias = "sd%d" % self.n
             try:
                 self._mci('open "%s" type mpegvideo alias %s' % (path, alias))
                 try:
-                    self._mci("setaudio %s volume to %d" % (alias, max(0, min(100, int(volume))) * 10))
+                    self._mci("setaudio %s volume to %d" % (alias, self.effective(volume) * 10))
                 except Exception:
                     pass
                 self._mci("play " + alias)
-                self.playing.append(alias)
+                self.playing.append((alias, volume))
             except Exception as e:
                 print("  erro ao tocar %s: %s" % (path, e))
                 self._close(alias)
 
 
 PLAYER = SoundPlayer()
+
+
+# ------------------------------------------------- volume do Windows (Core Audio) ---
+def _endpoint(flow):
+    """IAudioEndpointVolume do dispositivo padrao: flow 0 = saida (alto-falante),
+    1 = entrada (microfone)."""
+    import ctypes
+    from ctypes import POINTER, byref, c_void_p, HRESULT, WINFUNCTYPE
+
+    ole32 = ctypes.windll.ole32
+    ole32.CoInitializeEx(None, 0)   # cada thread do servidor inicializa o COM
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("d1", ctypes.c_ulong), ("d2", ctypes.c_ushort),
+                    ("d3", ctypes.c_ushort), ("d4", ctypes.c_ubyte * 8)]
+
+    def guid(text):
+        g = GUID()
+        ole32.CLSIDFromString(ctypes.c_wchar_p(text), byref(g))
+        return g
+
+    def method(obj, index, *argtypes):
+        vtbl = ctypes.cast(obj, POINTER(POINTER(c_void_p)))[0]
+        return WINFUNCTYPE(HRESULT, c_void_p, *argtypes)(vtbl[index])
+
+    clsid = guid("{BCDE0395-E52F-467C-8E3D-C4579291692E}")
+    iid_enum = guid("{A95664D2-9614-4F35-A746-DE8DB63617E6}")
+    iid_vol = guid("{5CDF2C82-841E-4546-9722-0CF74078229A}")
+    enum, dev, vol = c_void_p(), c_void_p(), c_void_p()
+    hr = ole32.CoCreateInstance(byref(clsid), None, 0x17, byref(iid_enum), byref(enum))
+    if hr != 0 or not enum.value:
+        raise OSError("audio indisponivel (%x)" % (hr & 0xFFFFFFFF))
+    try:
+        method(enum, 4, ctypes.c_int, ctypes.c_int, POINTER(c_void_p))(enum, flow, 0, byref(dev))
+        method(dev, 3, POINTER(GUID), ctypes.c_ulong, c_void_p, POINTER(c_void_p))(
+            dev, byref(iid_vol), 0x17, None, byref(vol))
+    finally:
+        if dev.value:
+            method(dev, 2)(dev)
+        method(enum, 2)(enum)
+    return vol, method
+
+
+def win_volume(flow, level=None, toggle_mute=False):
+    """Le (e opcionalmente muda) volume 0-100 e mudo. Devolve (nivel, mudo)."""
+    if not IS_WINDOWS:
+        st = SIM_VOL.setdefault(flow, [60, False])
+        if level is not None:
+            st[0] = max(0, min(100, int(level)))
+        if toggle_mute:
+            st[1] = not st[1]
+        return st[0], st[1]
+    import ctypes
+    from ctypes import POINTER, byref
+    vol, method = _endpoint(flow)
+    try:
+        if level is not None:
+            method(vol, 7, ctypes.c_float, ctypes.c_void_p)(vol, max(0.0, min(1.0, level / 100.0)), None)
+        mute = ctypes.c_int()
+        method(vol, 15, POINTER(ctypes.c_int))(vol, byref(mute))
+        if toggle_mute:
+            method(vol, 14, ctypes.c_int, ctypes.c_void_p)(vol, 0 if mute.value else 1, None)
+            mute.value = 0 if mute.value else 1
+        cur = ctypes.c_float()
+        method(vol, 9, POINTER(ctypes.c_float))(vol, byref(cur))
+        return int(round(cur.value * 100)), bool(mute.value)
+    finally:
+        method(vol, 2)(vol)
+
+
+SIM_VOL = {}
+ONAIR = [False]
+VOL_TARGETS = {"master": 0, "mic": 1}
+
+
+def levels():
+    out = {"effects": PLAYER.level, "effectsMute": PLAYER.muted, "onair": ONAIR[0]}
+    for name, flow in VOL_TARGETS.items():
+        try:
+            out[name], out[name + "Mute"] = win_volume(flow)
+        except Exception:
+            out[name], out[name + "Mute"] = None, False
+    return out
+
+
+def set_level(target, value=None, toggle_mute=False):
+    if target == "effects":
+        PLAYER.set_level(value, (not PLAYER.muted) if toggle_mute else None)
+    elif target in VOL_TARGETS:
+        win_volume(VOL_TARGETS[target], value, toggle_mute)
+    else:
+        raise ValueError("controle desconhecido: %s" % target)
 
 
 # ---------------------------------------------------------- requisicao web ---
@@ -438,6 +552,8 @@ def run_action(action):
         PLAYER.play(path, action.get("volume", 100), bool(action.get("exclusive")))
     elif t == "stopsound":
         PLAYER.stop_all()
+    elif t == "mute":
+        set_level(action.get("target", "master"), toggle_mute=True)
     elif t == "text":
         type_text(action["text"], bool(action.get("enter")))
     elif t == "http":
@@ -506,7 +622,7 @@ def write_json(path, data):
 
 
 ACTION_TYPES = {"hotkey", "open", "command", "multi", "page", "none",
-                "sound", "stopsound", "text", "http"}
+                "sound", "stopsound", "text", "http", "mute"}
 
 
 def validate_action(a, n_pages, where):
@@ -525,6 +641,8 @@ def validate_action(a, n_pages, where):
         raise ValueError("%s: informe o comando" % where)
     elif t == "sound" and not str(a.get("file", "")).strip():
         raise ValueError("%s: escolha o arquivo de som" % where)
+    elif t == "mute" and a.get("target", "master") not in ("master", "mic", "effects"):
+        raise ValueError("%s: mudo deve ser master, mic ou effects" % where)
     elif t == "text" and not str(a.get("text", "")):
         raise ValueError("%s: informe o texto" % where)
     elif t == "http":
@@ -561,6 +679,8 @@ def validate_config(cfg):
     for pi, pg in enumerate(pages):
         if not isinstance(pg, dict) or not isinstance(pg.get("buttons"), list):
             raise ValueError("pagina %d invalida" % (pi + 1))
+        if pg.get("layout", "grid") not in ("grid", "mixer"):
+            raise ValueError("pagina %d: layout invalido" % (pi + 1))
         if len(pg["buttons"]) > 120:
             raise ValueError("pagina %d: botoes demais" % (pi + 1))
         for bi, b in enumerate(pg["buttons"]):
@@ -822,7 +942,7 @@ class Handler(BaseHTTPRequestHandler):
         path = (getattr(self, "path", "") or "").split("?")[0]
         if not path:
             return
-        if path in ("/ping.gif", "/api/state") or (path == "/api/config" and self.command == "GET" and code == 200):
+        if path in ("/ping.gif", "/api/state", "/api/volume") or (path == "/api/config" and self.command == "GET" and code == 200):
             return
         print("  %s %s %s -> %s" % (self.client_address[0], self.command, path, code))
 
@@ -1055,8 +1175,18 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/update":
                 return self._json(200, update_status())
             if url.path == "/api/state":   # consulta leve e frequente dos aparelhos
-                return self._json(200, {"ok": True, "v": config_version(),
-                                        "update": bool(UPDATE["available"])})
+                st = {"ok": True, "v": config_version(), "update": bool(UPDATE["available"])}
+                if q.get("mix"):
+                    st["levels"] = levels()
+                return self._json(200, st)
+            if url.path == "/api/volume":
+                try:
+                    if "c" in q:   # c = controle (master, effects, mic)
+                        v = q.get("v", [None])[0]
+                        set_level(q["c"][0], None if v is None else max(0, min(100, int(v))))
+                    return self._json(200, {"ok": True, "levels": levels()})
+                except Exception as e:
+                    return self._json(400, {"ok": False, "error": str(e)})
             if url.path == "/api/config":
                 try:
                     return self._json(200, load_config(), extra={"X-Config-Version": config_version()})
@@ -1073,10 +1203,15 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     p = int(q["p"][0])
                     b = int(q["b"][0])
-                    btn = find_button(load_config(), p, b)
+                    cfg = load_config()
+                    btn = find_button(cfg, p, b)
                     print("> %s" % btn.get("label", "?"))
                     run_action(btn["action"])
-                    return self._json(200, {"ok": True})
+                    out = {"ok": True}
+                    if cfg["pages"][p].get("layout") == "mixer" and b == 42:   # botao ON AIR
+                        ONAIR[0] = not ONAIR[0]
+                        out["onair"] = ONAIR[0]
+                    return self._json(200, out)
                 except Exception as e:
                     print("  erro:", e)
                     return self._json(500, {"ok": False, "error": str(e)})

@@ -27,6 +27,43 @@
   .tab i.down { background: #cf222e; }
   .tab.add { padding: 0 11px; color: #fff; }
   #dots .pn { display: inline-block; color: #6e7681; font-size: 12px; vertical-align: top; line-height: 26px; margin-right: 4px; }
+
+  /* ---- layout Mixer de DJ ---- */
+  .mx-panel { position: absolute; background: #15181d; border: 1px solid #262b33; border-radius: 14px;
+    -webkit-box-sizing: border-box; box-sizing: border-box; }
+  .mx-panel.mid { background: #12151a; }
+  .mx-t { position: absolute; font-size: 12px; letter-spacing: 1.5px; color: #9aa4b2; white-space: nowrap; overflow: hidden; }
+  .mx-t b { font-weight: bold; }
+  .key.mx { border-radius: 10px; background: #1c2027;
+    -webkit-box-shadow: inset 0 0 0 1px #2d333c; box-shadow: inset 0 0 0 1px #2d333c; }
+  .key.mx.empty { background: #101317; -webkit-box-shadow: inset 0 0 0 1px #1f242c; box-shadow: inset 0 0 0 1px #1f242c; }
+  .key.mx.pad { background: #11252b; -webkit-box-shadow: inset 0 0 0 1px #1e4a54; box-shadow: inset 0 0 0 1px #1e4a54; }
+  .key.mx.pad .lb { text-align: left; left: 9px; right: 6px; }
+  .key.mx .tag { position: absolute; left: 9px; top: 7px; font-size: 10px; color: rgba(255,255,255,0.55); font-family: monospace; }
+  .key.mx.empty .tag { color: #4b5563; }
+  .key.mx.air { font-weight: bold; letter-spacing: 2px; }
+  .key.mx.air.on { background: #ef4444 !important; -webkit-box-shadow: 0 0 14px rgba(239,68,68,0.6); box-shadow: 0 0 14px rgba(239,68,68,0.6); }
+  .key.mx.muted { background: #7c2d12 !important; }
+  .mx-led { position: absolute; border-radius: 2px; }
+  .mx-track { position: absolute; background: #05070a; border: 1px solid #2d333c; border-radius: 3px;
+    -webkit-box-sizing: border-box; box-sizing: border-box; }
+  .mx-cap { position: absolute; border-radius: 5px; background: #b9c0ca; border: 1px solid #0b0d10;
+    -webkit-box-sizing: border-box; box-sizing: border-box; }
+  .mx-cap i { position: absolute; left: 3px; right: 3px; top: 50%; height: 2px; margin-top: -1px; background: #11151a; }
+  .mx-hit { position: absolute; }
+  .mx-val { position: absolute; text-align: center; font-family: monospace; font-size: 13px; color: #e6edf3; }
+  .mx-lbl { position: absolute; text-align: center; font-size: 12px; letter-spacing: 1px; color: #c3cad4; font-weight: bold; }
+  .mx-jog { position: absolute; border-radius: 50%; background: #171a20; border: 3px solid #2d333c;
+    -webkit-box-sizing: border-box; box-sizing: border-box; }
+  .mx-ring { position: absolute; left: 6px; top: 6px; right: 6px; bottom: 6px; border-radius: 50%;
+    border: 7px dashed #2a3039; -webkit-box-sizing: border-box; box-sizing: border-box; }
+  .mx-core { position: absolute; border-radius: 50%; background: #0f1216; border: 2px solid #ff8a3d;
+    -webkit-box-sizing: border-box; box-sizing: border-box; text-align: center; color: #9aa4b2; font-size: 11px; letter-spacing: 1px; }
+  .mx-tab { position: absolute; border-radius: 9px; text-align: center; font-size: 14px; font-weight: bold; color: #9aa4b2; }
+  .mx-tab.on { background: #22d3ee; color: #061016; }
+  .mx-bank { position: absolute; border-radius: 8px; text-align: center; font-size: 13px; font-weight: bold;
+    color: #9aa4b2; background: #1c2027; -webkit-box-shadow: inset 0 0 0 1px #2d333c; box-shadow: inset 0 0 0 1px #2d333c; }
+  .mx-bank.on { background: #22d3ee; color: #061016; -webkit-box-shadow: none; box-shadow: none; }
   #sheet .chk { display: block; color: #c9d1d9; font-size: 14px; margin-top: 12px; }
   #sheet .chk input { width: 20px; height: 20px; vertical-align: middle; margin: 0 8px 0 0; }
   #tools { position: absolute; right: 34px; top: 0; line-height: 0; padding-bottom: 5px; }
@@ -152,6 +189,7 @@
     playlist: '<path d="M3 6h13M3 11h13M3 16h8"' + S + '/><path d="M15 14l6 3.5-6 3.5z" fill="#fff"/>',
     radio: '<rect x="3" y="8" width="18" height="12" rx="2"' + S + '/><path d="M7 8l10-5M6 12h4M6 15.5h4"' + S + '/><circle cx="15.5" cy="14" r="2.5" fill="#fff"/>',
     headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"' + S + '/><rect x="3" y="14" width="4" height="7" rx="1" fill="#fff"/><rect x="17" y="14" width="4" height="7" rx="1" fill="#fff"/>',
+    updown: '<path d="M12 4v16M7 9l5-5 5 5M7 15l5 5 5-5"' + S + '/>',
     bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" fill="#fff"/><path d="M10 20.5a2 2 0 0 0 4 0"' + S + '/>'
   };
   var COLORS = ["#1f6feb", "#0a3069", "#8250df", "#bf3989", "#cf222e", "#d1490b",
@@ -160,7 +198,8 @@
                  ["open", "Abrir site, arquivo ou programa"], ["command", "Rodar comando"],
                  ["page", "Ir para outra página"], ["multi", "Sequência de ações (avançado)"],
                  ["sound", "Rádio: tocar efeito sonoro"], ["stopsound", "Rádio: parar efeitos sonoros"],
-                 ["text", "Rádio: digitar mensagem no chat"], ["http", "Rádio: chamar API do programa"]];
+                 ["text", "Rádio: digitar mensagem no chat"], ["http", "Rádio: chamar API do programa"],
+                 ["mute", "Rádio: ligar/desligar mudo"]];
   var DEFAULT_ICON = { sound: "sound", stopsound: "stop", text: "chat", http: "radio" };
 
   function qs(name) {
@@ -265,6 +304,7 @@
     pending++;
     req("GET", "/api/press?p=" + page + "&b=" + i, null, function (ok, data, status) {
       pending--;
+      if (ok && data && typeof data.onair === "boolean") setOnAir(data.onair);
       if (ok) return;
       flash(el, false);
       toast(status === 0 ? "Sem conexão com o PC" : ((data && data.error) || "Não funcionou"), true);
@@ -326,7 +366,8 @@
     t.innerHTML = "";
     var items = editing
       ? [["Renomear", renamePage, ""], ["+ Página", addPage, ""], ["Excluir página", delPage, "red"],
-         ["Grade " + cfg.columns + "×" + cfg.rows, gridSize, ""]]
+         [cfg.pages[page].layout === "mixer" ? "Layout: Mixer" : "Grade " + cfg.columns + "×" + cfg.rows,
+          cfg.pages[page].layout === "mixer" ? function () { toast("Toque em um botão, pad, mudo ou no disco para editar."); } : gridSize, ""]]
       : [];
     if (editing && canFullscreen()) items.push([isFullscreen() ? "Sair da tela cheia" : "Tela cheia", toggleFullscreen, ""]);
     if (editing || updAvail()) items.push([updAvail() ? "● Atualização" : "Atualizações", openUpdates, updAvail() ? "new" : ""]);
@@ -341,9 +382,21 @@
     renderTabs();
   }
 
+  function renderDots(pg) {
+    var d = '<b class="pn">' + esc(pg.name || "") + "</b>";
+    if (cfg.pages.length > 1 || editing) {
+      for (var j = 0; j < cfg.pages.length; j++) d += '<span class="' + (j === page ? "on" : "") + '"><i></i></span>';
+    }
+    dots.innerHTML = d;
+    var sp = dots.getElementsByTagName("span");
+    for (var k = 0; k < sp.length; k++) (function (idx) { tap(sp[idx], function () { goPage(idx); }); })(k);
+  }
+
   function render() {
     renderBar();
     var pg = cfg.pages[page];
+    if (pg.layout === "mixer") { renderMixer(pg); return; }
+    mx = null;
     grid.className = editing ? "editing" : "";
     grid.innerHTML = "";
     keys = [];
@@ -389,6 +442,7 @@
 
   function layout() {
     if (!cfg) return;
+    if (mx) { layoutMixer(); return; }
     var W = window.innerWidth, H = window.innerHeight;
     var top = barHeight(W), bottom = 26;
     var gap = Math.round(Math.min(W, H) * 0.025);
@@ -424,6 +478,361 @@
   var layoutT = null;
   function layoutSoon() { clearTimeout(layoutT); layoutT = setTimeout(layout, 60); }
 
+
+  /* ======================================================= Mixer de DJ === */
+  /* posicoes fixas: 0-5 deck A | 6-37 pads (4 bancos x 8) | 38-41 chat | 42 ON AIR
+     43-45 mudo master/efeitos/mic | 46-47 disco (esquerda/direita) */
+  var MX = { pad0: 6, chat0: 38, air: 42, mute0: 43, jogL: 46, jogR: 47, n: 48 };
+  var mx = null, mxBank = 0, mxTab = "pads", onAir = false, lv = {};
+  var FADERS = [["MASTER", "master"], ["EFEITOS", "effects"], ["MIC", "mic"]];
+
+  function none() { return { label: "", icon: "", color: "", action: { type: "none" } }; }
+  function newMixerPage(name) {
+    var b = [], i;
+    for (i = 0; i < MX.n; i++) b.push(none());
+    function k(l, ic, col, a) { return { label: l, icon: ic, color: col, action: a }; }
+    b[0] = k("Anterior", "prev", "", { type: "hotkey", keys: ["prev"] });
+    b[1] = k("Play/Pausa", "playpause", "#ff8a3d", { type: "hotkey", keys: ["playpause"] });
+    b[2] = k("Próxima", "next", "", { type: "hotkey", keys: ["next"] });
+    b[3] = k("Parar", "stop", "", { type: "hotkey", keys: ["stop"] });
+    b[4] = k("CUE", "headphones", "", { type: "hotkey", keys: ["ctrl", "alt", "f10"] });
+    b[5] = k("AUTO DJ", "playlist", "", { type: "hotkey", keys: ["ctrl", "alt", "f11"] });
+    for (i = 0; i < 4; i++) b[MX.pad0 + i * 8 + 7] = k("Parar sons", "stop", "#7f1d1d", { type: "stopsound" });
+    b[MX.air] = k("ON AIR", "", "#ef4444", { type: "hotkey", keys: ["ctrl", "alt", "f12"] });
+    b[43] = k("MUDO", "", "", { type: "mute", target: "master" });
+    b[44] = k("MUDO", "", "", { type: "mute", target: "effects" });
+    b[45] = k("MUTE", "", "", { type: "mute", target: "mic" });
+    b[46] = k("Subir na lista", "", "", { type: "hotkey", keys: ["up"] });
+    b[47] = k("Descer na lista", "", "", { type: "hotkey", keys: ["down"] });
+    return { name: name, layout: "mixer", buttons: b };
+  }
+
+  function div(cls, parent) {
+    var d = document.createElement("div");
+    d.className = cls;
+    (parent || grid).appendChild(d);
+    return d;
+  }
+  function place(el, x, y, w, h) {
+    var st = el.style;
+    st.left = Math.round(x) + "px"; st.top = Math.round(y) + "px";
+    if (w != null) st.width = Math.max(0, Math.round(w)) + "px";
+    if (h != null) st.height = Math.max(0, Math.round(h)) + "px";
+  }
+
+  /* um botao do mixer: mesmo comportamento e editor dos botoes da grade */
+  function mxKey(slot, extra, tag) {
+    var pg = cfg.pages[page], b = pg.buttons[slot];
+    var empty = !b || !b.action || b.action.type === "none";
+    var el = div("key mx " + (extra || "") + (empty ? " empty" : "") + (slot === moveFrom ? " from" : ""));
+    if (!empty && b.color) el.style.background = b.color;
+    el.innerHTML = '<div class="ic"></div><div class="lb"></div><div class="fl"></div>' + (tag ? '<span class="tag">' + esc(tag) + "</span>" : "");
+    if (!empty) el.childNodes[1].innerHTML = esc(b.label || "");
+    if (!empty || editing) tap(el, function (rep) { press(slot, el, rep); }, function () { return canRepeat(slot); });
+    var k = { el: el, b: b, empty: empty, ic: el.firstChild, lb: el.childNodes[1], drawn: null, slot: slot, tag: !!tag };
+    mx.keys.push(k);
+    return k;
+  }
+
+  function sizeKey(k, x, y, w, h) {
+    place(k.el, x, y, w, h);
+    var m = Math.min(w, h), ic = k.ic, lb = k.lb;
+    var hasIcon = !k.empty && k.b.icon && ICONS[k.b.icon], label = !k.empty && k.b.label;
+    if (k.empty) {
+      var plus = editing ? "+" + Math.round(m * 0.4) : "";
+      if (k.drawn !== plus) { ic.innerHTML = editing ? svg("plus", Math.round(m * 0.4)).replace(/#fff/g, "#30363d") : ""; k.drawn = plus; }
+      ic.style.top = Math.round((h - m * 0.4) / 2) + "px";
+      lb.style.display = "none";
+      return;
+    }
+    var iconOnly = hasIcon && (!label || (h < 70 && w < 100));
+    var is = Math.round(m * (iconOnly ? 0.48 : 0.34));
+    var want = hasIcon ? k.b.icon + is : "";
+    if (k.drawn !== want) { ic.innerHTML = hasIcon ? svg(k.b.icon, is) : ""; k.drawn = want; }
+    var font = Math.max(11, Math.min(16, Math.round(m * 0.17)));
+    lb.style.display = iconOnly ? "none" : "block";
+    lb.style.fontSize = font + "px";
+    if (iconOnly) {
+      ic.style.top = Math.round((h - is) / 2) + "px";
+    } else if (hasIcon) {
+      ic.style.top = Math.round(h * 0.16) + "px";
+      lb.style.top = Math.round(h * 0.16 + is + 5) + "px";
+      lb.style.whiteSpace = k.tag ? "normal" : "nowrap";
+    } else if (k.tag) {
+      lb.style.whiteSpace = "normal";
+      lb.style.top = "auto"; lb.style.bottom = "8px";
+    } else {
+      lb.style.whiteSpace = "normal";
+      lb.style.top = Math.max(2, Math.round(h / 2 - font * (label.length * font * 0.55 > w - 12 ? 1.2 : 0.65))) + "px";
+    }
+  }
+
+  function setOnAir(v) {
+    onAir = v;
+    if (mx && mx.air) mx.air.el.className = mx.air.el.className.replace(/ on/g, "") + (v ? " on" : "");
+  }
+
+  /* ----------------------------------------------------------- faders --- */
+  function makeFader(i) {
+    var f = { i: i, target: FADERS[i][1], leds: [], v: lv[FADERS[i][1]] };
+    f.lbl = div("mx-lbl"); f.lbl.innerHTML = FADERS[i][0];
+    for (var j = 0; j < 14; j++) f.leds.push(div("mx-led"));
+    f.track = div("mx-track");
+    f.cap = div("mx-cap"); f.cap.innerHTML = "<i></i>";
+    f.hit = div("mx-hit");
+    f.val = div("mx-val");
+    f.mute = mxKey(MX.mute0 + i, "", null);
+    var dragging = false;
+    function fromY(y) {
+      var r = f.geo; if (!r) return;
+      var v = Math.round((1 - (y - r.y - r.cap / 2) / (r.h - r.cap)) * 100);
+      v = Math.max(0, Math.min(100, v));
+      if (v !== f.v) { f.v = v; drawFader(f); sendFader(f); }
+    }
+    function start(y) {
+      if (editing) { toast("Os faders controlam o volume e não precisam de configuração."); return; }
+      dragging = true; f.dragging = true; fromY(y);
+    }
+    function end() { dragging = false; setTimeout(function () { f.dragging = false; }, 600); }
+    f.hit.addEventListener("touchstart", function (e) { e.preventDefault(); start(e.touches[0].clientY); }, false);
+    f.hit.addEventListener("touchmove", function (e) { e.preventDefault(); if (dragging) fromY(e.touches[0].clientY); }, false);
+    f.hit.addEventListener("touchend", function (e) { e.preventDefault(); end(); }, false);
+    f.hit.addEventListener("mousedown", function (e) {
+      start(e.clientY);
+      function mv(ev) { if (dragging) fromY(ev.clientY); }
+      function up() { end(); document.removeEventListener("mousemove", mv, false); document.removeEventListener("mouseup", up, false); }
+      document.addEventListener("mousemove", mv, false);
+      document.addEventListener("mouseup", up, false);
+    }, false);
+    return f;
+  }
+
+  function sendFader(f) {
+    if (f.sending) { f.next = f.v; return; }
+    f.sending = true;
+    req("GET", "/api/volume?c=" + f.target + "&v=" + f.v, null, function (ok, data) {
+      f.sending = false;
+      if (!ok) toast((data && data.error) || "Não foi possível mudar o volume", true);
+      if (f.next != null && f.next !== f.v) { f.next = null; sendFader(f); } else f.next = null;
+      if (!f.sending) { f.v = f.v; }
+    });
+  }
+
+  function drawFader(f) {
+    var r = f.geo;
+    if (!r) return;
+    var known = f.v != null, v = known ? f.v : 0;
+    place(f.cap, r.capX, r.y + (1 - v / 100) * (r.h - r.cap), r.capW, r.cap);
+    var lit = Math.round(v / 100 * 14);
+    for (var j = 0; j < 14; j++) {
+      var c = j >= 12 ? "#ef4444" : j >= 9 ? "#eab308" : "#22c55e";
+      f.leds[j].style.background = c;
+      f.leds[j].style.opacity = j < lit ? "1" : "0.15";
+    }
+    f.val.innerHTML = known ? v + "%" : "--";
+    var muted = lv[f.target + "Mute"];
+    f.mute.el.className = f.mute.el.className.replace(/ muted/g, "") + (muted ? " muted" : "");
+  }
+
+  function applyLevels(l) {
+    if (!l) return;
+    lv = l;
+    if (typeof l.onair === "boolean") setOnAir(l.onair);
+    if (!mx) return;
+    for (var i = 0; i < mx.faders.length; i++) {
+      var f = mx.faders[i];
+      if (!f.dragging && !f.sending) { f.v = l[f.target]; }
+      drawFader(f);
+    }
+  }
+
+  /* ------------------------------------------------------------- disco --- */
+  function makeJog() {
+    var j = { angle: 0, acc: 0 };
+    j.el = div("mx-jog");
+    j.ring = div("mx-ring", j.el);
+    j.core = div("mx-core", j.el);
+    j.core.innerHTML = '<div class="jc"></div>';
+    var active = false, last = 0;
+    function ang(x, y) {
+      var r = j.el.getBoundingClientRect();
+      return Math.atan2(y - (r.top + r.height / 2), x - (r.left + r.width / 2)) * 180 / Math.PI;
+    }
+    function start(x, y) {
+      if (editing) {
+        var r = j.el.getBoundingClientRect();
+        editTap(x < r.left + r.width / 2 ? MX.jogL : MX.jogR);
+        return;
+      }
+      active = true; last = ang(x, y); j.acc = 0;
+    }
+    function move(x, y) {
+      if (!active) return;
+      var a = ang(x, y), d = a - last;
+      if (d > 180) d -= 360; if (d < -180) d += 360;
+      last = a; j.acc += d; j.angle += d;
+      var t = "rotate(" + Math.round(j.angle) + "deg)";
+      j.ring.style.webkitTransform = t; j.ring.style.transform = t;
+      while (j.acc >= 24) { j.acc -= 24; press(MX.jogR, j.el, true); }
+      while (j.acc <= -24) { j.acc += 24; press(MX.jogL, j.el, true); }
+    }
+    j.el.addEventListener("touchstart", function (e) { e.preventDefault(); start(e.touches[0].clientX, e.touches[0].clientY); }, false);
+    j.el.addEventListener("touchmove", function (e) { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); }, false);
+    j.el.addEventListener("touchend", function (e) { e.preventDefault(); active = false; }, false);
+    j.el.addEventListener("mousedown", function (e) {
+      start(e.clientX, e.clientY);
+      function mv(ev) { move(ev.clientX, ev.clientY); }
+      function up() { active = false; document.removeEventListener("mousemove", mv, false); document.removeEventListener("mouseup", up, false); }
+      document.addEventListener("mousemove", mv, false);
+      document.addEventListener("mouseup", up, false);
+    }, false);
+    j.el.innerHTML += '<div class="fl"></div>';
+    j.ring = j.el.firstChild; j.core = j.el.childNodes[1];
+    return j;
+  }
+
+  /* --------------------------------------------------------- montagem --- */
+  function renderMixer(pg) {
+    grid.className = editing ? "editing" : "";
+    grid.innerHTML = "";
+    keys = [];
+    mx = { keys: [], faders: [], pads: [], deck: [], chat: [] };
+    var portrait = window.innerWidth < window.innerHeight * 1.1;
+    mx.portrait = portrait;
+    mx.panels = [div("mx-panel"), div("mx-panel mid"), div("mx-panel")];
+    mx.titles = [div("mx-t"), div("mx-t"), div("mx-t")];
+    mx.titles[0].innerHTML = '<b style="color:#ff8a3d">DECK A</b> · PLAYLIST';
+    mx.titles[1].innerHTML = '<b style="color:#e6edf3">MIXER</b> · VOLUME';
+    mx.titles[2].innerHTML = '<b style="color:#22d3ee">DECK B</b> · EFEITOS';
+    if (portrait) {
+      mx.tabs = [];
+      var names = [["pads", "Pads"], ["deck", "Deck"], ["mixer", "Mixer"]];
+      for (var t = 0; t < 3; t++) (function (id, label) {
+        var el = div("mx-tab" + (mxTab === id ? " on" : ""));
+        el.innerHTML = label;
+        tap(el, function () { mxTab = id; render(); });
+        mx.tabs.push(el);
+      })(names[t][0], names[t][1]);
+    }
+    var show = function (id) { return !portrait || mxTab === id; };
+    if (show("deck")) {
+      mx.jog = makeJog();
+      for (var a = 0; a < 6; a++) mx.deck.push(mxKey(a, a === 1 ? "" : ""));
+    }
+    if (show("mixer")) {
+      mx.air = mxKey(MX.air, "air" + (onAir ? " on" : ""));
+      for (var f = 0; f < 3; f++) mx.faders.push(makeFader(f));
+    }
+    if (show("pads")) {
+      mx.banks = [];
+      for (var bk = 0; bk < 4; bk++) (function (n) {
+        var el = div("mx-bank" + (mxBank === n ? " on" : ""));
+        el.innerHTML = "ABCD".charAt(n);
+        tap(el, function () { mxBank = n; render(); });
+        mx.banks.push(el);
+      })(bk);
+      for (var p = 0; p < 8; p++) mx.pads.push(mxKey(MX.pad0 + mxBank * 8 + p, "pad", "ABCD".charAt(mxBank) + (p + 1)));
+      mx.chatT = div("mx-t");
+      mx.chatT.innerHTML = '<b style="color:#c3cad4">CHAT</b> · MENSAGENS RÁPIDAS';
+      for (var c = 0; c < 4; c++) mx.chat.push(mxKey(MX.chat0 + c, ""));
+    }
+    renderDots(pg);
+    layoutMixer();
+    req("GET", "/api/volume", null, function (ok, data) { if (ok) applyLevels(data.levels); });
+  }
+
+  function layoutMixer() {
+    var W = window.innerWidth, H = window.innerHeight;
+    var portrait = W < H * 1.1;
+    if (portrait !== mx.portrait) { render(); return; }
+    var top = barHeight(W) + 6, bottom = 28, pad = 10, g = 10;
+    var X = pad, Y = top, AW = W - pad * 2, AH = H - top - bottom;
+    var i;
+    for (i = 0; i < 3; i++) { mx.panels[i].style.display = "none"; mx.titles[i].style.display = "none"; }
+    function panel(n, x, y, w, h) {
+      mx.panels[n].style.display = "block"; place(mx.panels[n], x, y, w, h);
+      if (!portrait) { mx.titles[n].style.display = "block"; place(mx.titles[n], x + 14, y + 10, w - 28, 16); }
+      return { x: x + 12, y: y + (portrait ? 12 : 34), w: w - 24, h: h - (portrait ? 24 : 46) };
+    }
+    var A, B, M;
+    if (portrait) {
+      for (i = 0; i < 3; i++) place(mx.tabs[i], X + i * (AW / 3), Y, AW / 3 - 4, 40);
+      for (i = 0; i < 3; i++) mx.tabs[i].style.lineHeight = "40px";
+      var area = { x: X, y: Y + 48, w: AW, h: AH - 48 };
+      if (mxTab === "deck") A = panel(0, area.x, area.y, area.w, area.h);
+      if (mxTab === "mixer") M = panel(1, area.x, area.y, area.w, area.h);
+      if (mxTab === "pads") B = panel(2, area.x, area.y, area.w, area.h);
+    } else {
+      var aw = Math.round(AW * 0.31), bw = Math.round(AW * 0.34), mw = AW - aw - bw - 2 * g;
+      A = panel(0, X, Y, aw, AH);
+      M = panel(1, X + aw + g, Y, mw, AH);
+      B = panel(2, X + aw + g + mw + g, Y, bw, AH);
+    }
+    if (A) layoutDeck(A, portrait);
+    if (M) layoutFaders(M);
+    if (B) layoutPads(B, portrait);
+    dots.style.top = (H - 26) + "px";
+  }
+
+  function layoutDeck(r, portrait) {
+    var rowH = Math.max(44, Math.min(68, Math.round(r.h * 0.14))), row2 = 44, gap = 10;
+    var jog = Math.min(r.w - 8, r.h - rowH - row2 - gap * 3, portrait ? 300 : 999);
+    var jx = r.x + (r.w - jog) / 2, jy = r.y + Math.max(0, (r.h - rowH - row2 - gap * 2 - jog) / 2);
+    place(mx.jog.el, jx, jy, jog, jog);
+    var core = Math.round(jog * 0.66);
+    place(mx.jog.core, (jog - 6 - core) / 2, (jog - 6 - core) / 2, core, core);
+    mx.jog.core.innerHTML = '<div style="padding-top:' + Math.round(core / 2 - 22) + 'px">' + svg("updown", 22).replace(/#fff/g, "#ff8a3d") + "<br>GIRE PARA<br>ROLAR A LISTA</div>";
+    var y = r.y + r.h - rowH - row2 - gap, cw = (r.w - 3 * 8) / 4;
+    for (var i = 0; i < 4; i++) sizeKey(mx.deck[i], r.x + i * (cw + 8), y, cw, rowH);
+    var hw = (r.w - 8) / 2;
+    sizeKey(mx.deck[4], r.x, y + rowH + gap, hw, row2);
+    sizeKey(mx.deck[5], r.x + hw + 8, y + rowH + gap, hw, row2);
+  }
+
+  function layoutFaders(r) {
+    var airH = 34, airW = Math.min(150, r.w);
+    sizeKey(mx.air, r.x + (r.w - airW) / 2, r.y - 2, airW, airH);
+    var y0 = r.y + airH + 10, colW = (r.w - 16) / 3;
+    var lblH = 18, valH = 18, btnH = 36, gap = 8;
+    var fh = r.h - (airH + 10) - lblH - valH - btnH - gap * 3;
+    for (var i = 0; i < 3; i++) {
+      var f = mx.faders[i], cx = r.x + i * (colW + 8);
+      place(f.lbl, cx, y0, colW, lblH);
+      var mid = cx + colW / 2, capW = Math.max(28, Math.min(46, colW - 34)), cap = 30;
+      var fy = y0 + lblH + gap;
+      var ledH = (fh - 13 * 3) / 14;
+      for (var j = 0; j < 14; j++) place(f.leds[j], mid - capW / 2 - 14, fy + fh - (j + 1) * ledH - j * 3, 8, ledH);
+      place(f.track, mid + 4 - 3, fy, 6, fh);
+      f.geo = { y: fy, h: fh, cap: cap, capX: mid + 4 - capW / 2, capW: capW };
+      place(f.hit, cx, fy - 10, colW, fh + 20);
+      place(f.val, cx, fy + fh + gap, colW, valH);
+      sizeKey(f.mute, cx, fy + fh + gap + valH + gap, colW, btnH);
+      drawFader(f);
+    }
+  }
+
+  function layoutPads(r, portrait) {
+    var gap = 8, bankH = 34;
+    for (var i = 0; i < 4; i++) {
+      var bw = (r.w - 3 * 6) / 4;
+      place(mx.banks[i], r.x + i * (bw + 6), r.y, bw, bankH);
+      mx.banks[i].style.lineHeight = bankH + "px";
+    }
+    var chatH = 44, chatRows = 2, chatT = 18;
+    var cols = portrait ? 2 : 4, rows = 8 / cols;
+    var avail = r.h - bankH - gap - chatT - gap - chatRows * chatH - gap - gap;
+    var pw = (r.w - (cols - 1) * gap) / cols, ph = Math.min((avail - (rows - 1) * gap) / rows, pw * (portrait ? 0.9 : 1.7));
+    var py = r.y + bankH + gap;
+    for (i = 0; i < 8; i++) {
+      var c = i % cols, rr = Math.floor(i / cols);
+      sizeKey(mx.pads[i], r.x + c * (pw + gap), py + rr * (ph + gap), pw, ph);
+    }
+    var cy = r.y + r.h - chatRows * chatH - gap;
+    place(mx.chatT, r.x + 2, cy - chatT - 4, r.w, chatT);
+    var hw = (r.w - gap) / 2;
+    for (i = 0; i < 4; i++) sizeKey(mx.chat[i], r.x + (i % 2) * (hw + gap), cy + Math.floor(i / 2) * (chatH + gap), hw, chatH);
+  }
+
   /* ---------------------------------------------------------- edicao --- */
   function toggleEdit() {
     editing = !editing;
@@ -454,6 +863,12 @@
   function addPage() {
     var n = window.prompt("Nome da nova página:", "Página " + (cfg.pages.length + 1));
     if (n === null) return;
+    if (window.confirm("Criar como Mixer de DJ (playlist, faders e pads)?\n\nOK = Mixer   ·   Cancelar = Grade de botões")) {
+      var cm = clone(cfg);
+      cm.pages.push(newMixerPage(n));
+      page = cm.pages.length - 1;
+      return saveCfg(cm);
+    }
     var c = clone(cfg), bs = [], total = c.columns * c.rows;
     for (var i = 0; i < total; i++) bs.push({ label: "", icon: "", color: "", action: { type: "none" } });
     bs[total - 1] = { label: "Voltar", icon: "back", color: "#0a3069", action: { type: "page", to: 0 } };
@@ -565,6 +980,9 @@
       h.push('<div class="help">Coloque os arquivos MP3 ou WAV na pasta <b>sons</b>, dentro da pasta StreamDeck do PC; eles aparecem na lista acima. Também aceita o caminho completo de qualquer arquivo.</div>');
       h.push('<label>Volume (0 a 100)</label><input type="text" id="f_volume" value="' + esc(a.volume == null ? 100 : a.volume) + '" style="width:100px">');
       h.push('<label class="chk"><input type="checkbox" id="f_excl"' + (a.exclusive ? " checked" : "") + '>Parar os outros sons antes de tocar este</label>');
+    } else if (a.type === "mute") {
+      var mt = a.target || "master";
+      h.push('<label>O que silenciar</label><select id="f_target"><option value="master"' + (mt === "master" ? " selected" : "") + '>Som do PC (master)</option><option value="effects"' + (mt === "effects" ? " selected" : "") + '>Efeitos sonoros</option><option value="mic"' + (mt === "mic" ? " selected" : "") + ">Microfone</option></select>");
     } else if (a.type === "stopsound") {
       h.push('<div class="help">Para na hora todos os efeitos sonoros tocados pelo Stream Deck.</div>');
     } else if (a.type === "text") {
@@ -664,6 +1082,8 @@
       a.volume = isNaN(vol) ? 100 : Math.max(0, Math.min(100, vol));
       a.exclusive = !!($("f_excl") && $("f_excl").checked);
       if (!a.file) return "Escolha o arquivo de som.";
+    } else if (a.type === "mute") {
+      a.target = val("f_target") || "master";
     } else if (a.type === "text") {
       a.text = val("f_text") || "";
       a.enter = !!($("f_enter") && $("f_enter").checked);
@@ -937,9 +1357,10 @@
   /* consulta leve: detecta edicoes feitas em outro aparelho e versoes novas */
   function poll() {
     if (denied || !cfg || !cfgV || document.hidden) return;
-    req("GET", "/api/state", null, function (ok, st, status) {
+    req("GET", "/api/state" + (mx ? "?mix=1" : ""), null, function (ok, st, status) {
       if (!ok) { if (status === 403) load(); return; }
       if (offlineToast) { offlineToast = false; toast("Conectado"); }
+      if (st.levels) applyLevels(st.levels);
       if (st.v !== cfgV && !editing && !panelOpen()) load();
       if (info && info.update && st.update !== !!info.update.available) loadInfo();
     });
