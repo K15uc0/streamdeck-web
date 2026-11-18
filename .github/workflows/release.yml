@@ -1,12 +1,12 @@
 name: Publicar versão
 
-# Para publicar uma versão nova: altere VERSION em server.py, adicione a seção
+# Para publicar uma versão nova: altere VERSION em streamdeck/__init__.py, adicione a seção
 # correspondente no CHANGELOG.md e envie para a branch main. Se ainda não
 # existir release com esse número, o .exe é gerado e publicado sozinho.
 on:
   push:
     branches: [main]
-    paths: ["server.py", "CHANGELOG.md", "web/**", "config.padrao.json", ".github/workflows/release.yml"]
+    paths: ["server.py", "streamdeck/**", "CHANGELOG.md", "web/**", "config.padrao.json", ".github/workflows/release.yml"]
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $ver = (Select-String -Path server.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
+          $ver = (Select-String -Path streamdeck/__init__.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
           "version=$ver" >> $env:GITHUB_OUTPUT
           gh release view "v$ver" --repo "${{ github.repository }}" *> $null
           if ($LASTEXITCODE -eq 0) { "exists=true" >> $env:GITHUB_OUTPUT; Write-Host "v$ver já publicada, nada a fazer." }
@@ -40,7 +40,7 @@ jobs:
         if: steps.ver.outputs.exists == 'false'
         run: |
           pip install pyinstaller
-          pyinstaller --onefile --console --name StreamDeck --icon icon.ico --add-data "web;web" --add-data "config.padrao.json;." server.py
+          pyinstaller --onefile --console --name StreamDeck --icon icon.ico --add-data "web;web" --add-data "config.padrao.json;." --collect-submodules streamdeck server.py
 
       - name: Notas da versão
         if: steps.ver.outputs.exists == 'false'

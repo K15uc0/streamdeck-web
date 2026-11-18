@@ -1,0 +1,440 @@
+# -*- coding: utf-8 -*-
+"""Servidor HTTP e tabela de rotas.
+
+Ordem das barreiras (nao mudar):
+  todo pedido: rede local -> Host deste PC -> limite de tentativas
+  GET : /ping.gif | /conectar e /api/local/* so no PC | "/?k=" grava cookie |
+        /api/*: cabecalho X-StreamDeck/Origin -> codigo de acesso -> rota | arquivos de web/
+  POST: cabecalho X-StreamDeck/Origin -> /api/local/* so no PC | codigo de acesso -> rota
+"""
+import json
+import os
+import re
+import socket
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
+
+from . import VERSION, actions, audio, paths, security, state, storage, updates, winapi
+
+SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
+
+PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,"
+         b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+
+MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript",
+        ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml",
+        ".jpg": "image/jpeg", ".ico": "image/x-icon"}
+
+CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+       "img-src 'self' data: http:; connect-src 'self'; frame-ancestors 'none'; "
+       "base-uri 'none'; form-action 'none'")
+
+TEXT = "text/plain; charset=utf-8"
+QUIET = ("/ping.gif", "/api/state", "/api/volume")   # nao aparecem no log
+SEEN = set()
+
+# (metodo, caminho) -> metodo do Handler. Rotas /api/local/* so respondem no proprio PC.
+ROUTES = {
+    ("GET", "/api/local/info"): "local_info",
+    ("GET", "/api/update"): "get_update",
+    ("GET", "/api/state"): "get_state",
+    ("GET", "/api/volume"): "get_volume",
+    ("GET", "/api/config"): "get_config",
+    ("GET", "/api/actions"): "get_actions",
+    ("GET", "/api/info"): "get_info",
+    ("GET", "/api/press"): "get_press",
+    ("POST", "/api/local/autostart"): "local_autostart",
+    ("POST", "/api/local/sounds"): "local_sounds",
+    ("POST", "/api/local/data"): "local_data",
+    ("POST", "/api/local/settings"): "local_settings",
+    ("POST", "/api/local/newcode"): "local_newcode",
+    ("POST", "/api/update/check"): "post_update_check",
+    ("POST", "/api/update/apply"): "post_update_apply",
+    ("POST", "/api/config"): "post_config",
+    ("POST", "/api/tabs"): "post_tabs",
+}
+NO_CODE = {("GET", "/api/local/info")}       # ja restritas ao proprio PC
+LOCAL_NO_CODE = {("GET", "/api/update")}     # sem codigo quando vem do proprio PC
+
+
+def _int(q, name):
+    return int(q[name][0])
+
+
+class Handler(BaseHTTPRequestHandler):
+    # HTTP/1.1: atende "Expect: 100-continue" e conexoes mantidas abertas,
+    # que o navegador antigo do Android usa. timeout evita conexoes presas.
+    protocol_version = "HTTP/1.1"
+    timeout = 30
+    disable_nagle_algorithm = True   # resposta sai na hora (sem atraso de ate 200 ms por toque)
+    wbufsize = 65536                 # cabecalhos e corpo no mesmo pacote
+    server_version = "StreamDeck"
+    sys_version = ""
+
+    def handle_expect_100(self):
+        ok = super().handle_expect_100()
+        self.wfile.flush()   # o "pode enviar" precisa sair ja (navegador antigo do Android)
+        return ok
+
+    # --------------------------------------------------------------- log ---
+    def log_message(self, fmt, *args):
+        pass
+
+    def log_error(self, fmt, *args):
+        raw = getattr(self, "raw_requestline", b"") or b""
+        raw = re.sub(rb"k=[^&\s]*", b"k=***", raw[:60])
+        kind = " (tentativa de HTTPS: use http://)" if raw[:1] == b"\x16" else ""
+        print("  pedido invalido de %s: %s%s %r" % (self.client_address[0], fmt % args, kind, raw[:30]))
+
+    def log_request(self, code="-", size="-"):
+        path = (getattr(self, "path", "") or "").split("?")[0]
+        if not path:
+            return
+        if path in QUIET or (path == "/api/config" and self.command == "GET" and code == 200):
+            return
+        print("  %s %s %s -> %s" % (self.client_address[0], self.command, path, code))
+
+    def _note_client(self):
+        ip = self.client_address[0]
+        if ip not in SEEN:
+            SEEN.add(ip)
+            print("  novo aparelho conectado: %s  [%s]" % (ip, time.strftime("%H:%M:%S")))
+
+    # ---------------------------------------------------------- resposta ---
+    def _security_headers(self, html=False):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        if html:
+            self.send_header("Content-Security-Policy", CSP)
+
+    def _send(self, code, body, ctype="application/json; charset=utf-8", cors_img=False, extra=None):
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Connection", "close" if self.close_connection else "keep-alive")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        if extra:
+            for name, value in extra.items():
+                self.send_header(name, value)
+        if cors_img:   # ping.gif precisa ser carregado pelas abas de outros PCs
+            self.send_header("X-Content-Type-Options", "nosniff")
+        else:
+            self._security_headers(html=ctype.startswith("text/html"))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+        self.wfile.flush()
+
+    def _json(self, code, obj, extra=None):
+        self._send(code, json.dumps(obj, ensure_ascii=False, separators=(",", ":")), extra=extra)
+
+    # ----------------------------------------------------------- pedido ---
+    def _local(self):
+        return self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+    def _body_json(self):
+        n = int(self.headers.get("Content-Length", "0") or 0)
+        if n <= 0:
+            return {}
+        if n > 2000000:
+            raise ValueError("tamanho invalido (%d)" % n)
+        raw = b""
+        while len(raw) < n:
+            chunk = self.rfile.read(n - len(raw))
+            if not chunk:
+                break
+            raw += chunk
+        return json.loads(raw.decode("utf-8"))
+
+    def _cookie_token(self):
+        for part in self.headers.get("Cookie", "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == "sdk":
+                return value
+        return ""
+
+    def _authed(self, q):
+        return security.same_token((q.get("k") or [""])[0]) or security.same_token(self._cookie_token())
+
+    def _deny_auth(self):
+        security.note_fail(self.client_address[0])
+        return self._json(403, {"ok": False, "error": "codigo de acesso invalido"})
+
+    def _api_header_ok(self):
+        """Sites de terceiros nao conseguem mandar cabecalhos proprios para ca
+        (o navegador bloqueia), e o Origin, quando vem, tem de ser este PC."""
+        if self.headers.get("X-StreamDeck") != "1":
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin != "null":
+            host = urlparse(origin).netloc
+            if not security.host_allowed(host) or host.lower() != (self.headers.get("Host") or "").lower():
+                return False
+        return True
+
+    def _guard(self):
+        """Barreiras aplicadas a todo pedido. Devolve False se ja respondeu."""
+        ip = self.client_address[0]
+        if not security.ip_allowed(ip):
+            print("! recusado: %s nao e da rede local" % ip)
+            self.close_connection = True
+            self._send(403, "Somente rede local.", TEXT)
+            return False
+        if not security.host_allowed(self.headers.get("Host")):
+            self.close_connection = True
+            self._send(421, "Endereco nao reconhecido. Use o IP deste PC.", TEXT)
+            return False
+        if security.fail_blocked(ip):
+            self.close_connection = True
+            self._send(429, "Muitas tentativas com codigo errado. Aguarde 10 minutos.", TEXT)
+            return False
+        self._note_client()
+        return True
+
+    def _route(self, method, path, q):
+        name = ROUTES.get((method, path))
+        if name is None:
+            return self._json(404, {"ok": False})
+        return getattr(self, name)(q)
+
+    # ------------------------------------------------------------- POST ---
+    def do_POST(self):
+        if not self._guard():
+            return
+        url = urlparse(self.path)
+        q = parse_qs(url.query)
+        if not self._api_header_ok():
+            return self._json(403, {"ok": False, "error": "pedido recusado"})
+
+        # funcoes so do proprio PC (tela de conexao)
+        if url.path.startswith("/api/local/"):
+            if not self._local():
+                return self._json(403, {"ok": False, "error": "so no proprio PC"})
+            if ("POST", url.path) not in ROUTES:
+                return self._json(404, {"ok": False})
+            try:
+                return self._route("POST", url.path, self._body_json())
+            except Exception as e:
+                return self._json(400, {"ok": False, "error": str(e)})
+
+        if not (self._local() or self._authed(q)):
+            print("! pedido recusado de %s: codigo de acesso ausente ou errado" % self.client_address[0])
+            return self._deny_auth()
+        return self._route("POST", url.path, q)
+
+    # -------------------------------------------------------------- GET ---
+    def do_HEAD(self):
+        self.do_GET()
+
+    def do_GET(self):
+        if not self._guard():
+            return
+        url = urlparse(self.path)
+        q = parse_qs(url.query)
+        k = (q.get("k") or [""])[0]
+
+        # sinal de vida para as abas de outros aparelhos (imagem 1x1, sem dados)
+        if url.path == "/ping.gif":
+            return self._send(200, PIXEL, "image/gif", cors_img=True)
+
+        # tela de conexao: so no proprio PC
+        if url.path in ("/conectar", "/conectar.html") or url.path.startswith("/api/local/"):
+            if not self._local():
+                return self._send(403, "Abra esta pagina no proprio PC.", TEXT)
+        if url.path == "/conectar":
+            url = url._replace(path="/conectar.html")
+
+        # primeiro acesso com o codigo: guarda no navegador e limpa o endereco
+        if url.path == "/" and k:
+            return self._first_access(url, k)
+
+        if url.path.startswith("/api/"):
+            if not self._api_header_ok():
+                return self._json(403, {"ok": False, "error": "pedido recusado"})
+            key = ("GET", url.path)
+            if key not in NO_CODE and not (self._authed(q) or (self._local() and key in LOCAL_NO_CODE)):
+                return self._deny_auth()
+            return self._route("GET", url.path, q)
+
+        return self._static(url.path)
+
+    def _first_access(self, url, k):
+        if not security.same_token(k):
+            security.note_fail(self.client_address[0])
+            return self._send(403, "Codigo de acesso invalido. Leia o QR code de novo na tela do PC.", TEXT)
+        sync = ""
+        for part in url.query.split("&"):
+            if part.startswith("sync="):
+                sync = part[5:]
+        if not SYNC_RE.match(sync):
+            sync = ""
+        self.send_response(302)
+        self.send_header("Set-Cookie", "sdk=%s; Max-Age=315360000; Path=/; HttpOnly; SameSite=Strict"
+                         % storage.token())
+        self.send_header("Location", "/#sync=" + sync if sync else "/")
+        self.send_header("Content-Length", "0")
+        self._security_headers()
+        self.end_headers()
+        self.wfile.flush()
+
+    def _static(self, path):
+        """Arquivos estaticos (so de dentro da pasta web)."""
+        if path == "/":
+            path = "/index.html"
+        full = os.path.join(paths.WEB_DIR, path.lstrip("/").replace("\\", "/"))
+        if not paths.inside(full, paths.WEB_DIR) or not os.path.isfile(full):
+            return self._send(404, "nao encontrado", "text/plain")
+        with open(full, "rb") as f:
+            data = f.read()
+        ext = os.path.splitext(full)[1].lower()
+        self._send(200, data, MIME.get(ext, "application/octet-stream"))
+
+    # ======================================================== rotas GET ===
+    def local_info(self, q):
+        base = "http://%s:%d" % (security.lan_ip(), state.PORT[0])
+        tok = storage.token()
+        return self._json(200, {"ok": True, "base": base, "first": "%s/?k=%s" % (base, tok),
+                                "code": tok, "weak": len(tok) < 16,
+                                "name": socket.gethostname(), "autostart": winapi.autostart_enabled(),
+                                "windows": paths.IS_WINDOWS, "data": paths.BASE,
+                                "settings": storage.load_settings(), "update": updates.update_status()})
+
+    def get_update(self, q):
+        return self._json(200, updates.update_status())
+
+    def get_state(self, q):
+        """Consulta leve e frequente dos aparelhos."""
+        st = {"ok": True, "v": storage.config_version(), "update": bool(updates.UPDATE["available"])}
+        try:
+            st["toggles"] = state.toggles(storage.load_config())
+        except Exception:
+            st["toggles"] = state.toggles()
+        if q.get("levels") or q.get("mix"):
+            st["levels"] = audio.levels()
+        return self._json(200, st)
+
+    def get_volume(self, q):
+        try:
+            if "c" in q:   # c = controle (master, effects, mic)
+                v = q.get("v", [None])[0]
+                audio.set_level(q["c"][0], None if v is None else max(0, min(100, int(v))))
+            return self._json(200, {"ok": True, "levels": audio.levels()})
+        except Exception as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+
+    def get_config(self, q):
+        try:
+            return self._json(200, storage.load_config(), extra={"X-Config-Version": storage.config_version()})
+        except Exception as e:
+            return self._json(500, {"ok": False, "error": str(e)})
+
+    def get_actions(self, q):
+        return self._json(200, {"ok": True, "actions": actions.schema()})
+
+    def get_info(self, q):
+        return self._json(200, {"ok": True, "name": socket.gethostname(),
+                                "code": storage.token(), "sounds": audio.list_sounds(),
+                                "tabs": storage.load_tabs(), "version": VERSION,
+                                "local": self._local(),
+                                "remote_admin": bool(storage.load_settings().get("remote_admin")),
+                                "update": updates.update_status()})
+
+    def get_press(self, q):
+        try:
+            p, b = _int(q, "p"), _int(q, "b")
+            if p < 0 or b < 0:
+                raise IndexError("botao inexistente")
+            cfg = storage.load_config()
+            btn = cfg["pages"][p]["buttons"][b]
+            if btn.get("kind", "button") != "button":
+                raise ValueError("este controle nao e um botao")
+            print("> %s" % (btn.get("label") or "?"))
+            actions.run(btn.get("action") or {"type": "none"})
+            if btn.get("toggle") is True:
+                state.flip(p, b)
+            return self._json(200, {"ok": True, "toggles": state.toggles(cfg)})
+        except Exception as e:
+            print("  erro:", e)
+            return self._json(500, {"ok": False, "error": str(e)})
+
+    # ======================================================= rotas POST ===
+    def local_autostart(self, body):
+        winapi.set_autostart(bool(body.get("on")))
+        return self._json(200, {"ok": True, "autostart": winapi.autostart_enabled()})
+
+    def local_sounds(self, body):
+        winapi.open_folder(paths.SOUNDS_DIR)
+        return self._json(200, {"ok": True})
+
+    def local_data(self, body):
+        winapi.open_folder(paths.BASE)
+        return self._json(200, {"ok": True})
+
+    def local_settings(self, body):
+        st = storage.load_settings()
+        st["remote_admin"] = bool(body.get("remote_admin"))
+        storage.save_settings(st)
+        print("* seguranca: botoes de comando pelos aparelhos %s"
+              % ("LIBERADOS" if st["remote_admin"] else "bloqueados"))
+        return self._json(200, {"ok": True, "settings": st})
+
+    def local_newcode(self, body):
+        storage.new_token()
+        print("* novo codigo de acesso gerado; os aparelhos precisam ler o QR de novo")
+        return self._json(200, {"ok": True})
+
+    def post_update_check(self, q):
+        updates.check_updates()
+        return self._json(200, updates.update_status())
+
+    def post_update_apply(self, q):
+        if not updates.can_apply():
+            return self._json(400, {"ok": False, "error": "atualizacao automatica indisponivel"})
+        if updates.UPDATE["state"] not in ("downloading", "restarting"):
+            threading.Thread(target=updates.apply_update, daemon=True).start()
+        return self._json(200, {"ok": True})
+
+    def post_tabs(self, q):
+        try:
+            storage.save_tabs(self._body_json())
+            return self._json(200, {"ok": True})
+        except Exception as e:
+            print("! erro ao salvar:", e)
+            return self._json(400, {"ok": False, "error": str(e)})
+
+    def post_config(self, q):
+        try:
+            data = self._body_json()
+            if not self._local():
+                security.check_remote_edit(data)
+            storage.save_config(data)
+            print("* configuracao salva")
+            return self._json(200, {"ok": True, "v": storage.config_version()})
+        except PermissionError as e:
+            print("! edicao recusada de %s: botao de comando/programa criado fora do PC" % self.client_address[0])
+            return self._json(403, {"ok": False, "error": str(e)})
+        except Exception as e:
+            print("! erro ao salvar:", e)
+            return self._json(400, {"ok": False, "error": str(e)})
+
+
+class Server(ThreadingHTTPServer):
+    """Nao deixa duas copias do servidor dividirem a mesma porta (no Windows
+    isso acontece por padrao e uma delas 'engole' os acessos)."""
+    allow_reuse_address = not paths.IS_WINDOWS
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        print("  conexao com %s falhou: %s" % (client_address[0], sys.exc_info()[1]))
+
+    def server_bind(self):
+        if paths.IS_WINDOWS:
+            self.socket.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_EXCLUSIVEADDRUSE", -5), 1)
+        super().server_bind()
