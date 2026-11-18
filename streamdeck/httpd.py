@@ -324,7 +324,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if "c" in q:   # c = controle (master, effects, mic)
                 v = q.get("v", [None])[0]
-                audio.set_level(q["c"][0], None if v is None else max(0, min(100, int(v))))
+                mute = q.get("mute", [""])[0] == "toggle"
+                audio.set_level(q["c"][0], None if v is None else max(0, min(100, int(v))), toggle_mute=mute)
             return self._json(200, {"ok": True, "levels": audio.levels()})
         except Exception as e:
             return self._json(400, {"ok": False, "error": str(e)})

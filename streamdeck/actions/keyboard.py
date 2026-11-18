@@ -3,13 +3,13 @@
 from . import action, Field
 from .. import winapi
 
-KEYS_HELP = ("Letras, números, ctrl, shift, alt, win, enter, esc, tab, space, backspace, delete, "
+KEYS_HELP = ("Separe as teclas com +. Letras, números, ctrl, shift, alt, win, enter, esc, tab, space, backspace, delete, "
              "home, end, pageup, pagedown, left, up, right, down, printscreen, f1…f24, playpause, "
              "next, prev, stop, mute, volumeup, volumedown, e . , - = ; /")
 
 
 @action("hotkey", "Atalho de teclado", group="Geral", icon="keyboard",
-        fields=[Field("keys", "Teclas (separe com +)", "keys", required=True,
+        fields=[Field("keys", "Teclas", "keys", required=True,
                       placeholder="ctrl+shift+m", help=KEYS_HELP)])
 def hotkey(a):
     winapi.send_keys(a["keys"])

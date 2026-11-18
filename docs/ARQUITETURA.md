@@ -92,7 +92,7 @@ Migração v1 -> v2 (automática ao carregar, com cópia `config.v1.bak.json`):
 | GET | `/api/info` | `{ok, name, code, sounds, tabs, version, local, remote_admin, update}` |
 | GET | `/api/press?p=&b=` | `{ok, toggles?}` ; erro `{ok:false, error}` |
 | GET | `/api/state?levels=1` | `{ok, v, update, toggles:{"p:b":true}, levels?}` |
-| GET | `/api/volume?c=master&v=40` | `{ok, levels:{master:{v,muted}, effects:{...}, mic:{...}}}` |
+| GET | `/api/volume?c=master&v=40` ou `?c=mic&mute=toggle` | `{ok, levels:{master:{v,muted}, effects:{...}, mic:{...}}}` |
 | POST | `/api/tabs` | lista de abas |
 | GET/POST | `/api/update`, `/api/update/check`, `/api/update/apply` | iguais à 1.x |
 | GET/POST | `/api/local/*` | só no próprio PC (tela Conectar), iguais à 1.x |
