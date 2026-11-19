@@ -1,0 +1,944 @@
+{
+  "title": "Stream Deck",
+  "columns": 5,
+  "rows": 3,
+  "pages": [
+    {
+      "name": "Principal",
+      "buttons": [
+        {
+          "label": "Play/Pausa",
+          "icon": "playpause",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "playpause"
+            ]
+          }
+        },
+        {
+          "label": "Anterior",
+          "icon": "prev",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "prev"
+            ]
+          }
+        },
+        {
+          "label": "Próxima",
+          "icon": "next",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "next"
+            ]
+          }
+        },
+        {
+          "label": "Volume -",
+          "icon": "voldown",
+          "color": "#8250df",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "volumedown"
+            ]
+          }
+        },
+        {
+          "label": "Volume +",
+          "icon": "volup",
+          "color": "#8250df",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "volumeup"
+            ]
+          }
+        },
+        {
+          "label": "Mudo",
+          "icon": "mute",
+          "color": "#8250df",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "mute"
+            ]
+          }
+        },
+        {
+          "label": "Navegador",
+          "icon": "globe",
+          "color": "#2da44e",
+          "action": {
+            "type": "open",
+            "target": "https://www.google.com"
+          }
+        },
+        {
+          "label": "Arquivos",
+          "icon": "folder",
+          "color": "#bf8700",
+          "action": {
+            "type": "command",
+            "command": "explorer"
+          }
+        },
+        {
+          "label": "Calculadora",
+          "icon": "calc",
+          "color": "#57606a",
+          "action": {
+            "type": "command",
+            "command": "calc"
+          }
+        },
+        {
+          "label": "Recorte",
+          "icon": "camera",
+          "color": "#cf222e",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "win",
+              "shift",
+              "s"
+            ]
+          }
+        },
+        {
+          "label": "Desktop",
+          "icon": "desktop",
+          "color": "#57606a",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "win",
+              "d"
+            ]
+          }
+        },
+        {
+          "label": "Gerenciador",
+          "icon": "chart",
+          "color": "#57606a",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "shift",
+              "esc"
+            ]
+          }
+        },
+        {
+          "label": "Bloquear",
+          "icon": "lock",
+          "color": "#cf222e",
+          "action": {
+            "type": "command",
+            "command": "rundll32.exe user32.dll,LockWorkStation"
+          }
+        },
+        {
+          "label": "Atalhos",
+          "icon": "keyboard",
+          "color": "#0a3069",
+          "action": {
+            "type": "page",
+            "to": 1
+          }
+        },
+        {
+          "label": "OBS",
+          "icon": "record",
+          "color": "#0a3069",
+          "action": {
+            "type": "page",
+            "to": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "Atalhos",
+      "buttons": [
+        {
+          "label": "Copiar",
+          "icon": "copy",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "c"
+            ]
+          }
+        },
+        {
+          "label": "Colar",
+          "icon": "paste",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "v"
+            ]
+          }
+        },
+        {
+          "label": "Recortar",
+          "icon": "cut",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "x"
+            ]
+          }
+        },
+        {
+          "label": "Desfazer",
+          "icon": "undo",
+          "color": "#8250df",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "z"
+            ]
+          }
+        },
+        {
+          "label": "Refazer",
+          "icon": "redo",
+          "color": "#8250df",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "y"
+            ]
+          }
+        },
+        {
+          "label": "Salvar",
+          "icon": "save",
+          "color": "#2da44e",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "s"
+            ]
+          }
+        },
+        {
+          "label": "Selec. tudo",
+          "icon": "select",
+          "color": "#2da44e",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "a"
+            ]
+          }
+        },
+        {
+          "label": "Trocar janela",
+          "icon": "apps",
+          "color": "#57606a",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "alt",
+              "tab"
+            ]
+          }
+        },
+        {
+          "label": "Fechar janela",
+          "icon": "close",
+          "color": "#cf222e",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "alt",
+              "f4"
+            ]
+          }
+        },
+        {
+          "label": "Nova aba",
+          "icon": "plus",
+          "color": "#57606a",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "t"
+            ]
+          }
+        },
+        {
+          "label": "Mic reunião",
+          "icon": "mic",
+          "color": "#cf222e",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "shift",
+              "m"
+            ]
+          }
+        },
+        {
+          "label": "Emojis",
+          "icon": "smile",
+          "color": "#bf8700",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "win",
+              "."
+            ]
+          }
+        },
+        {
+          "label": "Configurações",
+          "icon": "gear",
+          "color": "#57606a",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "win",
+              "i"
+            ]
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "Voltar",
+          "icon": "back",
+          "color": "#0a3069",
+          "action": {
+            "type": "page",
+            "to": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "OBS",
+      "buttons": [
+        {
+          "label": "Iniciar live",
+          "icon": "record",
+          "color": "#cf222e",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f1"
+            ]
+          }
+        },
+        {
+          "label": "Gravar",
+          "icon": "record",
+          "color": "#cf222e",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f2"
+            ]
+          }
+        },
+        {
+          "label": "Cena 1",
+          "icon": "scene",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f3"
+            ]
+          }
+        },
+        {
+          "label": "Cena 2",
+          "icon": "scene",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f4"
+            ]
+          }
+        },
+        {
+          "label": "Cena 3",
+          "icon": "scene",
+          "color": "#1f6feb",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f5"
+            ]
+          }
+        },
+        {
+          "label": "Mic on/off",
+          "icon": "mic",
+          "color": "#8250df",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f6"
+            ]
+          }
+        },
+        {
+          "label": "Câmera on/off",
+          "icon": "camera",
+          "color": "#8250df",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f7"
+            ]
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "Voltar",
+          "icon": "back",
+          "color": "#0a3069",
+          "action": {
+            "type": "page",
+            "to": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rádio",
+      "layout": "mixer",
+      "buttons": [
+        {
+          "label": "Anterior",
+          "icon": "prev",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "prev"
+            ]
+          }
+        },
+        {
+          "label": "Play/Pausa",
+          "icon": "playpause",
+          "color": "#ff8a3d",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "playpause"
+            ]
+          }
+        },
+        {
+          "label": "Próxima",
+          "icon": "next",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "next"
+            ]
+          }
+        },
+        {
+          "label": "Parar",
+          "icon": "stop",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "stop"
+            ]
+          }
+        },
+        {
+          "label": "CUE",
+          "icon": "headphones",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f10"
+            ]
+          }
+        },
+        {
+          "label": "AUTO DJ",
+          "icon": "playlist",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f11"
+            ]
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "Parar sons",
+          "icon": "stop",
+          "color": "#7f1d1d",
+          "action": {
+            "type": "stopsound"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "Parar sons",
+          "icon": "stop",
+          "color": "#7f1d1d",
+          "action": {
+            "type": "stopsound"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "Parar sons",
+          "icon": "stop",
+          "color": "#7f1d1d",
+          "action": {
+            "type": "stopsound"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "none"
+          }
+        },
+        {
+          "label": "Parar sons",
+          "icon": "stop",
+          "color": "#7f1d1d",
+          "action": {
+            "type": "stopsound"
+          }
+        },
+        {
+          "label": "Bom dia, ouvintes!",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "text",
+            "text": "Bom dia, ouvintes!",
+            "enter": true
+          }
+        },
+        {
+          "label": "Peça sua música!",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "text",
+            "text": "Peça sua música!",
+            "enter": true
+          }
+        },
+        {
+          "label": "Já volto!",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "text",
+            "text": "Já volto!",
+            "enter": true
+          }
+        },
+        {
+          "label": "Obrigado pela audiência!",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "text",
+            "text": "Obrigado pela audiência!",
+            "enter": true
+          }
+        },
+        {
+          "label": "ON AIR",
+          "icon": "",
+          "color": "#ef4444",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "ctrl",
+              "alt",
+              "f12"
+            ]
+          }
+        },
+        {
+          "label": "MUDO",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "mute",
+            "target": "master"
+          }
+        },
+        {
+          "label": "MUDO",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "mute",
+            "target": "effects"
+          }
+        },
+        {
+          "label": "MUTE",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "mute",
+            "target": "mic"
+          }
+        },
+        {
+          "label": "Subir na lista",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "up"
+            ]
+          }
+        },
+        {
+          "label": "Descer na lista",
+          "icon": "",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "down"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
