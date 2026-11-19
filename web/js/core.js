@@ -271,6 +271,12 @@
     return out;
   };
 
+  /* endereco de uma imagem da biblioteca (Documentos\\StreamDeck\\imagens), com o codigo
+     no mesmo esquema de SD.req (?k=) para funcionar tambem sem o cookie */
+  SD.imgUrl = function (name) {
+    return "/img/" + encodeURIComponent(String(name || "")) + (SD.TOKEN ? "?k=" + encodeURIComponent(SD.TOKEN) : "");
+  };
+
   SD.padButtons = function (pg, n) {
     if (!pg.buttons) pg.buttons = [];
     while (pg.buttons.length < n) pg.buttons.push(SD.emptyButton());

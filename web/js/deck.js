@@ -5,14 +5,16 @@
 
   var SD = window.SD, $ = SD.$, esc = SD.esc, el = SD.el, css = SD.css;
   var grid, dotsEl, msg;
-  var keys = [];          /* celulas da pagina atual */
+  var keys = [];          /* blocos da pagina atual */
+  var fkeys = [];         /* blocos da pasta aberta */
   var geo = null;         /* medidas da grade atual */
 
   /* ============================================================ blocos === */
   /* Um bloco pode ser usado na grade do celular ou na pre-visualizacao do editor do PC.
-     t = { el, b, kind, empty, lit, level, ... } ; paintTile(t, w, h) desenha. */
+     t = { el, b, kind, empty, lit, level, tkey, ... } ; paintTile(t, w, h) desenha. */
   SD.buildTile = function (b) {
     var t = { b: b, kind: b && b.kind === "fader" ? "fader" : "button" };
+    t.folder = !!(b && b.kind === "folder");
     t.empty = SD.isEmpty(b);
     var e = t.el = el("div", "key");
     if (t.kind === "fader") {
@@ -35,9 +37,53 @@
   SD.FADER_TARGETS = [["master", "Som do PC (master)"], ["effects", "Efeitos sonoros"], ["mic", "Microfone"]];
 
   function px(n) { return Math.round(n) + "px"; }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+  /* ------------------------------------------------------ texto ao vivo --- */
+  SD.since = {};       /* "p:b" -> epoch_s (do PC) dos liga/desliga ligados */
+  SD.skew = 0;         /* relogio do PC - relogio do aparelho (ms), pelo cabecalho Date */
+  SD.app = null;       /* exe em foco no PC */
+
+  function fmtTimer(s) {
+    s = Math.max(0, Math.floor(s));
+    var h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+    return h ? h + ":" + pad2(m) + ":" + pad2(x) : pad2(m) + ":" + pad2(x);
+  }
+  function liveText(t, live) {
+    var d = new Date();
+    if (live === "clock") return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    if (live === "date") return pad2(d.getDate()) + "/" + pad2(d.getMonth() + 1);
+    if (live.indexOf("volume:") === 0) {
+      var lv = levelOf(live.substring(7));
+      if (!lv || lv.v == null) return "--";
+      return lv.muted ? "Mudo" : Math.round(lv.v) + "%";
+    }
+    if (live === "timer") {
+      var since = t.tkey && SD.since[t.tkey];
+      if (!t.lit || !since) return "00:00";
+      return fmtTimer((SD.now() + SD.skew) / 1000 - since);
+    }
+    return "";
+  }
+  SD.liveText = liveText;
+
+  /* aparencia efetiva: liga/desliga aceso com "on" usa os campos de "on" por cima */
+  function hasOn(o) { return !!(o && typeof o === "object" && (o.label || o.icon || o.color || o.textColor || o.image)); }
+  function look(t) {
+    var b = t.b || {}, on = t.lit && b.toggle && hasOn(b.on) ? b.on : null;
+    var a = { label: b.label, icon: b.icon, color: b.color, textColor: b.textColor, image: b.image, invert: false, on: !!on };
+    if (on) {
+      if (on.label) a.label = on.label;
+      if (on.icon) { a.icon = on.icon; if (!on.image) a.image = ""; }
+      if (on.color) a.color = on.color;
+      if (on.textColor) a.textColor = on.textColor;
+      if (on.image) a.image = on.image;
+    } else if (t.lit) a.invert = true;
+    return a;
+  }
 
   SD.paintTile = function (t, w, h) {
-    var e = t.el, b = t.b || {}, m = Math.min(w, h), r = Math.round(m * 0.22), st = e.style;
+    var e = t.el, b = t.b || {}, m = Math.min(w, h), r = Math.round(Math.min(m, 110) * 0.22), st = e.style;
     st.width = px(w); st.height = px(h);
     st.borderRadius = px(r);
     t.w = w; t.h = h;
@@ -47,43 +93,56 @@
     ic.style.cssText = ""; lb.style.cssText = ""; lb.className = "lb";
     if (t.empty) {
       e.className = "key empty";
-      st.background = "";
-      var ps = Math.round(m * 0.3);
+      st.backgroundColor = ""; st.backgroundImage = "";
       ic.innerHTML = "";
-      ic.style.left = px((w - ps) / 2); ic.style.top = px((h - ps) / 2);
       lb.innerHTML = "";
       return;
     }
-    var color = SD.validColor(b.color) ? b.color : SD.DEFAULT_TILE;
+    var a = look(t);
+    var color = SD.validColor(a.color) ? a.color : SD.DEFAULT_TILE;
+    var tc = SD.validColor(a.textColor) ? a.textColor : "";
+    var img = a.image ? String(a.image) : "";
     var fg, bg;
-    if (t.lit) { bg = "#fff"; fg = SD.isLight(color) ? "#1c1c1e" : color; }
-    else { bg = color; fg = SD.isLight(color) ? "rgba(0,0,0,0.78)" : "#fff"; }
-    e.className = "key" + (t.lit ? " lit" : "") + (b.toggle ? " tg" : "");
-    st.background = bg;
+    if (a.invert) { bg = "#fff"; fg = tc || (SD.isLight(color) ? "#1c1c1e" : color); }
+    else { bg = color; fg = tc || (img ? "#fff" : SD.isLight(color) ? "rgba(0,0,0,0.78)" : "#fff"); }
+    var live = b.live ? String(b.live) : "";
+    var label = live ? liveText(t, live) : SD.trim(a.label);
+    var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : "";
+    e.className = "key" + (t.lit ? " lit" : "") + (a.on ? " onlook" : "") + (b.toggle ? " tg" : "") +
+      (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "");
+    st.backgroundColor = bg;
+    var bgi = img ? 'url("' + SD.imgUrl(img) + '")' : "";
+    if (t.bgi !== bgi) { st.backgroundImage = bgi; t.bgi = bgi; }
     lb.style.color = fg;
-    var icon = SD.hasIcon(b.icon) ? b.icon : "";
-    var label = SD.trim(b.label);
-    var pad = Math.max(7, Math.round(m * 0.12));
+    var pad = Math.max(7, Math.round(Math.min(m, 140) * 0.12));
     lb.innerHTML = esc(label);
-    if (icon && (!label || m < 66)) {
+    if (img) {
+      /* imagem cobre o bloco; rotulo embaixo sobre um degrade */
+      ic.innerHTML = "";
+      var fi = Math.max(10, Math.min(live ? 34 : 17, Math.round(m * (live ? 0.2 : 0.118))));
+      lb.className = "lb bl";
+      lb.style.left = px(pad); lb.style.right = px(pad * 0.7); lb.style.bottom = px(pad * 0.85);
+      lb.style.fontSize = px(fi);
+    } else if (icon && (!label || m < 66)) {
       /* pequeno ou sem rotulo: so o icone, centralizado */
-      var cs = Math.round(m * 0.44);
+      var cs = Math.round(Math.min(m, 160) * 0.44);
       ic.innerHTML = SD.svg(icon, cs, fg);
       ic.style.left = px((w - cs) / 2); ic.style.top = px((h - cs) / 2);
       lb.style.display = "none";
     } else if (icon) {
       /* como no app Atalhos: icone em cima a esquerda, rotulo embaixo a esquerda */
-      var is = Math.max(16, Math.round(m * 0.26));
+      var is = Math.max(16, Math.round(Math.min(m, 160) * 0.26));
       ic.innerHTML = SD.svg(icon, is, fg);
       ic.style.left = px(pad); ic.style.top = px(pad);
-      var fs = Math.max(10, Math.min(17, Math.round(m * 0.118)));
+      var fs = live ? Math.max(12, Math.min(40, Math.round(m * 0.22))) : Math.max(10, Math.min(19, Math.round(m * 0.118)));
       lb.className = "lb bl";
       lb.style.left = px(pad); lb.style.right = px(pad * 0.7); lb.style.bottom = px(pad * 0.85);
       lb.style.fontSize = px(fs);
     } else {
       /* so texto: centralizado, maior */
       ic.innerHTML = "";
-      var f2 = Math.max(11, Math.min(22, Math.round(m * 0.16)));
+      var f2 = live ? Math.max(12, Math.min(56, Math.floor(Math.min(m * 0.3, (w - pad * 1.4) / (Math.max(3, label.length) * 0.62)))))
+                    : Math.max(11, Math.min(24, Math.round(m * 0.16)));
       lb.className = "lb mid";
       lb.style.left = px(pad * 0.6); lb.style.right = px(pad * 0.6);
       lb.style.fontSize = px(f2);
@@ -92,39 +151,42 @@
   };
 
   /* fader no estilo da Central de Controle: preenche de baixo para cima.
-     A parte clara repete icone e texto em cor escura (recortada pelo preenchimento). */
+     A parte clara repete icone e texto em cor escura (recortada pelo preenchimento).
+     Escala 0..max (efeitos ate 200%). */
   function paintFader(t, w, h, m, r) {
     var b = t.b || {}, lv = t.level, known = !!(lv && lv.v != null);
-    var v = known ? Math.max(0, Math.min(100, lv.v)) : 0, muted = !!(lv && lv.muted);
+    var max = lv && lv.max > 0 ? lv.max : 100;
+    var v = known ? Math.max(0, Math.min(max, lv.v)) : 0, muted = !!(lv && lv.muted);
     var color = SD.validColor(b.color) ? b.color : "#fff";
-    t.el.className = "key fader" + (muted ? " muted" : "");
+    t.el.className = "key fader" + (muted ? " muted" : "") + (h > w * 1.6 ? " tall" : "");
     t.el.style.background = "";
-    var fillH = Math.round(h * v / 100);
+    var fillH = Math.round(h * v / max);
     t.fill.style.height = px(fillH);
     t.inner.style.width = px(w); t.inner.style.height = px(h);
     var target = b.target || "master";
     var icon = muted ? (target === "mic" ? "micoff" : "mute") : (SD.hasIcon(b.icon) ? b.icon : FADER_ICON[target] || "sound");
-    var is = Math.round(m * (m < 80 ? 0.34 : 0.27));
+    var is = Math.round(Math.min(m, 140) * (m < 80 ? 0.34 : 0.27));
     var label = SD.trim(b.label) || FADER_NAME[target] || "";
     var val = known ? (muted ? "Mudo" : Math.round(v) + "%") : "--";
-    var fs = Math.max(10, Math.min(15, Math.round(m * 0.105)));
-    var vs = Math.max(12, Math.min(26, Math.round(m * 0.17)));
+    var fs = Math.max(10, Math.min(16, Math.round(m * 0.105)));
+    var vs = Math.max(12, Math.min(30, Math.round(m * 0.17)));
     var small = m < 80;
     var pairs = [[t.ic, t.lb, t.val, "#fff", "rgba(235,235,245,0.6)"],
                  [t.ic2, t.lb2, t.val2, muted || SD.isLight(color) ? "#1c1c1e" : color, "rgba(0,0,0,0.5)"]];
     var key = icon + "|" + is + "|" + color + "|" + muted;
+    var top0 = Math.round(Math.min(m, 140) * 0.1);
     for (var i = 0; i < 2; i++) {
       var p = pairs[i];
       if (p[0].getAttribute("data-k") !== key) {
         p[0].innerHTML = SD.svg(icon, is, i === 0 ? "#fff" : pairs[1][3]);
         p[0].setAttribute("data-k", key);
       }
-      p[0].style.left = px((w - is) / 2); p[0].style.bottom = px(Math.round(m * 0.12)); p[0].style.top = "auto";
+      p[0].style.left = px((w - is) / 2); p[0].style.bottom = px(Math.round(Math.min(m, 140) * 0.12)); p[0].style.top = "auto";
       p[1].innerHTML = small ? "" : esc(label);
-      p[1].style.fontSize = px(fs); p[1].style.top = px(Math.round(m * 0.1)); p[1].style.color = p[4];
+      p[1].style.fontSize = px(fs); p[1].style.top = px(top0); p[1].style.color = p[4];
       p[2].innerHTML = esc(val);
       p[2].style.fontSize = px(vs); p[2].style.color = i === 0 ? "#fff" : p[3];
-      p[2].style.top = px(small ? Math.round(m * 0.1) : Math.round(m * 0.1) + fs + 3);
+      p[2].style.top = px(small ? top0 : top0 + fs + 3);
     }
   }
 
@@ -133,26 +195,30 @@
   function curPage() { return SD.cfg && SD.cfg.pages[SD.page]; }
   SD.curPage = curPage;
 
+  /* {v, muted, max} ; max = 100 (efeitos: o que o PC mandar, ate 200) */
   function levelOf(target) {
     var l = SD.levels;
     if (!l) return null;
     var x = l[target];
     if (x == null) return null;
-    if (typeof x === "object") return { v: x.v, muted: !!x.muted };
-    return { v: x, muted: !!l[target + "Mute"] };   /* formato antigo (1.x) */
+    if (typeof x === "object") return { v: x.v, muted: !!x.muted, max: x.max > 0 ? x.max : 100 };
+    return { v: x, muted: !!l[target + "Mute"], max: 100 };   /* formato antigo (1.x) */
   }
   SD.levelOf = levelOf;
 
   /* ============================================ ajustes deste aparelho === */
-  /* sd_prefs = { orientation: "auto"|"portrait"|"landscape", autoFullscreen: bool } */
+  /* sd_prefs = { orientation: "auto"|"portrait"|"landscape", autoFullscreen: bool,
+                  vibrate: bool (padrao true), autoPage: bool (padrao true) } */
   var PREFS_KEY = "sd_prefs";
-  SD.prefs = { orientation: "auto", autoFullscreen: false };
+  SD.prefs = { orientation: "auto", autoFullscreen: false, vibrate: true, autoPage: true };
   function loadPrefs() {
     try {
       var p = JSON.parse(window.localStorage.getItem(PREFS_KEY));
       if (p && typeof p === "object") {
         if (p.orientation === "portrait" || p.orientation === "landscape") SD.prefs.orientation = p.orientation;
         SD.prefs.autoFullscreen = !!p.autoFullscreen;
+        if (typeof p.vibrate === "boolean") SD.prefs.vibrate = p.vibrate;
+        if (typeof p.autoPage === "boolean") SD.prefs.autoPage = p.autoPage;
       }
     } catch (e) {}
   }
@@ -273,12 +339,24 @@
   };
   function dims() { return SD.gridDims(SD.cfg, frame.portrait); }
 
-  function pageHasFaders() {
-    var pg = curPage();
-    if (!pg || !pg.buttons) return false;
-    var d = dims(), n = d.cols * d.rows;
-    for (var i = 0; i < pg.buttons.length && i < n; i++) if (pg.buttons[i] && pg.buttons[i].kind === "fader") return true;
+  /* blocos na tela (pagina e pasta aberta) */
+  function visible() { return folder ? keys.concat(fkeys) : keys; }
+
+  /* precisa dos volumes? (fader ou texto ao vivo de volume na tela) */
+  function needLevels() {
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var b = v[i].b;
+      if (!b || v[i].empty) continue;
+      if (v[i].kind === "fader" || (b.live && String(b.live).indexOf("volume:") === 0)) return true;
+    }
     return false;
+  }
+
+  /* vibrar (se ligado nos ajustes deste aparelho) */
+  function buzz(p) {
+    if (!SD.prefs.vibrate) return;
+    try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {}
   }
 
   /* ========================================================== barra ===== */
@@ -327,25 +405,46 @@
     SD.layout();
   };
 
+  /* monta os blocos de uma lista de botoes numa grade cols x rows (regra SD.flow);
+     posicoes que nenhum botao cobre viram blocos vazios. fi = indice da pasta (ou null). */
+  function buildTiles(box, buttons, d, p, fi) {
+    var out = [], used = [], i, j, pl = SD.flow(buttons || [], d.cols, d.rows);
+    for (i = 0; i < d.cols * d.rows; i++) used.push(false);
+    function add(b, bi, x, y, w, h) {
+      var t = SD.buildTile(b);
+      if (fi != null && t.folder) { t.folder = false; }   /* pasta dentro de pasta nao vale */
+      t.p = p; t.bi = bi; t.f = fi;
+      t.idx = fi != null ? fi : bi;
+      t.tkey = bi < 0 ? "" : fi != null ? p + ":" + fi + ":" + bi : p + ":" + bi;
+      if (fi != null) { t.bi = fi; t.f = bi; }
+      t.lit = !!(b && b.toggle && t.tkey && SD.toggles[t.tkey]);
+      if (t.kind === "fader") t.level = levelOf(b.target || "master");
+      t.gx = x; t.gy = y; t.gw = w; t.gh = h;
+      var cell = el("div", "cell" + (t.empty ? " empty-cell" : ""), null, box);
+      cell.appendChild(t.el);
+      cell.setAttribute("data-i", out.length);
+      cell.sdTile = t;
+      t.cell = cell;
+      out.push(t);
+    }
+    for (i = 0; i < pl.length; i++) {
+      var q = pl[i];
+      for (var yy = q.y; yy < q.y + q.h; yy++) for (var xx = q.x; xx < q.x + q.w; xx++) used[yy * d.cols + xx] = true;
+      add(buttons[q.i], q.i, q.x, q.y, q.w, q.h);
+    }
+    for (j = 0; j < used.length; j++) if (!used[j]) add(null, -1, j % d.cols, Math.floor(j / d.cols), 1, 1);
+    return out;
+  }
+
   /* recria os blocos quando muda a pagina, o config ou a grade (orientacao) */
   var built = null;
   function renderGrid(d) {
-    var pg = curPage(), n = d.cols * d.rows;
+    var pg = curPage();
     grid.innerHTML = "";
-    keys = [];
-    for (var i = 0; i < n; i++) {
-      var b = pg.buttons && pg.buttons[i];
-      var t = SD.buildTile(b);
-      t.idx = i;
-      t.lit = !!(b && b.toggle && SD.toggles[SD.page + ":" + i]);
-      if (t.kind === "fader") t.level = levelOf(b.target || "master");
-      var cell = el("div", "cell" + (t.empty ? " empty-cell" : ""), null, grid);
-      cell.appendChild(t.el);
-      cell.setAttribute("data-i", i);
-      t.cell = cell;
-      keys.push(t);
-    }
-    built = { cfg: SD.cfg, page: SD.page, n: n };
+    keys = buildTiles(grid, pg.buttons, d, SD.page, null);
+    built = { cfg: SD.cfg, page: SD.page, cols: d.cols, rows: d.rows };
+    if (folder) reopenFolder(d);
+    setupLive();
   }
   SD.getKeys = function () { return keys; };
 
@@ -357,13 +456,27 @@
     for (var k = 0; k < sp.length; k++) sp[k].onclick = function () { SD.goPage(parseInt(this.getAttribute("data-p"), 10)); };
   }
 
+  /* posiciona blocos (celulas somadas com os vaos entre elas) */
+  function placeTiles(list) {
+    var g = geo;
+    for (var i = 0; i < list.length; i++) {
+      var k = list[i];
+      var w = k.gw * g.w + (k.gw - 1) * g.gap, h = k.gh * g.h + (k.gh - 1) * g.gap;
+      k.x = g.x0 + k.gx * (g.w + g.gap); k.y = g.y0 + k.gy * (g.h + g.gap);
+      var st = k.cell.style;
+      st.left = px(k.x); st.top = px(k.y); st.width = px(w); st.height = px(h);
+      SD.paintTile(k, w, h);
+    }
+  }
+
   SD.layout = function () {
     applyFrame();
     var sa = safe(), nav = $("nav");
     nav.style.paddingTop = px(sa.t); nav.style.paddingLeft = px(sa.l); nav.style.paddingRight = px(sa.r);
+    fbar.style.paddingTop = px(sa.t); fbar.style.paddingLeft = px(sa.l); fbar.style.paddingRight = px(sa.r);
     if (!SD.cfg) { SD.renderNav(); return; }
     var d = dims();
-    if (!built || built.cfg !== SD.cfg || built.page !== SD.page || built.n !== d.cols * d.rows || keys.length !== d.cols * d.rows) renderGrid(d);
+    if (!built || built.cfg !== SD.cfg || built.page !== SD.page || built.cols !== d.cols || built.rows !== d.rows) renderGrid(d);
     var W = frame.w, H = frame.h;
     var top = nav.offsetHeight, bottom = Math.max(sa.b, 4) + 26;
     var side = 12;
@@ -380,13 +493,8 @@
     var gw = w * cols + gap * (cols - 1), gh = h * rows + gap * (rows - 1);
     var x0 = Math.round(sa.l + side + (aw - gw) / 2), y0 = Math.round(top + 3 + (ah - gh) / 2);
     geo = { cols: cols, rows: rows, w: w, h: h, gap: gap, x0: x0, y0: y0 };
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i], c = i % cols, r = Math.floor(i / cols);
-      k.x = x0 + c * (w + gap); k.y = y0 + r * (h + gap);
-      var st = k.cell.style;
-      st.left = px(k.x); st.top = px(k.y); st.width = px(w); st.height = px(h);
-      SD.paintTile(k, w, h);
-    }
+    placeTiles(keys);
+    if (folder) placeTiles(fkeys);
     dotsEl.style.bottom = px(Math.max(sa.b, 4));
     SD.renderNav();
   };
@@ -396,6 +504,7 @@
   /* ========================================================= paginas ===== */
   SD.goPage = function (to, dir) {
     if (!SD.cfg || !SD.cfg.pages[to] || to === SD.page) return;
+    if (folder) closeFolder(true);
     if (dir == null) dir = to > SD.page ? 1 : -1;
     SD.page = to;
     SD.render();
@@ -410,6 +519,109 @@
     pollSoon();
   };
 
+  /* =========================================================== pasta ===== */
+  /* abre por cima da pagina (zoom a partir do bloco, como no iOS), mesma grade,
+     com barra "Voltar". Toques dentro: /api/press?p&b&f ; liga/desliga "p:b:f". */
+  var folder = null;      /* { bi, b } */
+  var fwrap, fbar, fgrid, ftitle, histPushed = false;
+
+  function folderBtn(bi) {
+    var pg = curPage(), b = pg && pg.buttons && pg.buttons[bi];
+    return b && b.kind === "folder" ? b : null;
+  }
+
+  function fillFolder(d) {
+    fgrid.innerHTML = "";
+    var b = folder.b;
+    ftitle.innerHTML = esc(SD.trim(b.label) || "Pasta");
+    fkeys = buildTiles(fgrid, b.buttons || [], d, SD.page, folder.bi);
+  }
+
+  function openFolder(t) {
+    if (folder) return;
+    folder = { bi: t.bi, b: t.b };
+    fillFolder(dims());
+    if (geo) placeTiles(fkeys);
+    /* zoom a partir do centro do bloco da pasta */
+    var cx = (t.x || 0) + (t.w || 0) / 2, cy = (t.y || 0) + (t.h || 0) / 2;
+    css(fwrap, "transformOrigin", Math.round(cx) + "px " + Math.round(cy) + "px");
+    css(fwrap, "transition", "none");
+    css(fwrap, "transform", "scale(0.25)");
+    fwrap.style.opacity = "0";
+    fwrap.style.display = "block";
+    fwrap.offsetWidth;   /* aplica o estado inicial antes da transicao */
+    css(fwrap, "transition", "");
+    css(fwrap, "transform", "scale(1)");
+    fwrap.style.opacity = "1";
+    SD.setClass(document.body, "fopen", true);
+    try { if (window.history && history.pushState) { history.pushState({ sdFolder: 1 }, ""); histPushed = true; } } catch (e) {}
+    setupLive();
+    pollSoon();
+  }
+
+  /* fromPop = veio do botao voltar do aparelho (historico ja voltou) */
+  function closeFolder(quick, fromPop) {
+    if (!folder) return;
+    var t = null;
+    for (var i = 0; i < keys.length; i++) if (keys[i].bi === folder.bi && keys[i].f == null) t = keys[i];
+    folder = null;
+    if (histPushed && !fromPop) { histPushed = false; try { history.back(); } catch (e) {} }
+    histPushed = false;
+    SD.setClass(document.body, "fopen", false);
+    var done = function () { if (!folder) { fwrap.style.display = "none"; fgrid.innerHTML = ""; fkeys = []; css(fgrid, "transform", ""); } };
+    if (quick) { done(); setupLive(); return; }
+    if (t) css(fwrap, "transformOrigin", Math.round(t.x + t.w / 2) + "px " + Math.round(t.y + t.h / 2) + "px");
+    css(fwrap, "transition", "");
+    css(fwrap, "transform", "scale(0.25)");
+    fwrap.style.opacity = "0";
+    setTimeout(done, 280);
+    setupLive();
+  }
+  SD.closeFolder = function () { closeFolder(false); };
+
+  /* config ou grade mudou com a pasta aberta: remonta (ou fecha se a pasta sumiu) */
+  function reopenFolder(d) {
+    var b = folderBtn(folder.bi);
+    if (!b) { closeFolder(true); return; }
+    folder.b = b;
+    fillFolder(d);
+  }
+
+  function onPop() { if (folder) { histPushed = false; closeFolder(false, true); } }
+
+  /* ====================================================== ao vivo ===== */
+  /* relogio/data: a cada 15 s alinhados; cronometro: a cada segundo, so se estiver na tela */
+  var liveT = null, secT = null;
+  function liveKinds() {
+    var v = visible(), k = { clock: false, timer: false };
+    for (var i = 0; i < v.length; i++) {
+      var l = v[i].b && v[i].b.live;
+      if (l === "clock" || l === "date") k.clock = true;
+      if (l === "timer") k.timer = true;
+    }
+    return k;
+  }
+  function repaintLive(test) {
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var l = v[i].b && v[i].b.live;
+      if (l && v[i].w && test(String(l))) SD.paintTile(v[i], v[i].w, v[i].h);
+    }
+  }
+  function setupLive() {
+    clearTimeout(liveT); clearInterval(secT); secT = null;
+    var k = liveKinds();
+    if (k.clock) {
+      liveT = setTimeout(function () {
+        repaintLive(function (l) { return l === "clock" || l === "date"; });
+        setupLive();
+      }, 15000 - (SD.now() % 15000) + 50);
+    }
+    if (k.timer) secT = setInterval(function () {
+      if (!document.hidden) repaintLive(function (l) { return l === "timer"; });
+    }, 1000);
+  }
+
   /* ====================================================== apertar ===== */
   var REPEAT = { volumeup: 1, volumedown: 1, left: 1, right: 1, up: 1, down: 1, pageup: 1, pagedown: 1 };
   var pending = 0;
@@ -417,7 +629,7 @@
   /* segurar repete (so volume e setas: repetir outros atalhos seria perigoso) */
   function canRepeat(k) {
     var a = k.b && k.b.action;
-    return !!(a && a.type === "hotkey" && a.keys && a.keys.length === 1 && REPEAT[String(a.keys[0]).toLowerCase()]);
+    return !!(!k.folder && a && a.type === "hotkey" && a.keys && a.keys.length === 1 && REPEAT[String(a.keys[0]).toLowerCase()]);
   }
 
   function flash(k, ok) {
@@ -432,24 +644,37 @@
     if (k.w) SD.paintTile(k, k.w, k.h);
   }
 
-  SD.applyToggles = function (t) {
+  SD.applyToggles = function (t, since) {
     if (t) SD.toggles = t;
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i];
-      if (k.kind === "button" && k.b && k.b.toggle) setLit(k, !!SD.toggles[SD.page + ":" + k.idx]);
+    if (since) SD.since = since;
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var k = v[i];
+      if (k.kind === "button" && k.b && k.b.toggle && k.tkey) {
+        var on = !!SD.toggles[k.tkey];
+        if (k.lit !== on) setLit(k, on);
+        else if (since && k.b.live === "timer" && k.w) SD.paintTile(k, k.w, k.h);
+      }
     }
   };
 
   function press(k, repeating) {
     var b = k.b, a = b && b.action;
+    if (k.folder) { buzz(10); openFolder(k); return; }
     if (!a || a.type === "none") return;
-    if (a.type === "page") return SD.goPage(parseInt(a.to, 10) || 0);
+    if (a.type === "page") { buzz(10); return SD.goPage(parseInt(a.to, 10) || 0); }
     if (repeating && pending > 0) return;   /* nao empilha pedidos se a rede estiver lenta */
     flash(k, true);                          /* resposta visual na hora */
-    var p = SD.page, idx = k.idx, tkey = p + ":" + idx, was = !!SD.toggles[tkey];
-    if (b.toggle) { SD.toggles[tkey] = !was; setLit(k, !was); }
+    buzz(10);
+    var p = k.p, tkey = k.tkey, was = !!SD.toggles[tkey];
+    if (b.toggle) {
+      SD.toggles[tkey] = !was;
+      if (!was) SD.since[tkey] = Math.floor((SD.now() + SD.skew) / 1000); else delete SD.since[tkey];
+      setLit(k, !was);
+    }
     pending++;
-    SD.req("GET", "/api/press?p=" + p + "&b=" + idx, null, function (ok, data, status) {
+    var url = "/api/press?p=" + p + "&b=" + k.bi + (k.f != null ? "&f=" + k.f : "");
+    SD.req("GET", url, null, function (ok, data, status) {
       pending--;
       if (ok) {
         if (data && data.toggles) { if (p === SD.page) SD.applyToggles(data.toggles); else SD.toggles = data.toggles; }
@@ -457,6 +682,7 @@
       }
       if (b.toggle) { SD.toggles[tkey] = was; if (p === SD.page) setLit(k, was); }
       flash(k, false);
+      buzz([30, 40, 30]);
       SD.toast(SD.errText(data, status), true);
     });
   }
@@ -465,19 +691,24 @@
   var sending = {};   /* alvo -> {busy, next} */
   var holdUntil = {}; /* alvo -> ate quando ignorar o PC (nao brigar com o dedo) */
 
+  /* redesenha faders e textos ao vivo de volume */
   function paintFaders(target) {
-    for (var i = 0; i < keys.length; i++) {
-      var k = keys[i];
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var k = v[i];
       if (k.kind === "fader" && (!target || (k.b.target || "master") === target)) {
         k.level = levelOf(k.b.target || "master");
         if (k.w) SD.paintTile(k, k.w, k.h);
+      } else if (k.b && k.b.live && String(k.b.live).indexOf("volume:") === 0 && k.w &&
+                 (!target || String(k.b.live) === "volume:" + target)) {
+        SD.paintTile(k, k.w, k.h);
       }
     }
   }
 
   function setLocalLevel(target, v, muted) {
-    var cur = levelOf(target) || { v: 0, muted: false };
-    SD.levels[target] = { v: v == null ? cur.v : v, muted: muted == null ? cur.muted : muted };
+    var cur = levelOf(target) || { v: 0, muted: false, max: target === "effects" ? 200 : 100 };
+    SD.levels[target] = { v: v == null ? cur.v : v, muted: muted == null ? cur.muted : muted, max: cur.max };
     delete SD.levels[target + "Mute"];
     paintFaders(target);
   }
@@ -510,7 +741,7 @@
     var target = k.b.target || "master", cur = levelOf(target) || { v: 0, muted: false };
     setLocalLevel(target, null, !cur.muted);
     holdUntil[target] = SD.now() + 1500;
-    SD.vibrate(8);
+    buzz(8);
     SD.req("GET", "/api/volume?c=" + encodeURIComponent(target) + "&mute=toggle", null, function (ok, data, status) {
       if (ok && data && data.levels) { holdUntil[target] = 0; SD.applyLevels(data.levels, true); return; }
       if (!ok) { setLocalLevel(target, null, cur.muted); SD.toast(SD.errText(data, status, "Não foi possível silenciar"), true); }
@@ -523,12 +754,12 @@
 
   /* ========================================================= gestos ===== */
   /* Um gesto por vez, tratado no documento: press (toque), repeat (segurar),
-     fader (arrastar volume), swipe (trocar pagina). x/y ja no referencial do #app. */
+     fader (arrastar volume), swipe (trocar pagina / fechar pasta). x/y ja no referencial do #app. */
   var G = null, lastTouch = 0;
 
   function cellOf(target) {
     while (target && target !== document.body) {
-      if (target.getAttribute && target.getAttribute("data-i") != null && SD.hasClass(target, "cell")) return target;
+      if (target.sdTile && SD.hasClass(target, "cell")) return target;
       target = target.parentNode;
     }
     return null;
@@ -549,13 +780,15 @@
 
   function start(x, y, target) {
     if (SD.sheet.isOpen() || SD.alertOpen() || !SD.cfg) return false;
-    if (isIn(target, "nav") || isIn(target, "dots-bar")) return false;
-    var cell = cellOf(target), k = cell ? keys[parseInt(cell.getAttribute("data-i"), 10)] : null;
+    if (isIn(target, "nav") || isIn(target, "dots-bar") || isIn(target, "fd-bar")) return false;
+    var cell = cellOf(target), k = cell ? cell.sdTile : null;
+    if (k && folder && k.f == null) k = null;   /* pasta aberta: a pagina de tras nao responde */
     G = { k: k, sx: x, sy: y, x: x, y: y, t0: SD.now(), mode: "pending", moved: false };
     if (!k) return true;
     if (k.kind === "fader") {
       var lv = levelOf(k.b.target || "master");
       G.mode = "fader"; G.target = k.b.target || "master"; G.v0 = lv && lv.v != null ? lv.v : 0;
+      G.max = lv && lv.max > 0 ? lv.max : (G.target === "effects" ? 200 : 100);
       return true;
     }
     if (!k.empty) SD.setClass(k.el, "down", true);
@@ -577,7 +810,7 @@
     if (adx > 6 || ady > 6) G.moved = true;
     if (G.mode === "fader") {
       /* para cima (no referencial da tela, girada ou nao) aumenta */
-      var h = G.k.h || 100, v = Math.max(0, Math.min(100, G.v0 - dy / h * 100 * 1.15));
+      var h = G.k.h || 100, v = Math.max(0, Math.min(G.max, G.v0 - dy / h * G.max * 1.15));
       if (!G.moved) return;
       var cur = levelOf(G.target);
       if (cur && cur.v != null && Math.round(cur.v) === Math.round(v)) return;
@@ -612,16 +845,34 @@
     G = null;
   }
 
-  /* ---------------------------------------------- deslizar (paginas) --- */
+  /* ---------------------------------------- deslizar (paginas / pasta) --- */
   function swipeMove(dx) {
+    if (folder) {
+      /* pasta: arrastar para a direita fecha */
+      css(fgrid, "transition", "none");
+      css(fgrid, "transform", "translate3d(" + Math.round(dx > 0 ? dx : dx / 4) + "px,0,0)");
+      fwrap.style.opacity = String(Math.max(0.35, 1 - Math.max(0, dx) / (frame.w || 400)));
+      return;
+    }
     var n = SD.cfg.pages.length;
     if ((SD.page === 0 && dx > 0) || (SD.page === n - 1 && dx < 0)) dx = dx / 3;   /* elastico nas pontas */
     css(grid, "transition", "none");
     css(grid, "transform", "translate3d(" + Math.round(dx) + "px,0,0)");
   }
   function swipeEnd(dx, dt) {
-    css(grid, "transition", "");
     var W = frame.w, fast = Math.abs(dx) > 40 && dt < 300;
+    if (folder) {
+      css(fgrid, "transition", "");
+      if (dx > 0 && (dx > W * 0.22 || fast)) {
+        css(fgrid, "transform", "translate3d(" + Math.round(W * 0.3) + "px,0,0)");
+        closeFolder(false);
+      } else {
+        css(fgrid, "transform", "");
+        fwrap.style.opacity = "1";
+      }
+      return;
+    }
+    css(grid, "transition", "");
     var to = SD.page + (dx < 0 ? 1 : -1);
     if ((Math.abs(dx) > W * 0.18 || fast) && SD.cfg.pages[to]) {
       css(grid, "transform", "translate3d(" + (dx < 0 ? -W : W) * 0.4 + "px,0,0)");
@@ -683,6 +934,7 @@
         if (!SD.info) SD.loadInfo(SD.pingAll);
         pollSoon();
       } else if (status === 403 || status === 429) {
+        if (folder) closeFolder(true);
         SD.cfg = null; keys = []; built = null;
         grid.innerHTML = ""; dotsEl.innerHTML = "";
         SD.dropCache();
@@ -702,31 +954,71 @@
     });
   };
 
-  /* consulta leve: mudancas feitas no PC, estados liga/desliga, volumes e versoes novas */
+  /* pagina que lista este exe em "apps" (-1 se nenhuma) */
+  function pageForApp(app) {
+    app = String(app || "").toLowerCase();
+    if (!app || !SD.cfg) return -1;
+    var base = app.replace(/^.*[\\\/]/, "");
+    for (var i = 0; i < SD.cfg.pages.length; i++) {
+      var l = SD.cfg.pages[i].apps;
+      if (!l || !l.length) continue;
+      for (var j = 0; j < l.length; j++) {
+        var a = String(l[j] || "").toLowerCase().replace(/^.*[\\\/]/, "");
+        if (a && (a === base || a + ".exe" === base)) return i;
+      }
+    }
+    return -1;
+  }
+
+  /* troca de pagina pelo app em foco: so quando o app MUDA (nao briga com o usuario) */
+  function onApp(app) {
+    if (app == null) return;
+    app = String(app).toLowerCase();
+    if (app === SD.app) return;
+    SD.app = app;
+    if (!SD.prefs.autoPage || G || SD.sheet.isOpen()) return;
+    var to = pageForApp(app);
+    if (to >= 0 && to !== SD.page) SD.goPage(to);
+  }
+  SD.pageForApp = pageForApp;
+
+  /* relogio do PC pelo cabecalho Date (para o cronometro) */
+  function readSkew(x) {
+    try {
+      var d = x && x.getResponseHeader("Date"), t = d ? Date.parse(d) : NaN;
+      if (!isNaN(t)) SD.skew = t + 500 - SD.now();
+    } catch (e) {}
+  }
+
+  /* consulta leve: mudancas feitas no PC, estados liga/desliga, volumes, app em foco e versoes novas */
   function poll() {
     clearTimeout(pollT);
-    var faders = pageHasFaders();
-    pollT = setTimeout(poll, faders ? 2000 : 5000);
+    var lv = needLevels();
+    pollT = setTimeout(poll, lv ? 2000 : 5000);
     if (SD.denied || !SD.cfg || document.hidden) return;
-    SD.req("GET", "/api/state" + (faders ? "?levels=1" : ""), null, function (ok, st, status) {
+    SD.req("GET", "/api/state" + (lv ? "?levels=1" : ""), null, function (ok, st, status, x) {
       if (!ok) { if (status === 403) SD.load(); return; }
       if (offlineToast) { offlineToast = false; SD.toast("Conectado"); }
-      if (st.toggles) SD.applyToggles(st.toggles);
+      readSkew(x);
+      if (st.toggles) SD.applyToggles(st.toggles, st.since || {});
       if (st.levels) SD.applyLevels(st.levels);
       if (SD.cfgV != null && st.v != null && String(st.v) !== String(SD.cfgV) && !G) SD.load();
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
+      if (st.app !== undefined) onApp(st.app);
     });
   }
   function pollSoon() {
     clearTimeout(pollT);
     pollT = setTimeout(poll, 50);
-    if (pageHasFaders()) fetchLevels();
+    if (needLevels()) fetchLevels();
   }
   SD.pollSoon = pollSoon;
 
   /* ======================================================== inicio ===== */
   SD.start = function () {
     grid = $("grid"); dotsEl = $("dots"); msg = $("msg");
+    fwrap = $("folder"); fbar = $("fd-bar"); fgrid = $("fgrid"); ftitle = $("fd-t");
+    $("fd-back").onclick = function () { closeFolder(false); };
     loadPrefs();
     document.addEventListener("touchstart", onTS, { passive: false });
     document.addEventListener("touchmove", onTM, { passive: false });
@@ -739,7 +1031,8 @@
     document.addEventListener("webkitfullscreenchange", onFsChange, false);
     window.addEventListener("resize", SD.layoutSoon, false);
     window.addEventListener("orientationchange", function () { setTimeout(SD.layout, 300); }, false);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) { pollSoon(); SD.pingAll(); } }, false);
+    window.addEventListener("popstate", onPop, false);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { pollSoon(); SD.pingAll(); setupLive(); } }, false);
     $("scrim").onclick = function () { SD.sheet.cancel(); };
     setInterval(function () { if (!document.hidden) SD.pingAll(); }, 20000);
 

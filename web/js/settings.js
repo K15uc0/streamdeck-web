@@ -56,6 +56,16 @@
         sub: os === "ios" ? ios : os === "android" ? andr : ios + " " + andr }).className += " tall";
     }
 
+    /* toque e paginas */
+    var tp = ui.group(body, "Toque e páginas");
+    iconRow(ui.switchRow(tp, "Vibrar ao tocar", SD.prefs.vibrate, function (on) {
+      SD.setPref("vibrate", on);
+    }), "phone", "#ff375f");
+    iconRow(ui.switchRow(tp, "Trocar de página pelo app em foco", SD.prefs.autoPage, function (on) {
+      SD.setPref("autoPage", on);
+    }), "pages", "#0a84ff").className += " tall";
+    tp.foot("Vibrar só funciona onde o navegador permite (Android). A troca automática vai para a página ligada ao programa aberto no PC (definida no editor do PC), só quando o programa em foco muda.");
+
     /* orientacao */
     el("div", "grp-h", "Orientação", body);
     var sw = el("div", "seg-wrap", null, body);

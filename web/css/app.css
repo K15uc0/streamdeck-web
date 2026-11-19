@@ -324,3 +324,42 @@ html, body {
 .rot #sheet { top: 10px; }
 .rot .sh-body { padding-bottom: 0; }
 .rot #toast { bottom: 40px; }
+
+/* =================================================== 2.2: blocos === */
+/* imagem cobre o bloco; degrade embaixo para o rotulo */
+.key.img { background-size: cover; background-position: center; background-repeat: no-repeat; }
+.key.img .gl { background: -webkit-linear-gradient(top, rgba(0,0,0,0) 40%, rgba(0,0,0,0.62));
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,0.62)); }
+.key.img.nolb .gl { display: none; }
+.key.img .lb { text-shadow: 0 1px 2px rgba(0,0,0,0.55); }
+.key.lit.img .gl { display: block; }
+/* aceso com aparencia propria ("on"): anel branco em volta */
+.key.lit.onlook { -webkit-box-shadow: 0 0 0 2px #fff, 0 0 14px rgba(255,255,255,0.35); box-shadow: 0 0 0 2px #fff, 0 0 14px rgba(255,255,255,0.35); }
+.key.lit.onlook .gl { display: block; }
+/* texto ao vivo: numeros de largura fixa */
+.key.live .lb { font-variant-numeric: tabular-nums; -webkit-font-feature-settings: "tnum"; font-feature-settings: "tnum"; letter-spacing: -0.5px; }
+/* pasta: borda interna leve, como as pastas da tela de inicio */
+.key.folder:after { content: ""; position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: inherit; pointer-events: none;
+  -webkit-box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); }
+/* fader alto (1x2...): trilho com mais respiro */
+.key.fader.tall .val { letter-spacing: -0.8px; }
+
+/* ========================================================== pasta === */
+#folder { display: none; position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 30; opacity: 0;
+  background: rgba(0,0,0,0.9);
+  -webkit-transition: -webkit-transform 280ms cubic-bezier(.2,.85,.25,1), opacity 240ms;
+  transition: transform 280ms cubic-bezier(.2,.85,.25,1), opacity 240ms; }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  #folder { background: rgba(0,0,0,0.62); -webkit-backdrop-filter: blur(26px) saturate(160%); backdrop-filter: blur(26px) saturate(160%); }
+}
+#fgrid { position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  -webkit-transition: -webkit-transform 260ms cubic-bezier(.2,.8,.2,1); transition: transform 260ms cubic-bezier(.2,.8,.2,1); }
+.fd-bar { position: absolute; left: 0; top: 0; right: 0; z-index: 2; }
+.fd-back { position: absolute; left: 0; top: 0; padding: 0 12px 0 6px; line-height: 44px; }
+.fd-back:before { content: ""; display: inline-block; width: 11px; height: 11px; margin: 0 6px 0 8px; vertical-align: 1px;
+  border-left: 2.5px solid #0a84ff; border-bottom: 2.5px solid #0a84ff; -webkit-transform: rotate(45deg); transform: rotate(45deg); }
+.fd-back:after { content: "Voltar"; }
+#fd-t { position: absolute; left: 100px; right: 100px; top: 0; height: 44px; line-height: 44px; text-align: center;
+  font-size: 17px; font-weight: 600; letter-spacing: -0.4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
+body.fopen #grid { -webkit-transform: scale(0.94); transform: scale(0.94); opacity: 0.3; }
+.key.live .lb.mid, .key.live .lb.bl { white-space: nowrap; }
