@@ -21,7 +21,9 @@ MAX_APPS = 20              # apps por pagina (troca automatica)
 LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer")
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()\-]{0,99}$")
-EXE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()+\-]{0,79}$")
+# nome de executavel: letras/digitos (inclusive acentos), espaco e pontuacao
+# comum; sem pastas nem caracteres de controle; termina em .exe
+EXE_RE = re.compile(r"^(?=.{1,80}$)[^\W_](?:[\w ._()+\-'&,!]*)\.[eE][xX][eE]$")
 
 
 # --------------------------------------------------------------- validacao ---

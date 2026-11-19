@@ -498,7 +498,11 @@
   /* aparencia efetiva: com on=true junta os campos de "Quando ligado" */
   function look(b, on) {
     var o = { label: b.label, icon: b.icon, color: b.color, textColor: b.textColor, image: b.image };
-    if (on && b.on) for (var k in b.on) if (b.on.hasOwnProperty(k) && b.on[k]) o[k] = b.on[k];
+    if (on && b.on) {
+      for (var k in b.on) if (b.on.hasOwnProperty(k) && b.on[k]) o[k] = b.on[k];
+      /* igual ao deck.js: icone ligado sem imagem ligada esconde a imagem */
+      if (b.on.icon && !b.on.image) o.image = "";
+    }
     return o;
   }
   function liveText(live) {
@@ -818,8 +822,11 @@
     hex.oninput = function () {
       var v = SD.trim(hex.value);
       if (v && v.charAt(0) !== "#") v = "#" + v;
-      if (!v || /^#[0-9a-f]{6}$/i.test(v) || /^#[0-9a-f]{3}$/i.test(v)) {
-        if (v) nat.value = fullHex(v);
+      if (!v) { set("", true); return; }
+      /* o servidor so aceita #rrggbb: expande #rgb */
+      if (/^#[0-9a-f]{6}$/i.test(v) || /^#[0-9a-f]{3}$/i.test(v)) {
+        v = fullHex(v);
+        nat.value = v;
         set(v, true);
       }
     };
@@ -1083,9 +1090,16 @@
     });
     if (!apps.length) el("span", "none", "Nenhum app", chips);
     function addApp(v) {
+      /* so o nome do arquivo (tira pastas), minusculo, termina em .exe */
+      v = String(v || "").split("/").pop().split("\\").pop();
       v = SD.trim(v).toLowerCase();
       if (!v) return;
-      if (!/\.exe$/.test(v) && v.indexOf(".") < 0) v += ".exe";
+      if (!/\.exe$/.test(v)) v += ".exe";
+      /* mesma regra do servidor (EXE_RE): sem separadores nem caracteres de controle */
+      if (v.length > 80 || /[\/\\:*?"<>|\u0000-\u001f\u007f]/.test(v) || !/^[^.\s]/.test(v)) {
+        SD.toast("Nome de app inválido");
+        return;
+      }
       var cur = curPage().apps || [];
       if (cur.indexOf(v) >= 0) { SD.toast("Já está na lista"); return; }
       change(function () { if (!curPage().apps) curPage().apps = []; curPage().apps.push(v); });
@@ -1515,6 +1529,11 @@
       var b = { kind: "button", label: it.label || "", icon: it.icon || "", color: it.color || "", action: clone(it.action || { type: "none" }) };
       if (it.toggle) b.toggle = true;
       if (it.textColor) b.textColor = it.textColor;
+      if (it.on) b.on = clone(it.on);
+      if (it.image) b.image = it.image;
+      if (it.live) b.live = it.live;
+      if (it.w) b.w = it.w;
+      if (it.h) b.h = it.h;
       if (old.w) b.w = old.w;
       if (old.h) b.h = old.h;
       h.buttons[tg.i] = b;

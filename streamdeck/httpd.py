@@ -25,6 +25,7 @@ from . import VERSION, actions, audio, library, media, paths, schema, security, 
     windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
+DRAIN_MAX = 256 * 1024 * 1024    # corpo grande demais: descarta ate isso antes de responder
 
 PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,"
          b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
@@ -202,13 +203,21 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(raw.decode("utf-8"))
 
     def _body_file(self, limit):
-        """Corpo bruto num arquivo temporario (ate limit bytes). Le tudo antes
-        de recusar, para a resposta chegar ao navegador."""
+        """Corpo bruto num arquivo temporario (ate limit bytes). Se passar do
+        limite, descarta o corpo (ate DRAIN_MAX) antes de recusar, para a
+        resposta chegar ao navegador; acima disso so fecha a conexao."""
         n = int(self.headers.get("Content-Length", "0") or 0)
         if n <= 0:
             raise ValueError("arquivo vazio")
         if n > limit:
             self.close_connection = True
+            if n <= DRAIN_MAX:
+                left = n
+                while left > 0:
+                    chunk = self.rfile.read(min(65536, left))
+                    if not chunk:
+                        break
+                    left -= len(chunk)
             raise ValueError("arquivo grande demais (maximo %d MB)" % (limit // (1024 * 1024)))
         tmp = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024)
         left = n
@@ -335,7 +344,8 @@ class Handler(BaseHTTPRequestHandler):
         # imagens dos botoes: <img> nao manda cabecalho, entao so o codigo
         if url.path.startswith("/img/"):
             if not (self._authed(q) or self._local()):
-                return self._deny_auth()
+                # imagens nao contam como tentativa de codigo errado
+                return self._send(403, "acesso negado", TEXT)
             from urllib.parse import unquote
             found = media.image_file(unquote(url.path[5:]))
             if not found:

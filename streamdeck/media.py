@@ -37,7 +37,9 @@ def clean_name(name, ext):
     """Nome seguro (so o nome do arquivo, caracteres simples) com a extensao ext."""
     base = os.path.basename(str(name or "").replace("\\", "/"))
     stem = os.path.splitext(base)[0]
-    stem = re.sub(r"[^A-Za-z0-9 ._()\-]", "_", stem).strip(" ._")[:80] or "arquivo"
+    stem = re.sub(r"[^A-Za-z0-9 ._()\-]", "_", stem)
+    # o nome precisa comecar com letra ou digito ('-logo', '(1) foto')
+    stem = re.sub(r"^[^A-Za-z0-9]+", "", stem).rstrip(" ._")[:80].rstrip(" ._") or "arquivo"
     return stem + ext
 
 

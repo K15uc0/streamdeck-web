@@ -91,6 +91,11 @@ def main():
     print("Stream Deck %s | dados em %s" % (VERSION, paths.BASE))
     first_run = storage.ensure_config()
     storage.load_config()  # valida o JSON (e migra config antigo) antes de subir
+    try:
+        from . import library
+        library.check()
+    except Exception as e:  # noqa: BLE001 - so avisa, nao impede de subir
+        print("Aviso: biblioteca de comandos com problema: %s" % e)
     os.makedirs(paths.SOUNDS_DIR, exist_ok=True)
     os.makedirs(paths.IMAGES_DIR, exist_ok=True)
     token = storage.token()
