@@ -47,7 +47,7 @@ class SchemaTest(unittest.TestCase):
     def test_lit(self):
         for v in ("obs:stream", "obs:record", "obs:scene=Cena 1", "obs:mute=Mic/Aux", "obs:scene=Á é", ""):
             self.ok(botao(lit=v))
-        for v in ("obs:scene=", "obs:x", "obs:mute=a\nb", "obs:scene=" + "x" * 111, 5, "obs:stream "):
+        for v in ("obs:scene=", "obs:x", "obs:mute=a\nb", "obs:scene=" + "x" * 121, 5, "obs:stream "):
             self.ruim(botao(lit=v), "OBS")
 
     def test_dentro_de_pasta(self):
@@ -182,12 +182,13 @@ class FadeTest(unittest.TestCase):
         t2 = {"done": False}
         self.p.playing.append(["a2", 100, t2, 1.0, False])   # comecou durante a saida
         self.p._handle(make(5))
-        self.assertEqual(self.p.playing[0][3], 0.5)
+        fator = 1.0 - 5 / float(audio.FADE_STEPS)
+        self.assertAlmostEqual(self.p.playing[0][3], fator)
         self.assertEqual(self.p.playing[1][3], 1.0)
         # fader mexeu no meio: mantem o fator
         vols[:] = []
         self.p._handle(("vol",))
-        self.assertEqual(vols, [("a1", 0.5), ("a2", 1.0)])
+        self.assertEqual(vols, [("a1", fator), ("a2", 1.0)])
         self.p._handle(make(audio.FADE_STEPS))
         self.assertEqual([e[0] for e in self.p.playing], ["a2"])
         self.assertTrue(t1["done"])

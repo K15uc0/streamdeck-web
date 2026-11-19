@@ -1076,6 +1076,8 @@
   /* consulta a cada 1 s enquanto toca som ou ha bloco do OBS na tela */
   function needFast() {
     for (var key in SD.sounds) if (SD.sounds.hasOwnProperty(key)) return true;
+    /* OBS so acelera a consulta se ele estiver configurado e conectado */
+    if (!SD.obs || !SD.obs.ok) return false;
     var v = visible();
     for (var i = 0; i < v.length; i++) {
       var b = v[i].b;
