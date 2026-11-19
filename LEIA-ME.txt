@@ -20,6 +20,17 @@ para marcar "Iniciar junto com o Windows".
 Seus dados (botoes, abas, codigo de acesso e sons) ficam em
 Documentos\StreamDeck e sao mantidos nas atualizacoes.
 
+WINDOWS BLOQUEOU O PROGRAMA?
+O programa nao tem assinatura digital paga, entao o Windows as vezes desconfia.
+- "O Windows protegeu o computador" (SmartScreen): "Mais informacoes" >
+  "Executar assim mesmo".
+- Defender apagou/colocou em quarentena: Seguranca do Windows > Protecao contra
+  virus e ameacas > Historico de protecao > clique no item > Restaurar
+  (ou Acoes > Permitir no dispositivo).
+- Confira o arquivo: no PowerShell, Get-FileHash .\StreamDeck.exe deve dar o
+  mesmo SHA-256 que aparece nas notas da versao (pagina Releases).
+- Avise a Microsoft do falso positivo: https://www.microsoft.com/wdsi/filesubmission
+
 ATUALIZACOES
 - Quando sai versao nova, aparece "Atualizacao" em verde no topo do app (e na
   tela de conexao do PC). Toque, veja o que mudou e toque em "Atualizar agora".

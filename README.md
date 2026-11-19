@@ -12,6 +12,17 @@ Transforma qualquer celular ou tablet, inclusive Android antigo, num painel de b
 
 Deixe a janela do Stream Deck aberta (pode minimizar) ou marque **Iniciar junto com o Windows** na tela de conexão (`http://127.0.0.1:8765/conectar` no PC).
 
+## Windows bloqueou o programa?
+
+O StreamDeck.exe é gratuito e não tem assinatura digital paga, por isso o Windows às vezes desconfia dele.
+
+- **SmartScreen** (*"O Windows protegeu o computador"*): clique em **Mais informações → Executar assim mesmo**.
+- **Microsoft Defender apagou ou colocou em quarentena**: abra **Segurança do Windows → Proteção contra vírus e ameaças → Histórico de proteção**, clique no item do StreamDeck.exe e escolha **Restaurar** (ou **Ações → Permitir no dispositivo**).
+- **Confira se o arquivo é o original**: as notas de cada versão em [Releases](https://github.com/K15uc0/streamdeck-web/releases) trazem o SHA-256 do StreamDeck.exe. No PowerShell: `Get-FileHash .\StreamDeck.exe` — o valor tem de ser igual.
+- **Avise a Microsoft do falso positivo**: envie o arquivo em <https://www.microsoft.com/wdsi/filesubmission> (escolha *Software developer* ou *Home customer* e marque *Incorrectly detected*). Depois da análise, o bloqueio costuma sumir para todo mundo.
+
+O programa só abre a porta local, não se instala em lugar nenhum além do registro de "iniciar com o Windows" (se você marcar) e não mexe em outros programas.
+
 ## O que dá para fazer
 
 - Atalhos de teclado, teclas de mídia, abrir sites e programas, rodar comandos, sequências de ações

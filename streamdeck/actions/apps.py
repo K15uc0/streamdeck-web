@@ -104,6 +104,13 @@ def bring(target):
     return False
 
 
+def _focused(hwnd):
+    """Foca e confere: so manda teclas se a janela ficou mesmo na frente."""
+    windows.focus(hwnd)
+    fg = windows.foreground_hwnd()
+    return fg is None or fg == getattr(hwnd, "value", hwnd)
+
+
 def _no_unc(a):
     from ..paths import is_unc
     for key in ("target", "app"):
@@ -139,7 +146,8 @@ def apphotkey(a):
     hwnd = windows.find_window(_exe_name(a["app"]))
     if not hwnd:
         raise ValueError("o programa %s nao esta aberto" % _exe_name(a["app"]))
-    windows.focus(hwnd)
+    if not _focused(hwnd):
+        raise ValueError("nao consegui trazer %s para a frente" % _exe_name(a["app"]))
     time.sleep(0.08)
     winapi.send_keys(a["keys"])
     if a.get("back", True) and prev and prev != hwnd:
@@ -212,7 +220,8 @@ def tab(a):
             hwnd = windows.find_window(BROWSERS[n][0])
     if not hwnd:
         raise ValueError("navegador nao esta aberto")
-    windows.focus(hwnd)
+    if not _focused(hwnd):
+        raise ValueError("nao consegui trazer o navegador para a frente")
     time.sleep(0.1)
     for _ in range(30):
         fg = windows.foreground_hwnd()

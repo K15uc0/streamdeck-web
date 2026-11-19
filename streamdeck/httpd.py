@@ -46,6 +46,8 @@ SEEN = set()
 # (metodo, caminho) -> metodo do Handler. Rotas /api/local/* so respondem no proprio PC.
 ROUTES = {
     ("GET", "/api/local/info"): "local_info",
+    ("GET", "/api/local/hello"): "local_hello",
+    ("POST", "/api/local/quit"): "local_quit",
     ("GET", "/api/update"): "get_update",
     ("GET", "/api/state"): "get_state",
     ("GET", "/api/volume"): "get_volume",
@@ -401,6 +403,20 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, data, ctype)
 
     # ======================================================== rotas GET ===
+    def local_hello(self, q):
+        """Usado por uma copia nova para saber se esta porta e do Stream Deck."""
+        return self._json(200, {"ok": True, "app": "streamdeck", "pid": os.getpid()})
+
+    def local_quit(self, body):
+        """Uma copia nova pediu a porta: responde e fecha este servidor."""
+        print("* outra copia do Stream Deck foi aberta; encerrando esta.")
+        self._json(200, {"ok": True})
+
+        def bye():
+            time.sleep(0.3)
+            os._exit(0)
+        threading.Thread(target=bye, daemon=True).start()
+
     def local_info(self, q):
         base = "http://%s:%d" % (security.lan_ip(), state.PORT[0])
         tok = storage.token()
