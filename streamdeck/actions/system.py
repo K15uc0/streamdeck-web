@@ -13,9 +13,7 @@ def _is_web(target):
 
 
 @action("open", "Abrir site, arquivo ou programa", group="Sistema", icon="globe",
-        help="Sites (http/https) abrem no navegador do PC. Programas e arquivos só podem ser "
-             "configurados no próprio PC ou se liberado em Conectar > Segurança.",
-        dangerous=lambda a: not _is_web(a.get("target", "")), warn=True,
+        help="Sites (http/https) abrem no navegador do PC; caminhos abrem o arquivo ou programa.",
         fields=[Field("target", "Endereço ou caminho", "text", required=True,
                       placeholder="https://… ou C:\\Pasta\\programa.exe")])
 def open_(a):
@@ -29,9 +27,7 @@ def open_(a):
 
 
 @action("command", "Rodar comando", group="Sistema", icon="code",
-        help="Roda um comando do Windows (como no Executar). Só pode ser configurado no próprio PC "
-             "ou se liberado em Conectar > Segurança.",
-        dangerous=True,
+        help="Roda um comando do Windows (como no Executar).",
         fields=[Field("command", "Comando do Windows", "text", required=True, placeholder="notepad")])
 def command(a):
     if IS_WINDOWS:

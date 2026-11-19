@@ -9,21 +9,24 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Stream Deck">
 <title>Stream Deck</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 <div id="safe"></div>
+<div id="app">
 <div id="nav" class="nav"><div class="nav-in"><div id="nav-l"></div><div id="nav-t"></div><div id="nav-r"></div></div></div>
 <div id="grid"></div>
 <div id="dots" class="dots-bar"></div>
 <div id="msg"></div>
-<div id="draglayer"></div>
 <div id="toast"></div>
 <div id="sheetwrap"><div id="scrim"></div><div id="sheet"><div class="grab"></div><div id="views"></div></div></div>
 <div id="alert"></div>
+</div>
 <script src="/js/core.js"></script>
 <script src="/js/deck.js"></script>
-<script src="/js/editor.js"></script>
 <script src="/js/settings.js"></script>
 </body>
 </html>

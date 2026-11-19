@@ -139,6 +139,10 @@
     wifi: '<path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0" stroke="#fff" stroke-width="2.2" fill="none"/><circle cx="12" cy="19.5" r="1.6" fill="#fff"/>',
     download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16" stroke="#fff" stroke-width="2.2" fill="none"/>',
     expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="#fff" stroke-width="2.2" fill="none"/>',
+    cog: '<path d="M10.3 2.5h3.4l.5 2.6 1.7.9 2.4-1.2 2.4 2.4-1.2 2.4.7 1.7 2.6.5v3.4l-2.6.5-.7 1.7 1.2 2.4-2.4 2.4-2.4-1.2-1.7.7-.5 2.6h-3.4l-.5-2.6-1.7-.7-2.4 1.2-2.4-2.4 1.2-2.4-.7-1.7-2.6-.5v-3.4l2.6-.5.7-1.7-1.2-2.4 2.4-2.4 2.4 1.2 1.7-.9z" stroke="#fff" stroke-width="1.8" fill="none" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" stroke="#fff" stroke-width="1.8" fill="none"/>',
+    shrink: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" stroke="#fff" stroke-width="2.2" fill="none"/>',
+    phone: '<rect x="6" y="2" width="12" height="20" rx="2.5" stroke="#fff" stroke-width="2" fill="none"/><path d="M10.5 18.5h3" stroke="#fff" stroke-width="2"/>',
+    share: '<path d="M12 3v12M8 7l4-4 4 4M6 11H5v10h14V11h-1" stroke="#fff" stroke-width="2" fill="none"/>',
     grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" fill="#fff"/>',
     pages: '<rect x="7" y="2" width="13" height="16" rx="2" fill="#fff" opacity="0.55"/><rect x="4" y="6" width="13" height="16" rx="2" fill="#fff"/>',
     info: '<circle cx="12" cy="12" r="9.5" stroke="#fff" stroke-width="2" fill="none"/><path d="M12 11v6" stroke="#fff" stroke-width="2.4"/><circle cx="12" cy="7.5" r="1.4" fill="#fff"/>',
@@ -167,7 +171,6 @@
   SD.actionMap = {};
   SD.toggles = {};         /* "p:b": true */
   SD.levels = {};          /* master/effects/mic -> {v, muted} */
-  SD.editing = false;
   SD.online = true;
   SD.here = location.host;
   SD.conns = [];
@@ -223,8 +226,13 @@
   SD.dropCache = function () { try { window.localStorage.removeItem(CFG_KEY); } catch (e) {} };
 
   SD.emptyButton = function () { return { kind: "button", label: "", icon: "", color: "", action: { type: "none" } }; };
+  /* regra unica (celular e editor): vazio = nao e fader, acao nenhuma
+     e sem texto, icone, liga/desliga ou cor */
   SD.isEmpty = function (b) {
-    return !b || (b.kind !== "fader" && (!b.action || !b.action.type || b.action.type === "none"));
+    if (!b) return true;
+    if (b.kind === "fader") return false;
+    var t = b.action && b.action.type;
+    return (!t || t === "none") && !SD.trim(b.label) && !b.icon && !b.toggle && !b.color;
   };
   SD.padButtons = function (pg, n) {
     if (!pg.buttons) pg.buttons = [];
@@ -363,7 +371,7 @@
         if (SD.renderNav) SD.renderNav();
         if (SD.updAvail() && !updToastShown) {
           updToastShown = true;
-          SD.toast("Versão " + (data.update.latest || "nova") + " disponível. Veja em Editar › Ajustes.");
+          SD.toast("Versão " + (data.update.latest || "nova") + " disponível. Veja em Ajustes.");
         }
       }
       if (cb) cb(ok);
@@ -409,12 +417,14 @@
     return !!(d.requestFullscreen || d.webkitRequestFullscreen);
   };
   SD.isFullscreen = function () { return !!(document.fullscreenElement || document.webkitFullscreenElement); };
+  /* o celular (deck.js) troca por uma versao que tambem trava a orientacao */
   SD.toggleFullscreen = function () {
-    var d = document.documentElement;
+    var d = document.documentElement, r = null;
     try {
-      if (SD.isFullscreen()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-      else (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
+      if (SD.isFullscreen()) r = (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else r = (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
     } catch (e) {}
+    if (r && r["catch"]) r["catch"](function () {});
     setTimeout(function () { if (SD.layout) SD.layout(); }, 400);
   };
 
@@ -479,18 +489,20 @@
   }
 
   function sheetEl() { return $("sheet"); }
+  /* tela girada por CSS no celular: usa o referencial da tela girada (SD.toLocal) */
+  function localY(t) { return SD.toLocal ? SD.toLocal(t.clientX, t.clientY).y : t.clientY; }
 
   /* puxar a folha para baixo pelo cabecalho fecha (como no iOS) */
   function dragHead(head) {
     var sy = 0, dy = 0, on = false, sh = sheetEl();
     head.addEventListener("touchstart", function (e) {
       if (e.target !== head && !SD.hasClass(e.target, "ht")) return;
-      on = true; sy = e.touches[0].clientY; dy = 0;
+      on = true; sy = localY(e.touches[0]); dy = 0;
       css(sh, "transition", "none");
     }, false);
     head.addEventListener("touchmove", function (e) {
       if (!on) return;
-      dy = Math.max(0, e.touches[0].clientY - sy);
+      dy = Math.max(0, localY(e.touches[0]) - sy);
       css(sh, "transform", "translate3d(0," + dy + "px,0)");
       e.preventDefault();
     }, false);

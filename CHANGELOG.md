@@ -1,5 +1,15 @@
 # Novidades
 
+## 2.1.0
+
+Edição pelo PC e celular só para uso:
+- Novo editor no PC: na tela Conectar, toque em "Editar botões". Páginas à esquerda, grade no centro e o botão selecionado à direita; arraste para mover, Ctrl+Z para desfazer, botão "Testar" e salvamento automático.
+- O celular não edita mais: fica só com os botões, sem risco de mudar algo sem querer.
+- Grade separada para o celular em pé (ex.: 3x5 em pé e 5x3 deitado), definida no editor do PC.
+- Tela cheia pelo botão no topo e opção "Abrir sempre em tela cheia".
+- Orientação por aparelho: Automática, Vertical ou Horizontal (nos Ajustes do celular).
+- Dá para adicionar à tela de início como um app (no iPhone, é assim que fica em tela cheia).
+
 ## 2.0.0
 
 Visual novo no estilo iOS e programa reorganizado:

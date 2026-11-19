@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<title>Stream Deck · Editar botões</title>
+<link rel="stylesheet" href="/css/editar.css">
+</head>
+<body>
+<header id="top">
+  <a href="/conectar" class="back" title="Voltar para Conectar">&#8249; Conectar</a>
+  <h1>Editar botões</h1>
+  <div class="tools">
+    <button id="undo" title="Desfazer (Ctrl+Z)">Desfazer</button>
+    <button id="redo" title="Refazer (Ctrl+Y)">Refazer</button>
+    <span id="status" class="status">Carregando…</span>
+  </div>
+</header>
+
+<div id="app">
+  <aside id="left">
+    <div class="hdr">Páginas</div>
+    <div id="pages" class="list"></div>
+    <button id="addPage" class="rowbtn">+ Nova página</button>
+    <p class="foot">Clique duas vezes no nome para renomear. Arraste para mudar a ordem.</p>
+
+    <div class="hdr">Sons</div>
+    <div class="list">
+      <div id="soundList" class="sounds"></div>
+    </div>
+    <button id="openSounds" class="rowbtn">Abrir pasta de sons</button>
+    <button id="reloadSounds" class="rowbtn">Atualizar lista</button>
+    <p class="foot">Coloque arquivos MP3 ou WAV na pasta sons e clique em Atualizar lista.</p>
+  </aside>
+
+  <main id="center">
+    <div class="bar">
+      <div id="orient" class="seg"></div>
+      <div id="sizes" class="sizes"></div>
+    </div>
+    <div id="warn" class="warnbox" style="display:none"></div>
+    <div id="stage"><div id="device"><div id="grid"></div></div></div>
+    <p class="hint">Clique para selecionar · arraste para mover ou trocar · Delete limpa · Ctrl+C / Ctrl+V copia e cola · setas mudam a seleção</p>
+  </main>
+
+  <aside id="right">
+    <div id="inspector"></div>
+  </aside>
+</div>
+
+<div id="toast"></div>
+
+<script src="/js/core.js"></script>
+<script src="/js/editar.js"></script>
+</body>
+</html>

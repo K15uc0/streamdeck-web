@@ -1,59 +1,69 @@
-/* Stream Deck - ajustes: grade, paginas, computadores (abas), atualizacoes, tela cheia. */
+/* Stream Deck (celular) - ajustes deste aparelho: tela cheia, orientacao, computadores (abas),
+   atualizacoes. Editar botoes e so no PC (editar.html). */
 (function () {
   "use strict";
 
   var SD = window.SD, esc = SD.esc, el = SD.el, ui = SD.ui, clone = SD.clone, trim = SD.trim;
 
   /* ======================================================== ajustes === */
-  var gridT = null, gridCfg = null, gridOrig = null;
-
   SD.openSettings = function () {
     if (!SD.info) SD.loadInfo(function () { if (SD.sheet.isOpen()) SD.sheet.refresh(); });
     SD.sheet.open({
       title: "Ajustes",
       left: null,
       right: { text: "OK", bold: true, fn: function () { SD.sheet.close(); } },
-      render: renderSettings,
-      onLeave: flushGrid
+      render: renderSettings
     });
   };
 
-  /* colunas/linhas: aplica na hora e salva depois de parar de tocar */
-  function changeGrid(cols, rows) {
-    if (!gridCfg) { gridOrig = SD.cfg; gridCfg = clone(SD.cfg); }
-    gridCfg.columns = cols; gridCfg.rows = rows;
-    SD.cfg = gridCfg;
-    SD.render();
-    clearTimeout(gridT);
-    gridT = setTimeout(flushGrid, 900);
+  function platform() {
+    var ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+    if (/Android/.test(ua)) return "android";
+    return "";
   }
-  function flushGrid() {
-    clearTimeout(gridT);
-    if (!gridCfg) return;
-    var c = gridCfg;
-    gridCfg = null;
-    SD.cfg = gridOrig;
-    SD.saveCfg(c, null, true);
+
+  function iconRow(row, icon, color) {
+    row.insertBefore(el("span", "r-ic", SD.svg(icon, 18)), row.firstChild).style.background = color;
+    row.className += " has-ic";
+    return row;
   }
 
   function renderSettings(body) {
-    var cfg = SD.cfg;
+    /* tela */
+    var tg;
+    if (SD.fsAvailable()) {
+      tg = ui.group(body, "Tela");
+      iconRow(ui.switchRow(tg, "Tela cheia", SD.isFullscreen(), function (on) {
+        SD.setFullscreen(on);
+        setTimeout(function () { if (SD.sheet.isOpen()) SD.sheet.refresh(); }, 700);
+      }), "expand", "#5e5ce6");
+      iconRow(ui.switchRow(tg, "Abrir sempre em tela cheia", SD.prefs.autoFullscreen, function (on) {
+        SD.setPref("autoFullscreen", on);
+      }), "bolt", "#ff9f0a").className += " tall";
+      tg.foot("O navegador só deixa entrar em tela cheia depois de um toque: ao abrir, o primeiro toque na tela já liga a tela cheia (e o botão tocado funciona normalmente).");
+    } else if (SD.isStandalone()) {
+      tg = ui.group(body, "Tela");
+      ui.row(tg, { icon: "expand", iconColor: "#5e5ce6", title: "Tela cheia", value: "app instalado" });
+      tg.foot("Aberto pela tela de início: o Stream Deck já ocupa a tela toda.");
+    }
+    if (!SD.isStandalone()) {
+      var os = platform(), hs = ui.group(body, "Tela de início");
+      var ios = "No iPhone/iPad (Safari): toque em Compartilhar e depois em “Adicionar à Tela de Início”. Abrindo pelo ícone, o Stream Deck ocupa a tela toda, sem a barra do navegador.";
+      var andr = "No Android (Chrome): menu ⋮ › “Adicionar à tela inicial” ou “Instalar app”. Abrindo pelo ícone, ele já abre em tela cheia.";
+      ui.row(hs, { icon: os === "android" ? "phone" : "share", iconColor: "#0a84ff",
+        title: os === "android" ? "Instalar como app" : "Adicionar à Tela de Início",
+        sub: os === "ios" ? ios : os === "android" ? andr : ios + " " + andr }).className += " tall";
+    }
 
-    /* grade */
-    var g = ui.group(body, "Grade de botões");
-    ui.stepperRow(g, "Colunas", cfg.columns, 1, 10, function (v) { changeGrid(v, (gridCfg || SD.cfg).rows); });
-    ui.stepperRow(g, "Linhas", cfg.rows, 1, 8, function (v) { changeGrid((gridCfg || SD.cfg).columns, v); });
-    g.foot("Em pé, o celular pode trocar colunas por linhas para os botões ficarem maiores.");
-
-    /* paginas */
-    var pg = ui.group(body, "Páginas");
-    for (var i = 0; i < cfg.pages.length; i++) (function (idx) {
-      var p = cfg.pages[idx];
-      ui.row(pg, { icon: "page", iconColor: idx === SD.page ? SD.TINT : "#636366", title: p.name || "Página " + (idx + 1),
-        value: idx === SD.page ? "atual" : "", chevron: true, onTap: function () { openPage(idx); } });
-    })(i);
-    ui.row(pg, { iconHtml: '<span class="r-add">' + SD.svg("plus", 12) + "</span>", title: "Adicionar página", tint: true, onTap: addPage });
-    pg.foot("Deslize para os lados na tela principal para trocar de página.");
+    /* orientacao */
+    el("div", "grp-h", "Orientação", body);
+    var sw = el("div", "seg-wrap", null, body);
+    ui.segmented(sw, [["auto", "Automática"], ["portrait", "Vertical"], ["landscape", "Horizontal"]], SD.prefs.orientation, function (v) {
+      SD.setPref("orientation", v);
+    });
+    el("div", "grp-f", esc("Vale só para este aparelho. Automática segue o aparelho. Vertical/Horizontal travam a tela " +
+      "(em tela cheia ou no app instalado); onde o sistema não deixa travar, a tela é girada pelo Stream Deck."), body);
 
     /* computadores */
     var cg = ui.group(body, "Computadores");
@@ -71,107 +81,13 @@
     var u = SD.info && SD.info.update;
     ui.row(gg, { icon: "download", iconColor: "#8e8e93", title: "Atualizações", badge: SD.updAvail() ? "1" : "",
       value: SD.info ? (SD.info.version || (u && u.version) || "") : "", chevron: true, onTap: openUpdates });
-    if (SD.canFullscreen()) {
-      var fr = ui.switchRow(gg, "Tela cheia", SD.isFullscreen(), function () {
-        SD.toggleFullscreen();
-        setTimeout(function () { if (SD.sheet.isOpen()) SD.sheet.refresh(); }, 600);
-      });
-      fr.insertBefore(el("span", "r-ic", SD.svg("expand", 18)), fr.firstChild).style.background = "#5e5ce6";
-    }
     ui.row(gg, { icon: "qr", iconColor: "#30d158", title: "Como conectar", chevron: true, onTap: openHowto });
+    gg.foot("Para criar ou editar botões, abra o Stream Deck no PC (Conectar › Editar botões).");
 
     var foot = el("div", "about", null, body);
     foot.innerHTML = "Stream Deck" + (SD.info && SD.info.version ? " " + esc(SD.info.version) : "") +
       (SD.info && SD.info.name ? " · " + esc(SD.info.name) : "");
     el("div", "sh-pad", null, body);
-  }
-
-  /* ======================================================== paginas === */
-  function addPage() {
-    var c = clone(SD.cfg), bs = [], n = c.columns * c.rows;
-    for (var i = 0; i < n; i++) bs.push(SD.emptyButton());
-    c.pages.push({ name: "Página " + (c.pages.length + 1), buttons: bs });
-    var idx = c.pages.length - 1;
-    SD.saveCfg(c, function (ok) {
-      if (!ok) return;
-      SD.page = idx;
-      SD.render();
-      SD.sheet.refresh();
-      openPage(idx);
-    });
-  }
-
-  function movePage(from, to) {
-    var c = clone(SD.cfg), map = {};
-    var p = c.pages.splice(from, 1)[0];
-    c.pages.splice(to, 0, p);
-    for (var i = 0; i < SD.cfg.pages.length; i++) {
-      var n = i;
-      if (i === from) n = to;
-      else if (from < to && i > from && i <= to) n = i - 1;
-      else if (from > to && i >= to && i < from) n = i + 1;
-      map[i] = n;
-    }
-    SD.remapPages(c, map);
-    var t = {};
-    for (var k in SD.toggles) if (SD.toggles.hasOwnProperty(k)) {
-      var parts = k.split(":");
-      t[map[parseInt(parts[0], 10)] + ":" + parts[1]] = SD.toggles[k];
-    }
-    SD.toggles = t;
-    SD.page = map[SD.page];
-    SD.saveCfg(c, null, true);
-    return to;
-  }
-
-  function deletePage(idx, done) {
-    if (SD.cfg.pages.length < 2) return SD.toast("Precisa ficar ao menos uma página.", true);
-    var name = SD.cfg.pages[idx].name || "Página " + (idx + 1);
-    SD.confirm("Excluir “" + name + "”?", "A página e todos os botões dela serão apagados. Botões que levavam a ela ficam vazios.",
-      "Excluir", true, function () {
-        var c = clone(SD.cfg), map = {};
-        c.pages.splice(idx, 1);
-        for (var i = 0; i < SD.cfg.pages.length; i++) map[i] = i < idx ? i : i === idx ? -1 : i - 1;
-        SD.remapPages(c, map);
-        SD.toggles = {};
-        if (SD.page >= idx && SD.page > 0) SD.page--;
-        SD.saveCfg(c, function (ok) { if (ok && done) done(); }, true);
-      });
-  }
-
-  function openPage(idx) {
-    var name = null;
-    SD.sheet.push({
-      title: "Página",
-      render: function (body) {
-        var p = SD.cfg.pages[idx];
-        if (!p) return;
-        var g = ui.group(body, "Nome");
-        ui.input(g, null, name != null ? name : (p.name || ""), { placeholder: "Página " + (idx + 1), maxlength: 30, autocap: true,
-          onInput: function (v) { name = v; } });
-        var a = ui.group(body);
-        if (idx !== SD.page) ui.row(a, { title: "Mostrar esta página", tint: true, onTap: function () { SD.goPage(idx); SD.sheet.refresh(); } });
-        ui.row(a, { title: "Mover para cima", tint: idx > 0, dim: idx === 0, onTap: idx > 0 ? function () { saveName(); idx = movePage(idx, idx - 1); SD.sheet.refresh(); } : null });
-        ui.row(a, { title: "Mover para baixo", tint: idx < SD.cfg.pages.length - 1, dim: idx >= SD.cfg.pages.length - 1,
-          onTap: idx < SD.cfg.pages.length - 1 ? function () { saveName(); idx = movePage(idx, idx + 1); SD.sheet.refresh(); } : null });
-        var d = ui.group(body);
-        ui.row(d, { title: "Excluir página", red: true, center: true, onTap: function () {
-          name = null;
-          deletePage(idx, function () { SD.sheet.pop(); });
-        } });
-      },
-      onLeave: saveName
-    });
-    function saveName() {
-      if (name == null) return;
-      var n = trim(name);
-      name = null;
-      var p = SD.cfg.pages[idx];
-      if (!p || n === (p.name || "")) return;
-      var c = clone(SD.cfg);
-      c.pages[idx].name = n;
-      SD.saveCfg(c, null, true);
-    }
   }
 
   /* =================================================== computadores === */

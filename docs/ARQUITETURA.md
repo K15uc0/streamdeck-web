@@ -35,10 +35,14 @@ streamdeck/
 web/
   index.html              casca (HTML mínimo)
   conectar.html           tela do PC (QR code)
+  editar.html             editor do PC (só no PC)
+  manifest.json           "Adicionar à tela inicial"
+  icons/                  ícones do manifest e apple-touch-icon
   css/app.css
+  css/editar.css          estilos do editor do PC
   js/core.js              rede, utilidades, ícones, estado global SD
   js/deck.js              grade, toque, páginas, faders, liga/desliga
-  js/editor.js            modo edição, folhas, formulário a partir do schema
+  js/editar.js            editor do PC: grade, formulário a partir do schema, autosave
   js/settings.js          ajustes, páginas, PCs (abas), atualizações
 ```
 
@@ -89,7 +93,7 @@ Migração v1 -> v2 (automática ao carregar, com cópia `config.v1.bak.json`):
 | GET | `/api/config` | config v2; cabeçalho `X-Config-Version` |
 | POST | `/api/config` | `{ok, v}`; 400 `{ok:false, error}`; 403 se ação perigosa vinda de fora do PC |
 | GET | `/api/actions` | `{ok, actions:[ActionSchema]}` |
-| GET | `/api/info` | `{ok, name, code, sounds, tabs, version, local, remote_admin, update}` |
+| GET | `/api/info` | `{ok, name, code, sounds, tabs, version, local, update}` |
 | GET | `/api/press?p=&b=` | `{ok, toggles?}` ; erro `{ok:false, error}` |
 | GET | `/api/state?levels=1` | `{ok, v, update, toggles:{"p:b":true}, levels?}` |
 | GET | `/api/volume?c=master&v=40` ou `?c=mic&mute=toggle` | `{ok, levels:{master:{v,muted}, effects:{...}, mic:{...}}}` |
@@ -107,7 +111,6 @@ ActionSchema:
   "group": "Rádio",
   "icon": "sound",
   "help": "Coloque MP3/WAV na pasta sons.",
-  "dangerous": false,
   "fields": [
     { "key": "file", "label": "Arquivo", "kind": "sound", "required": true },
     { "key": "volume", "label": "Volume", "kind": "number", "min": 0, "max": 100, "default": 100 },
@@ -121,10 +124,6 @@ Tipos de campo (`kind`): `text`, `textarea`, `keys` (lista de teclas; editada co
 [{value, label}]`), `sound` (nome de arquivo; opções vêm de `/api/info.sounds`),
 `page` (índice de página), `steps` (lista de ações, sem `page`/`multi`).
 Opcionais em qualquer campo: `placeholder`, `help`, `default`, `required`.
-
-`dangerous: true` = só pode ser criada/alterada no próprio PC, salvo se liberado em
-Conectar > Segurança (`remote_admin`). Para `open`, endereços http/https não contam
-como perigosos (o servidor decide; o editor só avisa).
 
 ## Como adicionar uma função
 
@@ -142,3 +141,27 @@ def beep(a):
 e importar o módulo em `streamdeck/actions/__init__.py` (`_load()`). A validação
 básica (obrigatórios, limites, opções) vem dos campos; validações extras vão em
 `validate=func`.
+
+## 2.1: edição só no PC, tela cheia e orientação
+
+**Edição só no PC.** `POST /api/config` só é aceito do próprio PC (127.0.0.1/::1);
+de outro aparelho responde 403 `{ok:false, error:"edite pelo PC"}`. A opção
+`remote_admin` (Conectar > Segurança) e o bloqueio de "ações perigosas" vindas do
+celular deixam de existir (o celular não salva mais nada). `/api/info` perde
+`remote_admin`. `POST /api/tabs` continua aceito do celular (lista de PCs do aparelho).
+
+**Editor do PC.** `GET /editar` (só no PC, como `/conectar`) serve `web/editar.html`
+com `web/css/editar.css` e `web/js/editar.js`, que reutilizam `web/js/core.js`
+(rede, ícones, cores). Rota extra só no PC: `POST /api/local/test` com corpo
+`{action}` executa uma ação sem salvar (botão "Testar").
+
+**Grade por orientação.** `columns`/`rows` = grade na horizontal. Opcional
+`"portrait": {"columns": 3, "rows": 5}` = grade na vertical (1..10 x 1..8). Sem
+`portrait`, a vertical é a horizontal transposta quando `columns > rows` (como hoje).
+A mesma lista de botões é distribuída linha a linha em cada grade; se a grade
+atual tiver menos posições que a lista, os excedentes não aparecem (o editor avisa).
+
+**Celular (só uso).** Sem modo edição. Ajustes por aparelho em localStorage
+(`sd_prefs`): `orientation` = `auto|portrait|landscape`, `autoFullscreen` bool.
+Tela cheia pela barra; trava via `screen.orientation.lock` quando possível, senão
+gira o conteúdo por CSS. `web/manifest.json` + ícones para "Adicionar à tela inicial".

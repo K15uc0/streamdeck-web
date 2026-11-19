@@ -1,24 +1,14 @@
 # -*- coding: utf-8 -*-
 """Acoes de som: tocar efeito, parar efeitos e ligar/desligar mudo."""
 import os
-import re
 
 from . import action, Field
 from .. import audio, paths
 
 
-def _sound_dangerous(a):
-    """Som fora da pasta sons (caminho absoluto, de rede ou com ..)."""
-    f = str(a.get("file", "")).strip().strip('"')
-    absolute = bool(re.match(r"^[A-Za-z]:", f)) or f.startswith(("\\", "/"))
-    return (paths.is_unc(f) or absolute or ".." in re.split(r"[\\/]", f)
-            or not paths.inside(audio.sound_path(f), paths.SOUNDS_DIR))
-
-
 @action("sound", "Tocar efeito sonoro", group="Rádio", icon="sound",
         help="Coloque os arquivos MP3 ou WAV na pasta sons, dentro da pasta StreamDeck do PC; "
-             "eles aparecem na lista. Arquivos fora dessa pasta só podem ser escolhidos no próprio PC.",
-        dangerous=_sound_dangerous, warn=False,
+             "eles aparecem na lista. Também aceita um caminho completo.",
         fields=[Field("file", "Arquivo", "sound", required=True,
                       placeholder="vinheta.mp3 ou C:\\Sons\\aplausos.wav"),
                 Field("volume", "Volume", "number", min=0, max=100, step=1, default=100),

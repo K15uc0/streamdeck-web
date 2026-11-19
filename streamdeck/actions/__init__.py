@@ -43,38 +43,25 @@ class Field(object):
 
 
 class Action(object):
-    def __init__(self, type, label, fn, group, icon, help, fields, dangerous, validate, warn):
+    def __init__(self, type, label, fn, group, icon, help, fields, validate):
         self.type, self.label, self.fn = type, label, fn
         self.group, self.icon, self.help = group, icon, help
         self.fields = list(fields or [])
-        self.dangerous = dangerous     # bool ou funcao(a) -> bool
         self.extra_validate = validate
-        self.warn = warn               # valor de "dangerous" mostrado no schema
-
-    def is_dangerous(self, a):
-        if callable(self.dangerous):
-            return bool(self.dangerous(a))
-        return bool(self.dangerous)
 
     def schema(self):
-        warn = self.warn
-        if warn is None:
-            warn = self.dangerous if isinstance(self.dangerous, bool) else True
         return {"type": self.type, "label": self.label, "group": self.group,
-                "icon": self.icon, "help": self.help or "", "dangerous": bool(warn),
+                "icon": self.icon, "help": self.help or "",
                 "fields": [f.schema() for f in self.fields]}
 
 
-def action(type, label, group="Geral", icon="", help="", fields=None,
-           dangerous=False, validate=None, warn=None):
-    """Registra uma acao. dangerous: True/False ou funcao(a) -> bool (decide o
-    servidor). validate: funcao(a) que levanta ValueError("mensagem") para
-    regras alem das dos campos. warn: valor de "dangerous" no schema quando
-    dangerous e uma funcao (o editor so avisa)."""
+def action(type, label, group="Geral", icon="", help="", fields=None, validate=None):
+    """Registra uma acao. validate: funcao(a) que levanta ValueError("mensagem")
+    para regras alem das dos campos. (A edicao so acontece no proprio PC.)"""
     def deco(fn):
         if type in REGISTRY:
             raise ValueError("acao repetida: %s" % type)
-        REGISTRY[type] = Action(type, label, fn, group, icon, help, fields, dangerous, validate, warn)
+        REGISTRY[type] = Action(type, label, fn, group, icon, help, fields, validate)
         return fn
     return deco
 
@@ -89,14 +76,6 @@ def run(a):
     if act is None:
         raise ValueError("tipo de acao desconhecido: %s" % (a.get("type") if isinstance(a, dict) else a))
     return act.fn(a)
-
-
-def is_dangerous(a):
-    """Acoes que dao controle amplo sobre o PC (so criadas no proprio PC)."""
-    if not isinstance(a, dict):
-        return False
-    act = REGISTRY.get(a.get("type"))
-    return act.is_dangerous(a) if act else False
 
 
 def schema():

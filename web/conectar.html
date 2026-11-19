@@ -57,6 +57,15 @@
   #upd a { color: #0a84ff; }
   #notes { white-space: pre-wrap; background: #2c2c2e; border-radius: 10px; padding: 10px 12px;
     font-size: 14px; color: rgba(235,235,245,0.85); margin-top: 10px; display: none; max-height: 220px; overflow: auto; }
+  a.edit { display: flex; align-items: center; gap: 16px; margin-top: 24px; padding: 18px 20px; border-radius: 14px;
+    background: linear-gradient(135deg, #0a84ff, #5e5ce6); color: #fff; text-decoration: none; }
+  a.edit:hover { filter: brightness(1.08); }
+  a.edit .ei { flex: none; width: 52px; height: 52px; border-radius: 12px; background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center; }
+  a.edit .et { flex: 1; line-height: 1.35; }
+  a.edit .et b { display: block; font-size: 20px; font-weight: 700; }
+  a.edit .et span { font-size: 15px; color: rgba(255,255,255,0.85); }
+  a.edit .ego { flex: none; background: #fff; color: #0a84ff; font-weight: 600; font-size: 15px; padding: 9px 16px; border-radius: 18px; }
   .muted { color: rgba(235,235,245,0.6); font-size: 13px; }
   .warn { margin: 0; padding: 12px 16px; background: rgba(255,159,10,0.12); color: #ff9f0a; font-size: 14px; line-height: 1.4; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 28px 16px 40px; } h1 { font-size: 28px; } }
@@ -86,6 +95,12 @@
     </div>
   </div>
 
+  <a class="edit" href="/editar">
+    <span class="ei"><svg width="30" height="30" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" fill="#fff" opacity="0.55"/></svg></span>
+    <span class="et"><b>Editar botões</b><span>Crie páginas, botões, faders e ações com o mouse e o teclado deste PC.</span></span>
+    <span class="ego">Abrir editor</span>
+  </a>
+
   <div class="hdr">Opções</div>
   <div class="list">
     <label class="item" id="autoWrap"><span class="t">Iniciar o Stream Deck junto com o Windows</span><input type="checkbox" id="auto"></label>
@@ -98,13 +113,11 @@
   <div class="list">
     <div id="weak" class="warn" style="display:none">Seu código de acesso é curto (de uma versão antiga).
       Gere um novo para mais segurança. Depois, leia o QR code de novo em cada aparelho.</div>
-    <label class="item"><span class="t">Permitir que os aparelhos criem botões que rodam comandos, abrem programas/arquivos ou chamam APIs
-      <span class="s">Desligado é mais seguro: esses botões só são criados aqui no PC. Botões assim que já existem continuam funcionando.</span></span>
-      <input type="checkbox" id="remote"></label>
     <div class="item btn"><span class="t"><button id="newcode" class="danger">Gerar novo código de acesso</button>
       <span class="s">Desconecta todos os aparelhos. Use se achar que alguém pegou o código.</span></span></div>
   </div>
-  <p class="foot">O Stream Deck só aceita aparelhos da sua rede local, exige o código de acesso
+  <p class="foot">Os botões só são criados e alterados aqui no PC; os aparelhos apenas usam.
+    O Stream Deck só aceita aparelhos da sua rede local, exige o código de acesso
     e bloqueia sites que tentem usar o seu navegador para acionar botões.</p>
 
   <div class="hdr">Atualizações</div>
@@ -158,17 +171,9 @@ async function load() {
   qr.make();
   $("qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
   showUpdate(info.update);
-  $("remote").checked = !!(info.settings && info.settings.remote_admin);
   $("weak").style.display = info.weak ? "" : "none";
 }
 
-$("remote").onchange = async (e) => {
-  if (e.target.checked && !confirm("Liberar? Quem tiver o código de acesso poderá criar botões que rodam comandos neste PC.")) {
-    e.target.checked = false; return;
-  }
-  const r = await api("/api/local/settings", { remote_admin: e.target.checked });
-  if (!r.ok) { alert("Não foi possível: " + r.error); e.target.checked = !e.target.checked; }
-};
 $("newcode").onclick = async () => {
   if (!confirm("Gerar um novo código? Todos os aparelhos precisarão ler o QR code de novo.")) return;
   const r = await api("/api/local/newcode", {});

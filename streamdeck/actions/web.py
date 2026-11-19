@@ -25,7 +25,7 @@ def _validate(a):
         help="Para programas de rádio que têm API web (veja no manual do programa o endereço e os "
              "comandos). A chamada sai do PC, então 127.0.0.1 aponta para o próprio PC. Se o programa "
              "não tiver API, use “Atalho de teclado” com as teclas de atalho configuradas nele.",
-        dangerous=True, validate=_validate,
+        validate=_validate,
         fields=[Field("method", "Método", "select", default="GET",
                       options=[("GET", "GET"), ("POST", "POST")]),
                 Field("url", "Endereço da API", "text", required=True, placeholder="http://127.0.0.1:porta/…"),

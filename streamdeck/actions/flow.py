@@ -2,7 +2,7 @@
 """Acoes de fluxo: nada (espaco vazio), ir para pagina e sequencia."""
 import time
 
-from . import action, Field, run, is_dangerous
+from . import action, Field, run
 
 
 @action("none", "Nada (espaço vazio)", group="Geral", icon="")
@@ -17,13 +17,8 @@ def page(a):
     pass   # a troca de pagina acontece no aparelho
 
 
-def _multi_dangerous(a):
-    return any(is_dangerous(x) for x in a.get("steps") or [])
-
-
 @action("multi", "Sequência de ações (avançado)", group="Geral", icon="bolt",
         help="Executa várias ações em ordem, com uma pausa entre elas.",
-        dangerous=_multi_dangerous, warn=False,
         fields=[Field("steps", "Passos", "steps", required=True,
                       help='Cada passo é uma ação: {"type":"hotkey","keys":["ctrl","c"]}, '
                            '{"type":"sound","file":"vinheta.mp3"}, {"type":"text","text":"Olá!","enter":true}, '
