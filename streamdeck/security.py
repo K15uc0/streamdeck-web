@@ -4,16 +4,15 @@
    no roteador). 2) So aceita o nome/IP deste PC no cabecalho Host (bloqueia
    "DNS rebinding"). 3) Toda chamada da API exige o cabecalho X-StreamDeck,
    que sites de terceiros nao conseguem enviar (bloqueia CSRF). 4) Limite de
-   tentativas com codigo errado. 5) Botoes que rodam comandos, abrem programas
-   ou chamam APIs so podem ser criados no proprio PC (a menos que liberado)."""
+   tentativas com codigo errado. 5) A configuracao dos botoes so pode ser
+   salva no proprio PC (tela Editar); os aparelhos so usam."""
 import hmac
 import ipaddress
-import json
 import socket
 import threading
 import time
 
-from . import actions, state, storage
+from . import storage
 from .paths import inside, is_unc  # noqa: F401  (reexportados)
 
 CGNAT = ipaddress.ip_network("100.64.0.0/10")   # Tailscale e similares
@@ -94,36 +93,3 @@ def note_fail(ip):
 def same_token(value):
     tok = storage.token()
     return bool(value) and hmac.compare_digest(str(value).encode("utf-8"), tok.encode("utf-8"))
-
-
-# ------------------------------------------------------------ acoes perigosas ---
-def is_dangerous(a):
-    """Acoes que dao controle amplo sobre o PC (decidido pelo registro de acoes)."""
-    return actions.is_dangerous(a)
-
-
-def dangerous_actions(cfg):
-    out = set()
-    for pg in (cfg or {}).get("pages", []):
-        for b in pg.get("buttons", []) if isinstance(pg, dict) else []:
-            a = b.get("action") if isinstance(b, dict) else None
-            if is_dangerous(a):
-                out.add(json.dumps(a, sort_keys=True, ensure_ascii=False))
-    return out
-
-
-def check_remote_edit(new_cfg):
-    """Vindo de um aparelho: nao deixa criar/alterar botoes perigosos,
-    a nao ser que o dono tenha liberado na tela de conexao do PC."""
-    if storage.load_settings().get("remote_admin"):
-        return
-    try:
-        old = dangerous_actions(storage.load_config())
-    except Exception:
-        old = set()
-    novos = dangerous_actions(new_cfg) - old
-    if novos:
-        raise PermissionError("Por seguranca, botoes que rodam comandos, abrem programas/arquivos ou "
-                              "chamam APIs so podem ser criados ou alterados no proprio PC "
-                              "(abra http://127.0.0.1:%s no PC) ou libere em Conectar > Seguranca."
-                              % (state.PORT[0] or 8765))

@@ -55,6 +55,14 @@ def validate_config(cfg):
         v = cfg.get(key)
         if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
             raise ValueError("%s deve ficar entre %d e %d" % (key, lo, hi))
+    por = cfg.get("portrait")
+    if por is not None:
+        if not isinstance(por, dict):
+            raise ValueError("portrait invalido")
+        for key, lo, hi in (("columns", 1, 10), ("rows", 1, 8)):
+            v = por.get(key)
+            if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
+                raise ValueError("vertical: %s deve ficar entre %d e %d" % (key, lo, hi))
     pages = cfg.get("pages")
     if not isinstance(pages, list) or not pages:
         raise ValueError("precisa ter ao menos uma pagina")

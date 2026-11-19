@@ -3,9 +3,10 @@
 
 Ordem das barreiras (nao mudar):
   todo pedido: rede local -> Host deste PC -> limite de tentativas
-  GET : /ping.gif | /conectar e /api/local/* so no PC | "/?k=" grava cookie |
+  GET : /ping.gif | /conectar, /editar e /api/local/* so no PC | "/?k=" grava cookie |
         /api/*: cabecalho X-StreamDeck/Origin -> codigo de acesso -> rota | arquivos de web/
   POST: cabecalho X-StreamDeck/Origin -> /api/local/* so no PC | codigo de acesso -> rota
+        (POST /api/config so no PC)
 """
 import json
 import os
@@ -17,7 +18,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, audio, paths, security, state, storage, updates, winapi
+from . import VERSION, actions, audio, paths, schema, security, state, storage, updates, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
 
@@ -49,15 +50,18 @@ ROUTES = {
     ("POST", "/api/local/autostart"): "local_autostart",
     ("POST", "/api/local/sounds"): "local_sounds",
     ("POST", "/api/local/data"): "local_data",
-    ("POST", "/api/local/settings"): "local_settings",
+    ("POST", "/api/local/test"): "local_test",
     ("POST", "/api/local/newcode"): "local_newcode",
     ("POST", "/api/update/check"): "post_update_check",
     ("POST", "/api/update/apply"): "post_update_apply",
     ("POST", "/api/config"): "post_config",
     ("POST", "/api/tabs"): "post_tabs",
 }
+# paginas e arquivos que so abrem no proprio PC
+LOCAL_PAGES = ("/conectar", "/conectar.html", "/editar", "/editar.html",
+               "/css/editar.css", "/js/editar.js")
 NO_CODE = {("GET", "/api/local/info")}       # ja restritas ao proprio PC
-LOCAL_NO_CODE = {("GET", "/api/update")}     # sem codigo quando vem do proprio PC
+# do proprio PC (tela Conectar/Editar) a API nao pede o codigo de acesso
 
 
 def _int(q, name):
@@ -245,11 +249,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, PIXEL, "image/gif", cors_img=True)
 
         # tela de conexao: so no proprio PC
-        if url.path in ("/conectar", "/conectar.html") or url.path.startswith("/api/local/"):
+        if url.path in LOCAL_PAGES or url.path.startswith("/api/local/"):
             if not self._local():
                 return self._send(403, "Abra esta pagina no proprio PC.", TEXT)
-        if url.path == "/conectar":
-            url = url._replace(path="/conectar.html")
+        if url.path in ("/conectar", "/editar"):
+            url = url._replace(path=url.path + ".html")
 
         # primeiro acesso com o codigo: guarda no navegador e limpa o endereco
         if url.path == "/" and k:
@@ -259,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self._api_header_ok():
                 return self._json(403, {"ok": False, "error": "pedido recusado"})
             key = ("GET", url.path)
-            if key not in NO_CODE and not (self._authed(q) or (self._local() and key in LOCAL_NO_CODE)):
+            if key not in NO_CODE and not (self._authed(q) or self._local()):
                 return self._deny_auth()
             return self._route("GET", url.path, q)
 
@@ -344,7 +348,6 @@ class Handler(BaseHTTPRequestHandler):
                                 "code": storage.token(), "sounds": audio.list_sounds(),
                                 "tabs": storage.load_tabs(), "version": VERSION,
                                 "local": self._local(),
-                                "remote_admin": bool(storage.load_settings().get("remote_admin")),
                                 "update": updates.update_status()})
 
     def get_press(self, q):
@@ -378,13 +381,21 @@ class Handler(BaseHTTPRequestHandler):
         winapi.open_folder(paths.BASE)
         return self._json(200, {"ok": True})
 
-    def local_settings(self, body):
-        st = storage.load_settings()
-        st["remote_admin"] = bool(body.get("remote_admin"))
-        storage.save_settings(st)
-        print("* seguranca: botoes de comando pelos aparelhos %s"
-              % ("LIBERADOS" if st["remote_admin"] else "bloqueados"))
-        return self._json(200, {"ok": True, "settings": st})
+    def local_test(self, body):
+        """Botao "Testar" do editor: valida e executa a acao sem salvar."""
+        a = body.get("action") if isinstance(body, dict) else None
+        try:
+            try:
+                n_pages = len(storage.load_config().get("pages") or [])
+            except Exception:
+                n_pages = schema.MAX_PAGES
+            actions.validate(a, max(1, n_pages), "Teste")
+            print("> teste: %s" % a.get("type"))
+            actions.run(a)
+            return self._json(200, {"ok": True})
+        except Exception as e:
+            print("  erro no teste:", e)
+            return self._json(200, {"ok": False, "error": str(e)})
 
     def local_newcode(self, body):
         storage.new_token()
@@ -412,15 +423,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def post_config(self, q):
         try:
-            data = self._body_json()
             if not self._local():
-                security.check_remote_edit(data)
-            storage.save_config(data)
+                print("! edicao recusada de %s: a configuracao so e editada no PC" % self.client_address[0])
+                return self._json(403, {"ok": False, "error": "edite pelo PC"})
+            storage.save_config(self._body_json())
             print("* configuracao salva")
             return self._json(200, {"ok": True, "v": storage.config_version()})
-        except PermissionError as e:
-            print("! edicao recusada de %s: botao de comando/programa criado fora do PC" % self.client_address[0])
-            return self._json(403, {"ok": False, "error": str(e)})
         except Exception as e:
             print("! erro ao salvar:", e)
             return self._json(400, {"ok": False, "error": str(e)})
