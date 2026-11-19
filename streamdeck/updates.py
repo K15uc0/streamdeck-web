@@ -114,8 +114,10 @@ def can_apply():
     return bool(paths.FROZEN and UPDATE["available"] and UPDATE["asset"])
 
 
-def _download(url, dest, min_size=1000000):
-    """Baixa url em dest conferindo o MZ, o tamanho e o SHA-256 da release."""
+def _download(url, dest, digest=None, min_size=1000000):
+    """Baixa url em dest conferindo o MZ, o tamanho e o SHA-256 da release.
+    digest vem do mesmo instante que url (a checagem em segundo plano pode
+    trocar UPDATE no meio do download)."""
     sha = hashlib.sha256()
     req = urllib.request.Request(url, headers={"User-Agent": "StreamDeck/" + VERSION})
     with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
@@ -130,11 +132,13 @@ def _download(url, dest, min_size=1000000):
     if head != b"MZ" or os.path.getsize(dest) < min_size:
         os.remove(dest)
         raise RuntimeError("arquivo baixado invalido")
-    if UPDATE.get("digest"):
-        if sha.hexdigest().lower() != UPDATE["digest"]:
+    if digest:
+        if sha.hexdigest().lower() != digest:
             os.remove(dest)
             raise RuntimeError("SHA-256 do arquivo baixado nao confere com o da versao publicada")
-        print("* SHA-256 conferido: %s" % UPDATE["digest"])
+        print("* SHA-256 conferido: %s" % digest)
+    else:
+        print("  aviso: a versao publicada nao informa SHA-256; conferidos so cabecalho e tamanho")
 
 
 INSTALLER_ARGS = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RESTARTAPP=1"]
@@ -182,7 +186,7 @@ def apply_installer_update():
         dest = os.path.join(folder, INSTALLER_NAME)
         if os.path.exists(dest):
             os.remove(dest)
-        _download(UPDATE["asset"], dest)
+        _download(UPDATE["asset"], dest, UPDATE.get("digest"))
         UPDATE["state"] = "restarting"
         print("* instalando %s, o programa reabre sozinho..." % UPDATE["latest"])
         # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP: o instalador sobrevive a este processo
@@ -252,7 +256,7 @@ def apply_portable_update():
         UPDATE["state"] = "downloading"
         print("* baixando versao %s..." % UPDATE["latest"])
         new = exe + ".download"
-        _download(UPDATE["asset"], new)
+        _download(UPDATE["asset"], new, UPDATE.get("digest"))
         old = exe + ".old"
         if os.path.exists(old):
             os.remove(old)
