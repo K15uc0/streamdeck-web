@@ -234,6 +234,43 @@
     var t = b.action && b.action.type;
     return (!t || t === "none") && !SD.trim(b.label) && !b.icon && !b.toggle && !b.color;
   };
+  /* isEmpty tambem vale para pasta (kind "folder" nunca e vazia) */
+  var isEmpty0 = SD.isEmpty;
+  SD.isEmpty = function (b) { return b && b.kind === "folder" ? false : isEmpty0(b); };
+
+  /* Encaixe da grade (celular e editor usam a mesma regra):
+     percorre os botoes na ordem; cada um ocupa w x h (1..4, limitado ao
+     tamanho da grade) na primeira posicao livre, linha a linha, da
+     esquerda para a direita (como o "dense" do CSS grid). O que nao couber
+     fica de fora. Devolve [{i, x, y, w, h}] (x/y = coluna/linha, base 0). */
+  SD.flow = function (buttons, cols, rows) {
+    var used = [], out = [], i, x, y, w, h, b, placed;
+    for (i = 0; i < cols * rows; i++) used.push(false);
+    function free(x0, y0, w0, h0) {
+      if (x0 + w0 > cols || y0 + h0 > rows) return false;
+      for (var yy = y0; yy < y0 + h0; yy++) {
+        for (var xx = x0; xx < x0 + w0; xx++) if (used[yy * cols + xx]) return false;
+      }
+      return true;
+    }
+    for (i = 0; i < (buttons || []).length; i++) {
+      b = buttons[i] || {};
+      w = Math.max(1, Math.min(cols, parseInt(b.w, 10) || 1));
+      h = Math.max(1, Math.min(rows, parseInt(b.h, 10) || 1));
+      placed = false;
+      for (y = 0; y < rows && !placed; y++) {
+        for (x = 0; x < cols && !placed; x++) {
+          if (free(x, y, w, h)) {
+            for (var yy = y; yy < y + h; yy++) for (var xx = x; xx < x + w; xx++) used[yy * cols + xx] = true;
+            out.push({ i: i, x: x, y: y, w: w, h: h });
+            placed = true;
+          }
+        }
+      }
+    }
+    return out;
+  };
+
   SD.padButtons = function (pg, n) {
     if (!pg.buttons) pg.buttons = [];
     while (pg.buttons.length < n) pg.buttons.push(SD.emptyButton());
