@@ -108,7 +108,7 @@ def fake_request(method, path, ip="192.168.0.50", headers=None, body=b""):
     """Chama o Handler de verdade como se o pedido viesse de ip (sem rede).
     Devolve (status, cabecalhos dict minusculo, corpo bytes)."""
     from streamdeck.httpd import Handler
-    h = {"Host": "127.0.0.1:8765", "X-StreamDeck": "1"}
+    h = {"Host": "127.0.0.1:8765", "X-StreamDeck": "1", "Connection": "close"}
     h.update(headers or {})
     if body:
         h["Content-Length"] = str(len(body))
@@ -124,6 +124,8 @@ def fake_request(method, path, ip="192.168.0.50", headers=None, body=b""):
     for line in hl[1:]:
         k, _, v = line.partition(":")
         hdrs[k.strip().lower()] = v.strip()
+    if "content-length" in hdrs:     # so a primeira resposta
+        payload = payload[:int(hdrs["content-length"])]
     return status, hdrs, payload
 
 
@@ -132,3 +134,26 @@ def quiet():
     """Esconde o que o servidor imprime (log) durante o bloco."""
     with contextlib.redirect_stdout(io.StringIO()):
         yield
+
+
+# Os testes nunca mandam teclas de verdade (no Windows o SendInput iria para a
+# maquina): send_keys/type_text so anotam o pedido em KEYS.
+KEYS = []
+
+
+def _patch_keys():
+    from streamdeck import winapi
+    orig = winapi.send_keys
+
+    def send_keys(keys):
+        [winapi.vk_of(k) for k in keys]     # mesma validacao das teclas
+        KEYS.append(("keys", list(keys)))
+
+    def type_text(text, enter=False):
+        KEYS.append(("text", text, bool(enter)))
+    send_keys.orig = orig
+    winapi.send_keys = send_keys
+    winapi.type_text = type_text
+
+
+_patch_keys()

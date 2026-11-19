@@ -105,11 +105,11 @@ class RegistroTest(unittest.TestCase):
         # fora do Windows estas acoes so imprimem; none/page nao fazem nada
         actions.run({"type": "none"})
         actions.run({"type": "page", "to": 0})
-        from streamdeck import paths
-        if not paths.IS_WINDOWS:
-            actions.run({"type": "hotkey", "keys": ["ctrl", "c"]})
-            actions.run({"type": "text", "text": "oi", "enter": True})
-            actions.run({"type": "multi", "steps": [{"type": "hotkey", "keys": ["a"]}], "delay": 0})
+        del apoio.KEYS[:]
+        actions.run({"type": "hotkey", "keys": ["ctrl", "c"]})
+        actions.run({"type": "text", "text": "oi", "enter": True})
+        actions.run({"type": "multi", "steps": [{"type": "hotkey", "keys": ["a"]}, {"type": "none"}], "delay": 0})
+        self.assertEqual(apoio.KEYS, [("keys", ["ctrl", "c"]), ("text", "oi", True), ("keys", ["a"])])
 
 
 class BibliotecaTest(unittest.TestCase):

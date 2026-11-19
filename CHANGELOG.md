@@ -1,5 +1,13 @@
 # Novidades
 
+## 2.4.0
+
+- Versões anteriores: o programa guarda as últimas 20 versões dos botões. No editor, Backup > "Versões anteriores…" mostra cada uma e restaura com um clique (a versão substituída também fica guardada).
+- Diagnóstico na tela Conectar: endereços, aparelhos conectados, últimos erros, "Abrir log" e "Copiar diagnóstico".
+- Botão liga/desliga sem ação (como o ON AIR) volta a acender no celular.
+- Importar backup funciona também rodando pelo código em Python 3.8 a 3.10.
+- Testes automáticos antes de cada versão: a versão só é publicada se o StreamDeck.exe gerado abrir e responder.
+
 ## 2.3.1
 
 - Menos chances de o Windows ou o antivírus bloquear o programa:

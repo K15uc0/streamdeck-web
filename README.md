@@ -42,4 +42,10 @@ Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão
 - Arquitetura, formato do `config.json` (v2) e API: [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
 - Nova função para os botões: um arquivo em `streamdeck/actions/` com `@action(...)` e o import em `_load()` (exemplo em [docs/ARQUITETURA.md](docs/ARQUITETURA.md#como-adicionar-uma-função)). O editor monta o formulário sozinho a partir de `/api/actions`.
 - Testar fora do Windows: `STREAMDECK_DATA=/tmp/sd python3 server.py` (as ações são simuladas e aparecem como `[simulado]` na janela).
+- Testes (rodam sozinhos no GitHub Actions em cada pull request, pelo `.github/workflows/testes.yml`, e antes de publicar uma versão):
+  - Python, sem instalar nada: `python -m unittest discover -s tests` (validação e migração do config, ações, biblioteca, segurança e a API com o servidor de verdade numa porta livre; os dados ficam numa pasta temporária e nenhuma tecla é enviada de verdade).
+  - JavaScript do núcleo (`SD.flow`, `SD.geometry`...), só com Node: `node tests/js/flow.test.js`.
+  - No navegador (celular 390x844, tablet 1180x820 e editor do PC): `npm install --no-save playwright@1.48.2`, `npx playwright install chromium` e `node tests/e2e/smoke.js` (sobe o `server.py` sozinho; falha com qualquer erro no console).
+  - `.exe` (Windows, pwsh): depois de gerar com o PyInstaller, `./tests/exe_smoke.ps1 -Exe dist/StreamDeck.exe` abre o programa, confere a API e fecha.
+  - Ação nova: acrescente um exemplo válido e alguns inválidos em `EXEMPLOS` de `tests/test_acoes.py` (o teste avisa se faltar).
 - Publicar versão: altere `VERSION` em `streamdeck/__init__.py`, adicione a seção no `CHANGELOG.md` e envie para a `main`. O GitHub Actions gera o `StreamDeck.exe` e publica a release; os programas instalados avisam os usuários.
