@@ -153,6 +153,7 @@
     var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : "";
     e.className = "key" + (t.lit || t.olit ? " lit" : "") + (a.on ? " onlook" : "") + (b.toggle ? " tg" : "") +
       (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "") +
+      (!img && SD.isLight(bg) ? " light" : "") + (m >= 140 ? " big" : "") +
       (t.conf ? " confirm" : "") + (t.holding ? " holding" + (t.holding === 2 ? " hgo" : "") : "") + (isDown ? " down" : "");
     st.backgroundColor = bg;
     paintExtras(t, w, h, m, r);

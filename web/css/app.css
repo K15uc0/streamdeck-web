@@ -386,3 +386,8 @@ body.fopen #grid { -webkit-transform: scale(0.94); transform: scale(0.94); opaci
   -webkit-transition: width 250ms linear; transition: width 250ms linear; }
 .key.lit:not(.onlook) .sbar { background: rgba(0,0,0,0.12); }
 .key.lit:not(.onlook) .sbar i { background: #30d158; }
+
+/* barra do som legivel em blocos claros e mais grossa nos blocos grandes */
+.key.light .sbar { background: rgba(0,0,0,0.12); }
+.key.light .sbar i { background: rgba(0,0,0,0.65); }
+.key.big .sbar { height: 7px; }
