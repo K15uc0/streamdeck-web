@@ -327,9 +327,17 @@ def load_settings():
         return {}
 
 
+SETTINGS_HOOKS = []    # funcoes (data) chamadas depois de salvar os ajustes
+
+
 def save_settings(data):
     with FILE_LOCK:
         write_json(paths.SETTINGS_PATH, data)
+    for fn in list(SETTINGS_HOOKS):
+        try:
+            fn(data)
+        except Exception:
+            pass
 
 
 # ------------------------------------------------------- codigo de acesso ---

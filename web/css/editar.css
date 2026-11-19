@@ -308,3 +308,14 @@ body.resizing, body.resizing * { cursor: nwse-resize !important; }
 .vnames li span { color: rgba(235,235,245,0.55); font-size: 12px; margin-left: 8px; }
 .vrestore { margin-top: 12px; background: #0a84ff; color: #fff; border: 0; border-radius: 10px; padding: 10px; font-size: 15px; font-weight: 600; }
 .vrestore:hover { background: #409cff; }
+
+/* 2.6: gestos, confirmacao, acender (OBS) */
+.tile .gbadges { position: absolute; display: flex; gap: 3px; z-index: 2; pointer-events: none; opacity: 0.7; }
+.tile .gbadges span { font-size: 9px; font-weight: 700; line-height: 13px; min-width: 13px; height: 13px; padding: 0 3px;
+  border-radius: 7px; background: rgba(0,0,0,0.35); color: #fff; text-align: center; letter-spacing: -1px; }
+.tile.light .gbadges span { background: rgba(0,0,0,0.18); color: rgba(0,0,0,0.75); }
+.gest { border-left: 2px solid rgba(120,120,128,0.35); padding-left: 10px; margin: -4px 0 8px; }
+.obsrow { display: flex; gap: 6px; }
+.obsrow select { flex: 0 0 44%; min-width: 0; }
+.obsrow input { flex: 1; min-width: 0; }
+.obsnote { color: #ff9f0a; }

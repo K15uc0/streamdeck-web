@@ -363,3 +363,31 @@ html, body {
   font-size: 17px; font-weight: 600; letter-spacing: -0.4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
 body.fopen #grid { -webkit-transform: scale(0.94); transform: scale(0.94); opacity: 0.3; }
 .key.live .lb.mid, .key.live .lb.bl { white-space: nowrap; }
+
+/* ============================================ 2.6: gestos e estados === */
+/* segurar: preenchimento sobe de baixo (so aparece depois de um instante) */
+.key .hp { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none; display: none; }
+.key.holding .hp { display: block; }
+.key .hp i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; display: block; background: rgba(255,255,255,0.26); }
+.key.hgo .hp i { height: 100%;
+  -webkit-transition: height 400ms linear 100ms; transition: height 400ms linear 100ms; }
+/* confirmar: bloco vermelho com anel de contagem (3 s) */
+.key .cf { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #ff453a; pointer-events: none; z-index: 2; }
+.key .cf .ring { position: absolute; display: block; }
+.key .cf .ct { position: absolute; left: 6px; right: 6px; text-align: center; color: #fff; font-weight: 600; line-height: 1.15;
+  letter-spacing: -0.2px; overflow: hidden; max-height: 2.4em; }
+.key .cf .arc { stroke-dashoffset: 0; -webkit-animation: sdring 3000ms linear forwards; animation: sdring 3000ms linear forwards; }
+@-webkit-keyframes sdring { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 94.25; } }
+@keyframes sdring { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 94.25; } }
+.key.confirm { -webkit-box-shadow: 0 0 0 2px #ff453a, 0 0 16px rgba(255,69,58,0.5); box-shadow: 0 0 0 2px #ff453a, 0 0 16px rgba(255,69,58,0.5); }
+/* som tocando: barra no rodape do bloco */
+.key .sbar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,0.28); pointer-events: none; z-index: 1; }
+.key .sbar i { display: block; height: 100%; width: 0; background: #fff;
+  -webkit-transition: width 250ms linear; transition: width 250ms linear; }
+.key.lit:not(.onlook) .sbar { background: rgba(0,0,0,0.12); }
+.key.lit:not(.onlook) .sbar i { background: #30d158; }
+
+/* barra do som legivel em blocos claros e mais grossa nos blocos grandes */
+.key.light .sbar { background: rgba(0,0,0,0.12); }
+.key.light .sbar i { background: rgba(0,0,0,0.65); }
+.key.big .sbar { height: 7px; }

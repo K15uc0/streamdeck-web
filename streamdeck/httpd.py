@@ -21,7 +21,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, audio, diag, library, media, paths, schema, security, state, storage, updates, \
+from . import VERSION, actions, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
     windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
@@ -70,11 +70,16 @@ ROUTES = {
     ("POST", "/api/local/data"): "local_data",
     ("POST", "/api/local/test"): "local_test",
     ("POST", "/api/local/newcode"): "local_newcode",
+    ("GET", "/api/local/obs"): "local_obs",
+    ("POST", "/api/local/obs"): "local_obs_save",
+    ("GET", "/api/local/obs/scenes"): "local_obs_scenes",
     ("POST", "/api/update/check"): "post_update_check",
     ("POST", "/api/update/apply"): "post_update_apply",
     ("POST", "/api/config"): "post_config",
     ("POST", "/api/tabs"): "post_tabs",
 }
+# gesto do /api/press -> campo do botao com a acao
+PRESS_KINDS = {"tap": "action", "hold": "hold", "double": "double"}
 # paginas e arquivos que so abrem no proprio PC
 # rotas do PC cujo corpo e um arquivo (bytes), com o limite de tamanho;
 # /api/local/sounds so com ?name= (sem ele, abre a pasta sons)
@@ -480,6 +485,10 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             st["since"] = state.since()
         st["app"] = windows.foreground_exe()
+        st["sounds"] = audio.PLAYER.sounds()
+        ob = obs.state_for_api()
+        if ob is not None:
+            st["obs"] = ob
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         return self._json(200, st)
@@ -511,6 +520,9 @@ class Handler(BaseHTTPRequestHandler):
                                 "update": updates.update_status()})
 
     def get_press(self, q):
+        g = (q.get("g") or ["tap"])[0] or "tap"
+        if g not in PRESS_KINDS:
+            return self._json(400, {"ok": False, "error": "gesto invalido"})
         try:
             p, b = _int(q, "p"), _int(q, "b")
             f = _int(q, "f") if (q.get("f") or [""])[0] != "" else None
@@ -526,9 +538,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": True, "toggles": state.toggles(cfg)})
             if btn.get("kind", "button") != "button":
                 raise ValueError("este controle nao e um botao")
-            print("> %s" % (btn.get("label") or "?"))
-            actions.run(btn.get("action") or {"type": "none"})
-            if btn.get("toggle") is True:
+            a = btn.get(PRESS_KINDS[g])
+            if g != "tap" and not isinstance(a, dict):
+                return self._json(400, {"ok": False, "error": "este botao nao tem acao %s" % (
+                    "ao segurar" if g == "hold" else "no toque duplo")})
+            print("> %s%s" % (btn.get("label") or "?", "" if g == "tap" else " (%s)" % g))
+            actions.run(a or {"type": "none"}, key=state.key(p, b, f))
+            if btn.get("toggle") is True and g == "tap":
                 state.flip(p, b, f)
             return self._json(200, {"ok": True, "toggles": state.toggles(cfg)})
         except Exception as e:
@@ -655,6 +671,20 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             print("  erro no teste:", e)
             return self._json(200, {"ok": False, "error": str(e)})
+
+    def local_obs(self, q):
+        return self._json(200, obs.status())
+
+    def local_obs_save(self, body):
+        obs.save_settings(body)
+        obs.CLIENT.reconnect()
+        print("* ajustes do OBS salvos")
+        return self._json(200, obs.status())
+
+    def local_obs_scenes(self, q):
+        if not obs.CLIENT.connected():
+            return self._json(200, {"ok": False, "error": "OBS nao esta conectado", "scenes": [], "inputs": []})
+        return self._json(200, {"ok": True, "scenes": list(obs.CLIENT.scenes), "inputs": list(obs.CLIENT.inputs)})
 
     def local_newcode(self, body):
         storage.new_token()

@@ -350,82 +350,67 @@
       "name": "OBS",
       "buttons": [
         {
-          "label": "Iniciar live",
+          "label": "Transmissão",
           "icon": "record",
           "color": "#cf222e",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "ctrl",
-              "alt",
-              "f1"
-            ]
-          }
+            "type": "obs_stream",
+            "mode": "toggle"
+          },
+          "lit": "obs:stream",
+          "live": "obs:stream"
         },
         {
           "label": "Gravar",
           "icon": "record",
           "color": "#cf222e",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "ctrl",
-              "alt",
-              "f2"
-            ]
-          }
+            "type": "obs_record",
+            "mode": "toggle"
+          },
+          "lit": "obs:record",
+          "live": "obs:record"
         },
         {
           "label": "Cena 1",
           "icon": "scene",
           "color": "#1f6feb",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "ctrl",
-              "alt",
-              "f3"
-            ]
-          }
+            "type": "obs_scene",
+            "scene": "Cena 1"
+          },
+          "lit": "obs:scene=Cena 1"
         },
         {
           "label": "Cena 2",
           "icon": "scene",
           "color": "#1f6feb",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "ctrl",
-              "alt",
-              "f4"
-            ]
-          }
+            "type": "obs_scene",
+            "scene": "Cena 2"
+          },
+          "lit": "obs:scene=Cena 2"
         },
         {
           "label": "Cena 3",
           "icon": "scene",
           "color": "#1f6feb",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "ctrl",
-              "alt",
-              "f5"
-            ]
-          }
+            "type": "obs_scene",
+            "scene": "Cena 3"
+          },
+          "lit": "obs:scene=Cena 3"
         },
         {
           "label": "Mic on/off",
           "icon": "mic",
           "color": "#8250df",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "ctrl",
-              "alt",
-              "f6"
-            ]
-          }
+            "type": "obs_mute",
+            "input": "Mic/Aux",
+            "mode": "toggle"
+          },
+          "lit": "obs:mute=Mic/Aux"
         },
         {
           "label": "Câmera on/off",

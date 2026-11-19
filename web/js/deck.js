@@ -58,6 +58,18 @@
       if (!lv || lv.v == null) return "--";
       return lv.muted ? "Mudo" : Math.round(lv.v) + "%";
     }
+    if (live === "obs:stream" || live === "obs:record") {
+      var o = SD.obs;
+      if (!o || !o.ok) return "OBS off";
+      if (live === "obs:stream") return o.stream ? "AO VIVO" : "Fora do ar";
+      return o.record ? "Gravando" : "Parado";
+    }
+    if (live === "obs:scene") return SD.obs && SD.obs.ok ? String(SD.obs.scene || "--") : "OBS off";
+    if (live === "sound") {
+      /* null = nada tocando: mostra o rotulo normal */
+      var sp = soundOf(t);
+      return sp ? fmtTimer(Math.ceil(Math.max(0, sp.dur - sp.cur))) : null;
+    }
     if (live === "timer") {
       var since = t.tkey && SD.since[t.tkey];
       if (!t.lit || !since) return "00:00";
@@ -67,10 +79,38 @@
   }
   SD.liveText = liveText;
 
+  /* ------------------------------------------------- OBS e sons (2.6) --- */
+  SD.obs = null;       /* {ok, stream, record, scene, muted:{fonte:bool}} */
+  SD.sounds = {};      /* "p:b[:f]" -> {pos, dur, at (relogio local ms), file} */
+
+  /* som tocando por este bloco, com a posicao estimada agora (cur, s) */
+  function soundOf(t) {
+    var s = t && t.tkey ? SD.sounds[t.tkey] : null;
+    if (!s || !(s.dur > 0)) return null;
+    var cur = s.pos + (SD.now() - s.at) / 1000;
+    if (cur > s.dur + 0.4) return null;
+    return { cur: Math.min(cur, s.dur), dur: s.dur };
+  }
+  /* mostra barra de progresso? (live=sound ou acao de tocar som) */
+  function showsSound(t) {
+    var b = t.b;
+    return !!(b && (b.live === "sound" || (b.action && b.action.type === "sound")));
+  }
+  /* acende pelo OBS? */
+  function obsLit(b) {
+    var l = b && b.lit ? String(b.lit) : "", o = SD.obs;
+    if (!l || !o || !o.ok) return false;
+    if (l === "obs:stream") return !!o.stream;
+    if (l === "obs:record") return !!o.record;
+    if (l.indexOf("obs:scene=") === 0) return String(o.scene || "") === l.substring(10);
+    if (l.indexOf("obs:mute=") === 0) return !!(o.muted && o.muted[l.substring(9)]);
+    return false;
+  }
+
   /* aparencia efetiva: liga/desliga aceso com "on" usa os campos de "on" por cima */
   function hasOn(o) { return !!(o && typeof o === "object" && (o.label || o.icon || o.color || o.textColor || o.image)); }
   function look(t) {
-    var b = t.b || {}, on = t.lit && b.toggle && hasOn(b.on) ? b.on : null;
+    var b = t.b || {}, lit = t.lit || t.olit, on = lit && (b.toggle || b.lit) && hasOn(b.on) ? b.on : null;
     var a = { label: b.label, icon: b.icon, color: b.color, textColor: b.textColor, image: b.image, invert: false, on: !!on };
     if (on) {
       if (on.label) a.label = on.label;
@@ -78,12 +118,13 @@
       if (on.color) a.color = on.color;
       if (on.textColor) a.textColor = on.textColor;
       if (on.image) a.image = on.image;
-    } else if (t.lit) a.invert = true;
+    } else if (lit) a.invert = true;
     return a;
   }
 
   SD.paintTile = function (t, w, h) {
     var e = t.el, b = t.b || {}, m = Math.min(w, h), r = Math.round(Math.min(m, 110) * 0.22), st = e.style;
+    var isDown = SD.hasClass(e, "down");
     st.width = px(w); st.height = px(h);
     st.borderRadius = px(r);
     t.w = w; t.h = h;
@@ -106,11 +147,16 @@
     if (a.invert) { bg = "#fff"; fg = tc || (SD.isLight(color) ? "#1c1c1e" : color); }
     else { bg = color; fg = tc || (img ? "#fff" : SD.isLight(color) ? "rgba(0,0,0,0.78)" : "#fff"); }
     var live = b.live ? String(b.live) : "";
-    var label = live ? liveText(t, live) : SD.trim(a.label);
+    var lt = live ? liveText(t, live) : null;
+    if (lt == null) live = "";
+    var label = live ? lt : SD.trim(a.label);
     var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : "";
-    e.className = "key" + (t.lit ? " lit" : "") + (a.on ? " onlook" : "") + (b.toggle ? " tg" : "") +
-      (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "");
+    e.className = "key" + (t.lit || t.olit ? " lit" : "") + (a.on ? " onlook" : "") + (b.toggle ? " tg" : "") +
+      (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "") +
+      (!img && SD.isLight(bg) ? " light" : "") + (m >= 140 ? " big" : "") +
+      (t.conf ? " confirm" : "") + (t.holding ? " holding" + (t.holding === 2 ? " hgo" : "") : "") + (isDown ? " down" : "");
     st.backgroundColor = bg;
+    paintExtras(t, w, h, m, r);
     var bgi = img ? 'url("' + SD.imgUrl(img) + '")' : "";
     if (t.bgi !== bgi) { st.backgroundImage = bgi; t.bgi = bgi; }
     lb.style.color = fg;
@@ -149,6 +195,38 @@
       lb.style.top = "50%";
     }
   };
+
+  /* camadas do 2.6: progresso de segurar, confirmacao e barra do som (criadas sob demanda) */
+  function paintExtras(t, w, h, m, r) {
+    if (t.holding && !t.hp) t.hp = el("div", "hp", "<i></i>", t.el);
+    if (t.hp) t.hp.style.borderRadius = px(r);
+    if (t.conf) {
+      if (!t.cf) {
+        t.cf = el("div", "cf", null, t.el);
+        t.cf.innerHTML = '<svg class="ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>' +
+          '<circle class="arc" cx="18" cy="18" r="15" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="94.25" transform="rotate(-90 18 18)"/></svg>' +
+          '<span class="ct"></span>';
+      }
+      var rs = Math.max(16, Math.min(40, Math.round(m * 0.26))), small = m < 92 || h < 80;
+      var sv = t.cf.firstChild, ct = t.cf.lastChild;
+      sv.setAttribute("width", rs); sv.setAttribute("height", rs);
+      sv.style.left = px((w - rs) / 2);
+      sv.style.top = px(small ? (h - rs) / 2 - Math.round(m * 0.08) : Math.max(6, h / 2 - rs - 2));
+      ct.innerHTML = small ? "Confirmar?" : "Toque de novo para confirmar";
+      ct.style.fontSize = px(Math.max(10, Math.min(15, Math.round(m * (small ? 0.14 : 0.105)))));
+      ct.style.top = small ? px((h + rs) / 2 - Math.round(m * 0.04)) : px(h / 2 + 4);
+      t.cf.style.borderRadius = px(r);
+    } else if (t.cf) { t.el.removeChild(t.cf); t.cf = null; }
+    paintSound(t);
+  }
+  /* barra do som no rodape do bloco (so o preenchimento muda a cada passo) */
+  function paintSound(t) {
+    var sp = showsSound(t) ? soundOf(t) : null;
+    if (!sp) { if (t.pb) { t.el.removeChild(t.pb); t.pb = null; } return; }
+    if (!t.pb) { t.pb = el("div", "sbar", "<i></i>", t.el); t.pbw = -1; }
+    var f = Math.max(0, Math.min(1, sp.cur / sp.dur)), wpx = Math.round((t.w || 0) * f);
+    if (wpx !== t.pbw) { t.pb.firstChild.style.width = px(wpx); t.pbw = wpx; }
+  }
 
   /* fader no estilo da Central de Controle: preenche de baixo para cima.
      A parte clara repete icone e texto em cor escura (recortada pelo preenchimento).
@@ -418,6 +496,7 @@
       t.tkey = bi < 0 ? "" : fi != null ? p + ":" + fi + ":" + bi : p + ":" + bi;
       if (fi != null) { t.bi = fi; t.f = bi; }
       t.lit = !!(b && b.toggle && t.tkey && SD.toggles[t.tkey]);
+      t.olit = obsLit(b);
       if (t.kind === "fader") t.level = levelOf(b.target || "master");
       t.gx = x; t.gy = y; t.gw = w; t.gh = h;
       var cell = el("div", "cell" + (t.empty ? " empty-cell" : ""), null, box);
@@ -644,34 +723,106 @@
     }
   };
 
-  function press(k, repeating) {
-    var b = k.b, a = b && b.action;
-    if (k.folder) { buzz(10); openFolder(k); return; }
+  /* acao de um gesto: tap = action, hold/double = campos do 2.6 */
+  function gestureAction(b, g) {
+    var a = b && (g === "tap" ? b.action : b[g]);
+    return a && typeof a === "object" && a.type && a.type !== "none" ? a : null;
+  }
+  SD.gestureAction = gestureAction;
+
+  /* g = "tap" (padrao) | "hold" | "double". quiet = a resposta visual ja foi dada */
+  function press(k, repeating, g, quiet) {
+    g = g || "tap";
+    var b = k.b, a = b && (g === "tap" ? b.action : gestureAction(b, g));
+    if (k.folder) { if (g === "tap") { buzz(10); openFolder(k); } return; }
+    var toggles = g === "tap" && b && b.toggle;
     /* liga/desliga sem acao (ex.: ON AIR) ainda alterna o estado no PC */
-    if (!b || ((!a || a.type === "none") && !b.toggle)) return;
+    if (!b || ((!a || a.type === "none") && !toggles)) return;
     if (a && a.type === "page") { buzz(10); return SD.goPage(parseInt(a.to, 10) || 0); }
     if (repeating && pending > 0) return;   /* nao empilha pedidos se a rede estiver lenta */
-    flash(k, true);                          /* resposta visual na hora */
-    buzz(10);
+    if (!quiet) { flash(k, true); buzz(10); }   /* resposta visual na hora */
     var p = k.p, tkey = k.tkey, was = !!SD.toggles[tkey];
-    if (b.toggle) {
+    if (toggles) {
       SD.toggles[tkey] = !was;
       if (!was) SD.since[tkey] = Math.floor((SD.now() + SD.skew) / 1000); else delete SD.since[tkey];
       setLit(k, !was);
     }
     pending++;
-    var url = "/api/press?p=" + p + "&b=" + k.bi + (k.f != null ? "&f=" + k.f : "");
+    var url = "/api/press?p=" + p + "&b=" + k.bi + (k.f != null ? "&f=" + k.f : "") + (g !== "tap" ? "&g=" + g : "");
     SD.req("GET", url, null, function (ok, data, status) {
       pending--;
       if (ok) {
         if (data && data.toggles) { if (p === SD.page) SD.applyToggles(data.toggles); else SD.toggles = data.toggles; }
+        /* som, OBS: o estado muda no PC; busca logo para acender/mostrar o progresso */
+        if (a && (a.type === "sound" || a.type === "stopsound" || String(a.type).indexOf("obs_") === 0)) pollSoon();
         return;
       }
-      if (b.toggle) { SD.toggles[tkey] = was; if (p === SD.page) setLit(k, was); }
+      if (toggles) { SD.toggles[tkey] = was; if (p === SD.page) setLit(k, was); }
       flash(k, false);
       buzz([30, 40, 30]);
       SD.toast(SD.errText(data, status), true);
     });
+  }
+
+  /* ---------------------------------------------- toque duplo e confirmar --- */
+  var DOUBLE_MS = 300, HOLD_MS = 500, CONFIRM_MS = 3000;
+  var dbl = null;      /* { k, t } toque simples esperando a janela do duplo */
+  var conf = null;     /* { k, g, t } bloco pedindo confirmacao */
+
+  function repaint(k) { if (k.w) SD.paintTile(k, k.w, k.h); }
+
+  function endConfirm() {
+    if (!conf) return;
+    var k = conf.k;
+    clearTimeout(conf.t);
+    conf = null;
+    k.conf = false;
+    repaint(k);
+  }
+  function askConfirm(k, g) {
+    endConfirm();
+    buzz([12, 50, 12]);
+    k.conf = g;
+    conf = { k: k, g: g, t: setTimeout(endConfirm, CONFIRM_MS) };
+    repaint(k);
+  }
+
+  /* dispara um gesto, passando pela confirmacao quando o botao pede */
+  function fire(k, g, quiet) {
+    if (k.b && k.b.confirm) { askConfirm(k, g); return; }
+    press(k, false, g, quiet);
+  }
+
+  /* toque simples terminado (sem segurar nem arrastar) */
+  function tap(k) {
+    if (k.folder || k.empty) { press(k, false, "tap"); return; }
+    /* bloco esperando confirmacao: este toque confirma o gesto pendente */
+    if (conf && conf.k === k) {
+      var g = conf.g;
+      endConfirm();
+      press(k, false, g);
+      return;
+    }
+    if (conf) endConfirm();
+    if (gestureAction(k.b, "double")) {
+      if (dbl && dbl.k === k) {
+        clearTimeout(dbl.t); dbl = null;
+        fire(k, "double");
+        return;
+      }
+      flushDouble();
+      flash(k, true); buzz(10);   /* resposta na hora; o envio espera a janela */
+      dbl = { k: k, t: setTimeout(function () { var d = dbl; dbl = null; if (d) fire(d.k, "tap", true); }, DOUBLE_MS) };
+      return;
+    }
+    flushDouble();
+    fire(k, "tap");
+  }
+  /* outro bloco tocado durante a janela: o toque simples anterior sai na hora */
+  function flushDouble() {
+    if (!dbl) return;
+    var d = dbl; dbl = null; clearTimeout(d.t);
+    fire(d.k, "tap", true);
   }
 
   /* ========================================================= faders ===== */
@@ -763,7 +914,13 @@
     if (!G) return;
     clearTimeout(G.holdT); clearInterval(G.repT);
   }
-  function up() { if (G && G.k) SD.setClass(G.k.el, "down", false); }
+  function stopHold(k) {
+    if (!k || !k.holding) return;
+    k.holding = false;
+    SD.setClass(k.el, "hgo", false);
+    SD.setClass(k.el, "holding", false);
+  }
+  function up() { if (G && G.k) { SD.setClass(G.k.el, "down", false); stopHold(G.k); } }
 
   function start(x, y, target) {
     if (SD.sheet.isOpen() || SD.alertOpen() || !SD.cfg) return false;
@@ -779,7 +936,22 @@
       return true;
     }
     if (!k.empty) SD.setClass(k.el, "down", true);
-    if (!k.empty && canRepeat(k)) {
+    if (!k.empty && !k.folder && gestureAction(k.b, "hold")) {
+      /* segurar: progresso no bloco e dispara em HOLD_MS (vence a repeticao) */
+      k.holding = 1; repaint(k);
+      k.el.offsetWidth;   /* aplica o estado inicial antes da transicao */
+      k.holding = 2; SD.setClass(k.el, "hgo", true);
+      G.holdT = setTimeout(function () {
+        if (!G || G.k !== k || G.mode !== "pending") return;
+        G.mode = "held";
+        stopHold(k);
+        if (conf && conf.k !== k) endConfirm();
+        flushDouble();
+        if (SD.prefs.vibrate) SD.vibrate(15);
+        flash(k, true);
+        fire(k, "hold", true);
+      }, HOLD_MS);
+    } else if (!k.empty && canRepeat(k)) {
       G.holdT = setTimeout(function () {
         if (!G || G.mode !== "pending") return;
         G.mode = "repeat";
@@ -827,7 +999,7 @@
     } else if (g.mode === "swipe") {
       swipeEnd(g.x - g.sx, SD.now() - g.t0);
     } else if (g.mode === "pending" && g.k && !cancel) {
-      press(g.k, false);
+      tap(g.k);
     }
     G = null;
   }
@@ -898,6 +1070,65 @@
     if (SD.now() - lastTouch < 800) return;
     if (G) end(false);
     maybeAutoFs();
+  }
+
+  /* ===================================================== OBS e sons ===== */
+  /* consulta a cada 1 s enquanto toca som ou ha bloco do OBS na tela */
+  function needFast() {
+    for (var key in SD.sounds) if (SD.sounds.hasOwnProperty(key)) return true;
+    /* OBS so acelera a consulta se ele estiver configurado e conectado */
+    if (!SD.obs || !SD.obs.ok) return false;
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var b = v[i].b;
+      if (b && (b.lit || String(b.live || "").indexOf("obs:") === 0)) return true;
+    }
+    return false;
+  }
+
+  SD.applyObs = function (o) {
+    SD.obs = o && typeof o === "object" ? o : null;
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var k = v[i], b = k.b;
+      if (!b || k.kind !== "button" || k.empty) continue;
+      var on = obsLit(b), lv = String(b.live || "");
+      if (on !== !!k.olit) { k.olit = on; repaint(k); }
+      else if (lv.indexOf("obs:") === 0) repaint(k);
+    }
+  };
+
+  /* lista do PC -> mapa por chave, com a hora local para interpolar */
+  var soundT = null;
+  SD.applySounds = function (list) {
+    var map = {}, t = SD.now();
+    if (list && list.length) {
+      for (var i = 0; i < list.length; i++) {
+        var s = list[i];
+        if (s && s.key != null && s.dur > 0) map[String(s.key)] = { pos: +s.pos || 0, dur: +s.dur, at: t, file: s.file };
+      }
+    }
+    SD.sounds = map;
+    soundTick(true);
+  };
+  /* passo local (250 ms) so enquanto algo toca */
+  function soundTick(all) {
+    var v = visible(), any = false;
+    for (var i = 0; i < v.length; i++) {
+      var k = v[i];
+      if (!k.w || !k.b || k.kind !== "button" || !showsSound(k)) continue;
+      var has = !!soundOf(k);
+      if (has) any = true;
+      if (k.b.live === "sound") {
+        /* texto mm:ss: redesenha so quando muda */
+        var txt = String(liveText(k, "sound"));
+        if (all || txt !== k.stxt) { k.stxt = txt; repaint(k); continue; }
+      } else if (all || has !== !!k.pb) { repaint(k); continue; }
+      paintSound(k);
+    }
+    for (var key in SD.sounds) if (SD.sounds.hasOwnProperty(key)) any = true;
+    clearTimeout(soundT); soundT = null;
+    if (any && !document.hidden) soundT = setTimeout(function () { soundTick(false); }, 250);
   }
 
   /* ======================================================== rede ===== */
@@ -981,7 +1212,7 @@
   function poll() {
     clearTimeout(pollT);
     var lv = needLevels();
-    pollT = setTimeout(poll, lv ? 2000 : 5000);
+    pollT = setTimeout(poll, needFast() ? 1000 : lv ? 2000 : 5000);
     if (SD.denied || !SD.cfg || document.hidden) return;
     SD.req("GET", "/api/state" + (lv ? "?levels=1" : ""), null, function (ok, st, status, x) {
       if (!ok) { if (status === 403) SD.load(); return; }
@@ -989,6 +1220,8 @@
       readSkew(x);
       if (st.toggles) SD.applyToggles(st.toggles, st.since || {});
       if (st.levels) SD.applyLevels(st.levels);
+      SD.applySounds(st.sounds);
+      SD.applyObs(st.obs);
       if (SD.cfgV != null && st.v != null && String(st.v) !== String(SD.cfgV) && !G) SD.load();
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
       if (st.app !== undefined) onApp(st.app);
@@ -1019,7 +1252,7 @@
     window.addEventListener("resize", SD.layoutSoon, false);
     window.addEventListener("orientationchange", function () { setTimeout(SD.layout, 300); }, false);
     window.addEventListener("popstate", onPop, false);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) { pollSoon(); SD.pingAll(); setupLive(); } }, false);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { pollSoon(); SD.pingAll(); setupLive(); soundTick(true); } }, false);
     $("scrim").onclick = function () { SD.sheet.cancel(); };
     setInterval(function () { if (!document.hidden) SD.pingAll(); }, 20000);
 

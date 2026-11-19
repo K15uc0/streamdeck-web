@@ -36,18 +36,34 @@ def _site(label, icon, color, url):
             "action": {"type": "site", "url": url, "browser": "default"}}
 
 
-OBS_HELP = ("O OBS não vem com teclas de atalho prontas: em OBS > Configurações > Teclas de atalho, "
-            "defina a mesma combinação deste botão (ou mude o botão para a sua).")
+OBS_HELP = ("Usa o WebSocket do OBS (OBS 28 ou mais novo): no OBS, abra Ferramentas > Configurações do "
+            "WebSocket e marque \"Ativar servidor WebSocket\". Se usar senha, informe-a na tela Conectar do PC. "
+            "Troque o nome da cena/fonte pelo do seu OBS.")
+
+
+def _obs(label, icon, color, action, lit=None, live=None):
+    it = {"label": label, "icon": icon, "color": color, "action": action, "help": OBS_HELP}
+    if lit:
+        it["lit"] = lit
+    if live:
+        it["live"] = live
+    return it
+
+
+def _confirm(it):
+    it["confirm"] = True
+    return it
+
 
 LIBRARY = [
     {"name": "Windows", "items": [
         _cmd("Bloquear PC", "lock", GRAY, "rundll32.exe user32.dll,LockWorkStation"),
-        _cmd("Desligar PC (na hora)", "power", RED, "shutdown /s /t 0",
-             help="Desliga o PC imediatamente, sem perguntar. Salve seu trabalho antes."),
-        _cmd("Reiniciar PC (na hora)", "power", ORANGE, "shutdown /r /t 0",
-             help="Reinicia o PC imediatamente, sem perguntar."),
-        _cmd("Suspender", "power", INDIGO, "rundll32.exe powrprof.dll,SetSuspendState 0,1,0",
-             help="Se a hibernação estiver ligada no Windows, o PC hiberna em vez de suspender."),
+        _confirm(_cmd("Desligar PC (na hora)", "power", RED, "shutdown /s /t 0",
+                      help="Desliga o PC imediatamente. O celular pede um segundo toque para confirmar.")),
+        _confirm(_cmd("Reiniciar PC (na hora)", "power", ORANGE, "shutdown /r /t 0",
+                      help="Reinicia o PC imediatamente. O celular pede um segundo toque para confirmar.")),
+        _confirm(_cmd("Suspender", "power", INDIGO, "rundll32.exe powrprof.dll,SetSuspendState 0,1,0",
+                      help="Se a hibernação estiver ligada no Windows, o PC hiberna em vez de suspender.")),
         _hk("Captura de tela", "camera", TEAL, "win+shift+s"),
         _hk("Área de trabalho", "desktop", BLUE, "win+d"),
         _hk("Minimizar tudo", "desktop", GRAY, "win+m"),
@@ -89,12 +105,15 @@ LIBRARY = [
         _site("YouTube", "play", RED, "https://www.youtube.com/"),
         _site("Google", "globe", BLUE, "https://www.google.com/"),
     ]},
-    {"name": "OBS", "items": [
-        _app("Iniciar/parar transmissão", "onair", RED, "obs64.exe", "ctrl+alt+shift+1", OBS_HELP),
-        _app("Iniciar/parar gravação", "record", RED, "obs64.exe", "ctrl+alt+shift+2", OBS_HELP),
-        _app("Cena 1", "scene", INDIGO, "obs64.exe", "ctrl+alt+shift+3", OBS_HELP),
-        _app("Cena 2", "scene", INDIGO, "obs64.exe", "ctrl+alt+shift+4", OBS_HELP),
-        _app("Mudo do mic (OBS)", "micoff", GRAY, "obs64.exe", "ctrl+alt+shift+5", OBS_HELP),
+    {"name": "OBS (WebSocket)", "items": [
+        _obs("Transmissão", "onair", RED, {"type": "obs_stream", "mode": "toggle"},
+             lit="obs:stream", live="obs:stream"),
+        _obs("Gravação", "record", RED, {"type": "obs_record", "mode": "toggle"},
+             lit="obs:record", live="obs:record"),
+        _obs("Cena 1", "scene", INDIGO, {"type": "obs_scene", "scene": "Cena 1"}, lit="obs:scene=Cena 1"),
+        _obs("Cena 2", "scene", INDIGO, {"type": "obs_scene", "scene": "Cena 2"}, lit="obs:scene=Cena 2"),
+        _obs("Mudo do mic (OBS)", "micoff", GRAY, {"type": "obs_mute", "input": "Mic/Aux", "mode": "toggle"},
+             lit="obs:mute=Mic/Aux"),
     ]},
     {"name": "Discord", "items": [
         _app("Mutar (Discord)", "micoff", INDIGO, "discord.exe", "ctrl+shift+m"),

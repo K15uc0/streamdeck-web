@@ -157,3 +157,14 @@ def _patch_keys():
 
 
 _patch_keys()
+
+
+# Som tambem simulado nos testes: o Windows do CI nao tem placa de som (o MCI
+# falha ao iniciar) e os testes conferem so a contabilidade (lista, duracao,
+# fades), nao o audio de verdade.
+def _patch_audio():
+    from streamdeck import audio
+    audio.IS_WINDOWS = False
+
+
+_patch_audio()

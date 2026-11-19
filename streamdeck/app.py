@@ -9,7 +9,7 @@ import time
 import urllib.request
 import webbrowser
 
-from . import VERSION, diag, paths, state, storage, updates, winapi
+from . import VERSION, diag, obs, paths, state, storage, updates, winapi
 from .httpd import Handler, Server
 from .security import lan_ip
 
@@ -172,6 +172,7 @@ def main():
     print("=" * 56)
     threading.Thread(target=updates.update_loop, daemon=True).start()
     threading.Thread(target=updates.cleanup_old_exe, daemon=True).start()
+    obs.start()   # conexao com o OBS em segundo plano (tenta a cada 5 s)
     minimized = "--minimizado" in sys.argv
     tray_on = False
     if "--sem-bandeja" not in sys.argv:

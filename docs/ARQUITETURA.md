@@ -202,3 +202,33 @@ gira o conteúdo por CSS. `web/manifest.json` + ícones para "Adicionar à tela 
 Tipos de campo novos: `app` (escolher entre janelas abertas ou digitar), `color`.
 
 **Celular, ajustes por aparelho (`sd_prefs`):** `vibrate` (bool, padrão true), `autoPage` (bool, padrão true).
+
+## 2.6: OBS, toque longo/duplo, confirmação, sons com progresso
+
+**Botão (campos novos, opcionais):**
+- `hold`: ação ao segurar (~500 ms). `double`: ação no toque duplo (janela ~300 ms).
+  Quando `double` existe, o toque simples espera a janela antes de disparar.
+  Botões com repetição ao segurar (volume, setas) não usam `hold`.
+- `confirm`: bool. O celular pede "Toque de novo para confirmar" (3 s) antes de enviar.
+  A biblioteca marca desligar/reiniciar/suspender com `confirm: true`.
+- `live` ganha `obs:stream`, `obs:record`, `obs:scene` (nome da cena atual) e
+  `sound` (progresso do som que este botão tocou).
+- `lit`: `obs:stream | obs:record | obs:scene=<nome> | obs:mute=<fonte>`: o botão
+  acende conforme o estado no OBS (independente de `toggle`).
+
+**API:**
+| Método | Rota | |
+|---|---|---|
+| GET | `/api/press?p=&b=&f=&g=` | `g` = `tap` (padrão) \| `hold` \| `double` |
+| GET | `/api/state` | + `sounds: [{key:"p:b[:f]", file, pos, dur}]` (tocando agora, s) e `obs: {ok, stream, record, scene, muted:{fonte:bool}}` |
+| GET | `/api/local/obs` | `{ok, host, port, has_password, connected, error}` |
+| POST | `/api/local/obs` | `{host, port, password?}` salva em `seguranca.json` (senha nunca volta) e reconecta |
+| GET | `/api/local/obs/scenes` | `{ok, scenes:[nome], inputs:[nome]}` |
+
+**Ações novas (grupo "OBS"):** `obs_scene` (`scene`, campo `obs_scene`), `obs_stream` (`mode`: toggle\|start\|stop),
+`obs_record` (idem), `obs_mute` (`input`, campo `obs_input`, `mode`). Tipos de campo novos: `obs_scene`, `obs_input`
+(lista de `/api/local/obs/scenes`, com texto livre).
+**Sons:** `sound` ganha `fade_in` (ms, 0–5000); `stopsound` ganha `fade` (ms, 0–5000).
+
+OBS: obs-websocket v5 (vem no OBS 28+), porta 4455, cliente WebSocket próprio (stdlib),
+autenticação SHA-256 (challenge/salt), reconexão automática a cada 5 s em segundo plano.
