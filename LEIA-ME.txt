@@ -58,6 +58,19 @@ EDITAR OS BOTOES (SO PELO PC)
 - O celular e so para usar: nao edita botoes.
 - A versao anterior fica salva em config.bak.json.
 
+NOVIDADES DA 2.2
+- Botoes maiores (ate 4x4), cor do texto, imagem propria no lugar do icone
+  (ficam em Documentos\StreamDeck\imagens: PNG, JPG, GIF ou WEBP, ate 2 MB)
+  e aparencia diferente quando um botao liga/desliga esta ligado.
+- Pastas: um botao que abre outros botoes por cima da pagina.
+- Apps e sites: trazer/abrir programa, atalho dentro de um programa (e voltar
+  para a janela anterior), abrir site num navegador/perfil/modo app e ir para
+  uma aba pelo titulo. A pagina pode trocar sozinha conforme o app em foco no PC.
+- Biblioteca de comandos prontos (Windows, midia, edicao, navegador, OBS,
+  Discord, Spotify, Teams, Zoom, radio).
+- Efeitos sonoros ate 200% (acima de 100% o som e amplificado e pode distorcer).
+- Copia de seguranca: exportar/importar um .zip com botoes, imagens e sons.
+
 NO CELULAR
 - Engrenagem (Ajustes): tela cheia, abrir sempre em tela cheia, orientacao
   (Automatica, Vertical, Horizontal), PCs e atualizacoes. Vale so para aquele aparelho.

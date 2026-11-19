@@ -2,6 +2,7 @@
 """Validacao e migracao do config.json (v1 -> v2). Formato em docs/ARQUITETURA.md."""
 import copy
 import json
+import re
 
 from . import actions
 from .audio import TARGETS as FADER_TARGETS
@@ -13,7 +14,14 @@ MAX_LABEL = 60             # texto do botao
 MAX_NAME = 60              # nome da pagina
 MAX_TITLE = 80
 MAX_SHORT = 40             # icone, cor
-KINDS = ("button", "fader")
+KINDS = ("button", "fader", "folder")
+FOLDER_KINDS = ("button", "fader")   # pasta dentro de pasta nao
+MAX_FOLDER = 60            # botoes dentro de uma pasta
+MAX_APPS = 20              # apps por pagina (troca automatica)
+LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer")
+HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()\-]{0,99}$")
+EXE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()+\-]{0,79}$")
 
 
 # --------------------------------------------------------------- validacao ---
@@ -27,18 +35,70 @@ def _opt_str(obj, key, limit, where):
         raise ValueError("%s: %s muito longo (maximo %d caracteres)" % (where, key, limit))
 
 
-def validate_button(b, n_pages, where):
-    if not isinstance(b, dict):
-        raise ValueError(where + ": invalido")
-    kind = b.get("kind", "button")
-    if kind not in KINDS:
-        raise ValueError("%s: tipo deve ser button ou fader" % where)
+def _opt_hex(obj, key, where):
+    v = obj.get(key)
+    if v is None or v == "":
+        return
+    if not isinstance(v, str) or not HEX_RE.match(v):
+        raise ValueError("%s: %s deve ser uma cor #rrggbb" % (where, key))
+
+
+def safe_image_name(v):
+    """Nome simples de arquivo (sem pastas), como os de imagens/."""
+    return isinstance(v, str) and bool(IMAGE_RE.match(v)) and ".." not in v
+
+
+def _opt_image(obj, key, where):
+    v = obj.get(key)
+    if v is None or v == "":
+        return
+    if not safe_image_name(v):
+        raise ValueError("%s: nome de imagem invalido" % where)
+
+
+def _looks(b, where):
+    """Campos de aparencia (do botao e do "on")."""
     _opt_str(b, "label", MAX_LABEL, where)
     _opt_str(b, "icon", MAX_SHORT, where)
     _opt_str(b, "color", MAX_SHORT, where)
+    _opt_hex(b, "textColor", where)
+    _opt_image(b, "image", where)
+
+
+def validate_button(b, n_pages, where, kinds=KINDS):
+    if not isinstance(b, dict):
+        raise ValueError(where + ": invalido")
+    kind = b.get("kind", "button")
+    if kind not in kinds:
+        raise ValueError("%s: tipo deve ser %s" % (where, " ou ".join(kinds)))
+    _looks(b, where)
+    for key in ("w", "h"):
+        if key in b:
+            v = b[key]
+            if not isinstance(v, int) or isinstance(v, bool) or not (1 <= v <= 4):
+                raise ValueError("%s: %s deve ficar entre 1 e 4" % (where, key))
     if "toggle" in b and not isinstance(b["toggle"], bool):
         raise ValueError("%s: toggle deve ser true ou false" % where)
-    if kind == "fader":
+    on = b.get("on")
+    if on is not None:
+        if not isinstance(on, dict):
+            raise ValueError("%s: aparencia ligado invalida" % where)
+        for k in on:
+            if k not in ("label", "icon", "color", "textColor", "image"):
+                raise ValueError("%s: campo desconhecido em on: %s" % (where, k))
+        _looks(on, where + " (ligado)")
+    live = b.get("live")
+    if live not in (None, "") and live not in LIVE:
+        raise ValueError("%s: texto ao vivo invalido" % where)
+    if kind == "folder":
+        inner = b.get("buttons")
+        if not isinstance(inner, list):
+            raise ValueError("%s: pasta sem lista de botoes" % where)
+        if len(inner) > MAX_FOLDER:
+            raise ValueError("%s: pasta com botoes demais (maximo %d)" % (where, MAX_FOLDER))
+        for i, x in enumerate(inner):
+            validate_button(x, n_pages, "%s, item %d" % (where, i + 1), FOLDER_KINDS)
+    elif kind == "fader":
         if b.get("target") not in FADER_TARGETS:
             raise ValueError("%s: o fader deve controlar %s" % (where, ", ".join(FADER_TARGETS)))
     else:
@@ -74,6 +134,13 @@ def validate_config(cfg):
         if pg.get("layout", "grid") != "grid":
             raise ValueError("pagina %d: layout invalido" % (pi + 1))
         _opt_str(pg, "name", MAX_NAME, "pagina %d" % (pi + 1))
+        apps = pg.get("apps")
+        if apps is not None:
+            if not isinstance(apps, list) or len(apps) > MAX_APPS:
+                raise ValueError("pagina %d: lista de apps invalida (maximo %d)" % (pi + 1, MAX_APPS))
+            for x in apps:
+                if not isinstance(x, str) or not EXE_RE.match(x):
+                    raise ValueError("pagina %d: nome de app invalido: %s" % (pi + 1, str(x)[:40]))
         if len(pg["buttons"]) > MAX_BUTTONS:
             raise ValueError("pagina %d: botoes demais (maximo %d)" % (pi + 1, MAX_BUTTONS))
         for bi, b in enumerate(pg["buttons"]):

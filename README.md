@@ -16,7 +16,10 @@ Deixe a janela do Stream Deck aberta (pode minimizar) ou marque **Iniciar junto 
 
 - Atalhos de teclado, teclas de mídia, abrir sites e programas, rodar comandos, sequências de ações
 - Funções para rádio: efeitos sonoros (MP3/WAV), parar sons, mensagens no chat e chamadas à API do programa
-- Várias páginas, ícones e cores, tudo editável no PC
+- Várias páginas, pastas, botões de até 4x4, ícones, imagens próprias e cores, tudo editável no PC
+- Apps e sites: trazer/abrir programas, atalho dentro de um programa, abrir site (navegador, perfil, modo app), ir para uma aba; troca de página conforme o app em foco
+- Biblioteca de comandos prontos (Windows, mídia, OBS, Discord, Spotify, Teams, Zoom…) e efeitos sonoros até 200%
+- Cópia de segurança: exportar/importar um .zip com botões, imagens e sons
 - Abas para vários PCs (casa, trabalho…); só a aba aberta controla o PC dela
 - **Atualizações**: o app avisa quando sai versão nova e atualiza com um toque, mantendo botões, abas e sons
 

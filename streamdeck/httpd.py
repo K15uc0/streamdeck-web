@@ -10,6 +10,8 @@ Ordem das barreiras (nao mudar):
 """
 import json
 import os
+import shutil
+import tempfile
 import posixpath
 import re
 import socket
@@ -19,7 +21,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, audio, paths, schema, security, state, storage, updates, winapi
+from . import VERSION, actions, audio, library, media, paths, schema, security, state, storage, updates, \
+    windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
 
@@ -28,7 +31,8 @@ PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x
 
 MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript",
         ".css": "text/css", ".png": "image/png", ".json": "application/json", ".svg": "image/svg+xml",
-        ".jpg": "image/jpeg", ".ico": "image/x-icon"}
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+        ".ico": "image/x-icon"}
 
 CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
        "img-src 'self' data: http:; connect-src 'self'; frame-ancestors 'none'; "
@@ -48,6 +52,12 @@ ROUTES = {
     ("GET", "/api/actions"): "get_actions",
     ("GET", "/api/info"): "get_info",
     ("GET", "/api/press"): "get_press",
+    ("GET", "/api/library"): "get_library",
+    ("GET", "/api/images"): "get_images",
+    ("GET", "/api/local/windows"): "local_windows",
+    ("GET", "/api/local/export"): "local_export",
+    ("POST", "/api/local/images"): "local_images",
+    ("POST", "/api/local/import"): "local_import",
     ("POST", "/api/local/autostart"): "local_autostart",
     ("POST", "/api/local/sounds"): "local_sounds",
     ("POST", "/api/local/data"): "local_data",
@@ -59,6 +69,10 @@ ROUTES = {
     ("POST", "/api/tabs"): "post_tabs",
 }
 # paginas e arquivos que so abrem no proprio PC
+# rotas do PC cujo corpo e um arquivo (bytes), com o limite de tamanho;
+# /api/local/sounds so com ?name= (sem ele, abre a pasta sons)
+RAW_POST = {"/api/local/images": media.MAX_IMAGE, "/api/local/sounds": media.MAX_SOUND,
+            "/api/local/import": media.MAX_IMPORT}
 LOCAL_PAGES = ("/conectar", "/conectar.html", "/editar", "/editar.html",
                "/css/editar.css", "/js/editar.js")
 
@@ -152,7 +166,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Connection", "close" if self.close_connection else "keep-alive")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        if not (extra and "Cache-Control" in extra):
+            self.send_header("Cache-Control", "no-store")
         if extra:
             for name, value in extra.items():
                 self.send_header(name, value)
@@ -185,6 +200,29 @@ class Handler(BaseHTTPRequestHandler):
                 break
             raw += chunk
         return json.loads(raw.decode("utf-8"))
+
+    def _body_file(self, limit):
+        """Corpo bruto num arquivo temporario (ate limit bytes). Le tudo antes
+        de recusar, para a resposta chegar ao navegador."""
+        n = int(self.headers.get("Content-Length", "0") or 0)
+        if n <= 0:
+            raise ValueError("arquivo vazio")
+        if n > limit:
+            self.close_connection = True
+            raise ValueError("arquivo grande demais (maximo %d MB)" % (limit // (1024 * 1024)))
+        tmp = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024)
+        left = n
+        while left > 0:
+            chunk = self.rfile.read(min(65536, left))
+            if not chunk:
+                break
+            tmp.write(chunk)
+            left -= len(chunk)
+        if left:
+            tmp.close()
+            raise ValueError("envio incompleto")
+        tmp.seek(0)
+        return tmp
 
     def _cookie_token(self):
         for part in self.headers.get("Cookie", "").split(";"):
@@ -253,6 +291,12 @@ class Handler(BaseHTTPRequestHandler):
             if ("POST", url.path) not in ROUTES:
                 return self._json(404, {"ok": False})
             try:
+                if url.path in RAW_POST and (url.path != "/api/local/sounds" or "name" in q):
+                    name = ROUTES[("POST", url.path)]
+                    if url.path == "/api/local/sounds":
+                        name = "local_sound_upload"
+                    with self._body_file(RAW_POST[url.path]) as f:
+                        return getattr(self, name)(q, f)
                 return self._route("POST", url.path, self._body_json())
             except Exception as e:
                 return self._json(400, {"ok": False, "error": str(e)})
@@ -287,6 +331,18 @@ class Handler(BaseHTTPRequestHandler):
         # primeiro acesso com o codigo: guarda no navegador e limpa o endereco
         if url.path == "/" and k:
             return self._first_access(url, k)
+
+        # imagens dos botoes: <img> nao manda cabecalho, entao so o codigo
+        if url.path.startswith("/img/"):
+            if not (self._authed(q) or self._local()):
+                return self._deny_auth()
+            from urllib.parse import unquote
+            found = media.image_file(unquote(url.path[5:]))
+            if not found:
+                return self._send(404, "nao encontrado", TEXT)
+            with open(found[0], "rb") as f:
+                data = f.read()
+            return self._send(200, data, found[1], extra={"Cache-Control": "private, max-age=3600"})
 
         if url.path.startswith("/api/"):
             if not self._api_header_ok():
@@ -354,6 +410,11 @@ class Handler(BaseHTTPRequestHandler):
             st["toggles"] = state.toggles(storage.load_config())
         except Exception:
             st["toggles"] = state.toggles()
+        try:
+            st["since"] = state.since(storage.load_config())
+        except Exception:
+            st["since"] = state.since()
+        st["app"] = windows.foreground_exe()
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         return self._json(200, st)
@@ -363,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
             if "c" in q:   # c = controle (master, effects, mic)
                 v = q.get("v", [None])[0]
                 mute = q.get("mute", [""])[0] == "toggle"
-                audio.set_level(q["c"][0], None if v is None else max(0, min(100, int(v))), toggle_mute=mute)
+                audio.set_level(q["c"][0], None if v is None else int(v), toggle_mute=mute)
             return self._json(200, {"ok": True, "levels": audio.levels()})
         except Exception as e:
             return self._json(400, {"ok": False, "error": str(e)})
@@ -387,22 +448,77 @@ class Handler(BaseHTTPRequestHandler):
     def get_press(self, q):
         try:
             p, b = _int(q, "p"), _int(q, "b")
-            if p < 0 or b < 0:
+            f = _int(q, "f") if (q.get("f") or [""])[0] != "" else None
+            if p < 0 or b < 0 or (f is not None and f < 0):
                 raise IndexError("botao inexistente")
             cfg = storage.load_config()
             btn = cfg["pages"][p]["buttons"][b]
+            if f is not None:
+                if btn.get("kind") != "folder":
+                    raise ValueError("este botao nao e uma pasta")
+                btn = btn["buttons"][f]
+            elif btn.get("kind") == "folder":   # abrir a pasta acontece no aparelho
+                return self._json(200, {"ok": True, "toggles": state.toggles(cfg)})
             if btn.get("kind", "button") != "button":
                 raise ValueError("este controle nao e um botao")
             print("> %s" % (btn.get("label") or "?"))
             actions.run(btn.get("action") or {"type": "none"})
             if btn.get("toggle") is True:
-                state.flip(p, b)
+                state.flip(p, b, f)
             return self._json(200, {"ok": True, "toggles": state.toggles(cfg)})
         except Exception as e:
             print("  erro:", e)
             return self._json(500, {"ok": False, "error": str(e)})
 
+    def get_library(self, q):
+        return self._json(200, {"ok": True, "groups": library.groups()})
+
+    def get_images(self, q):
+        return self._json(200, {"ok": True, "images": media.list_images()})
+
+    def local_windows(self, q):
+        try:
+            wins = [{"title": w["title"], "exe": w["exe"], "path": w["path"]} for w in windows.list_windows()]
+        except Exception as e:
+            print("  erro ao listar janelas:", e)
+            wins = []
+        return self._json(200, {"ok": True, "windows": wins})
+
+    def local_export(self, q):
+        tmp, name = media.export_zip()
+        with tmp:
+            tmp.seek(0, 2)
+            size = tmp.tell()
+            tmp.seek(0)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(size))
+            self.send_header("Content-Disposition", 'attachment; filename="%s"' % name)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close" if self.close_connection else "keep-alive")
+            self._security_headers()
+            self.end_headers()
+            if self.command != "HEAD":
+                shutil.copyfileobj(tmp, self.wfile)
+            self.wfile.flush()
+        print("* copia de seguranca exportada (%s)" % name)
+
     # ======================================================= rotas POST ===
+    def local_images(self, q, f):
+        name = media.save_image((q.get("name") or [""])[0], f.read())
+        print("* imagem adicionada: %s" % name)
+        return self._json(200, {"ok": True, "name": name})
+
+    def local_sound_upload(self, q, f):
+        name = media.save_sound((q.get("name") or [""])[0], f.read())
+        print("* som adicionado: %s" % name)
+        return self._json(200, {"ok": True, "name": name})
+
+    def local_import(self, q, f):
+        n_img, n_snd = media.import_zip(f)
+        print("* copia de seguranca importada: %d imagem(ns), %d som(ns)" % (n_img, n_snd))
+        return self._json(200, {"ok": True, "images": n_img, "sounds": n_snd, "v": storage.config_version()})
+
     def local_autostart(self, body):
         winapi.set_autostart(bool(body.get("on")))
         return self._json(200, {"ok": True, "autostart": winapi.autostart_enabled()})

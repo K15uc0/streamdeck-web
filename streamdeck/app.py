@@ -92,6 +92,7 @@ def main():
     first_run = storage.ensure_config()
     storage.load_config()  # valida o JSON (e migra config antigo) antes de subir
     os.makedirs(paths.SOUNDS_DIR, exist_ok=True)
+    os.makedirs(paths.IMAGES_DIR, exist_ok=True)
     token = storage.token()
     stop_old_instances()
     srv = port = None

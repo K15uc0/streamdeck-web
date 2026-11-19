@@ -35,6 +35,8 @@ SETTINGS_PATH = os.path.join(BASE, "seguranca.json")
 LOG_PATH = os.path.join(BASE, "streamdeck.log")
 SOUNDS_DIR = os.path.join(BASE, "sons")
 SOUND_EXT = (".mp3", ".wav", ".wma", ".m4a")
+IMAGES_DIR = os.path.join(BASE, "imagens")
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 PORTS = (8765, 8766, 8767)  # usa a primeira livre
 
 

@@ -11,7 +11,8 @@ from .. import audio, paths
              "eles aparecem na lista. Também aceita um caminho completo.",
         fields=[Field("file", "Arquivo", "sound", required=True,
                       placeholder="vinheta.mp3 ou C:\\Sons\\aplausos.wav"),
-                Field("volume", "Volume", "number", min=0, max=100, step=1, default=100),
+                Field("volume", "Volume (%)", "number", min=0, max=200, step=1, default=100,
+                      help="Acima de 100% o som é amplificado (pode distorcer)."),
                 Field("exclusive", "Parar os outros sons antes de tocar este", "bool", default=False)])
 def sound(a):
     if paths.is_unc(a["file"]):
