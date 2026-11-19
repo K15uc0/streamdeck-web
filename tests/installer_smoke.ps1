@@ -55,7 +55,10 @@ function Wait-Hello([int]$NotPid = 0) {
   return $null
 }
 function Run-Setup([string[]]$ArgList) {
-  $p = Start-Process -FilePath $setup -ArgumentList $ArgList -PassThru -Wait
+  # sem -Wait: no pwsh 7 o -Wait espera tambem os filhos, e com /RESTARTAPP=1
+  # o filho e o proprio Stream Deck reaberto (ficaria esperando para sempre)
+  $p = Start-Process -FilePath $setup -ArgumentList $ArgList -PassThru
+  if (-not $p.WaitForExit(180000)) { Fail "instalador nao terminou em 3 minutos" }
   if ($p.ExitCode -ne 0) { Fail "instalador terminou com codigo $($p.ExitCode)" }
 }
 
