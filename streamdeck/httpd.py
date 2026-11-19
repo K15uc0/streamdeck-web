@@ -443,7 +443,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def local_quit(self, body):
         """Uma copia nova pediu a porta: responde e fecha este servidor."""
-        print("* outra copia do Stream Deck foi aberta; encerrando esta.")
+        print("* pedido para fechar pela API local (outra copia, instalador ou tela Conectar); encerrando.")
         self._json(200, {"ok": True})
 
         def bye():

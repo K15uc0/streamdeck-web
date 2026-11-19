@@ -56,6 +56,32 @@ class MenuTest(unittest.TestCase):
         self.assertFalse(tray.show_console(True))
 
 
+class CliqueTest(unittest.TestCase):
+    def test_clique_simples_abre_menu(self):
+        st = {}
+        self.assertEqual(tray.click_event(st, "up"), "start_timer")
+        self.assertEqual(tray.click_event(st, "timer"), "menu")
+
+    def test_duplo_clique_ignora_up_seguinte(self):
+        st = {}
+        self.assertEqual(tray.click_event(st, "up"), "start_timer")
+        self.assertEqual(tray.click_event(st, "dbl"), "open")
+        self.assertIsNone(tray.click_event(st, "up"))       # nao reinicia o timer
+        self.assertIsNone(tray.click_event(st, "timer"))    # timer atrasado: sem menu
+        # proximo clique simples volta a abrir o menu
+        self.assertEqual(tray.click_event(st, "up"), "start_timer")
+        self.assertEqual(tray.click_event(st, "timer"), "menu")
+
+
+class DicaParaParar(unittest.TestCase):
+    def test_textos(self):
+        self.assertIn("Sair", app.stop_hint(True, True))
+        self.assertIn("Ctrl+C", app.stop_hint(False, True))
+        t = app.stop_hint(False, False)
+        self.assertIn("Gerenciador de Tarefas", t)
+        self.assertIn("Conectar", t)
+
+
 class TeeTest(unittest.TestCase):
     def test_sem_console(self):
         with tempfile.TemporaryDirectory() as d:

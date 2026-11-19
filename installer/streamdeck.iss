@@ -85,6 +85,7 @@ Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"; Flags: nowait; Check: Restar
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"
+Type: files; Name: "{app}\instalado.txt"
 
 [Code]
 const
@@ -166,6 +167,15 @@ function InitializeUninstall: Boolean;
 begin
   FecharApp;
   Result := True;
+end;
+
+{ marcador lido pelo app (updates.install_kind): "esta pasta veio do instalador" }
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    if not SaveStringToFile(ExpandConstant('{app}\instalado.txt'),
+        'Stream Deck {#MyAppVersion} instalado pelo instalador. Nao apague: a atualizacao automatica usa este arquivo.' + #13#10, False) then
+      Log('aviso: nao gravou instalado.txt');
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

@@ -5,7 +5,8 @@ name: Publicar versão
 # existir release com esse número, o instalador e o .exe portátil são gerados e publicados.
 # ORDEM DOS ARQUIVOS: os apps até a 2.4.0 baixam o ÚLTIMO .exe da release (ordem
 # de envio). Por isso o instalador sobe primeiro e o StreamDeck.exe (arquivo
-# único) por último; o passo final confere isso pela API.
+# único) por último; tudo vai para um RASCUNHO, a ordem é conferida pela API e
+# só então a release é publicada.
 on:
   push:
     branches: [main]
@@ -29,8 +30,15 @@ jobs:
         run: |
           $ver = (Select-String -Path streamdeck/__init__.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
           "version=$ver" >> $env:GITHUB_OUTPUT
-          gh release view "v$ver" --repo "${{ github.repository }}" *> $null
-          if ($LASTEXITCODE -eq 0) { "exists=true" >> $env:GITHUB_OUTPUT; Write-Host "v$ver já publicada, nada a fazer." }
+          $draft = gh release view "v$ver" --repo "${{ github.repository }}" --json isDraft --jq .isDraft 2> $null
+          if ($LASTEXITCODE -eq 0 -and $draft -eq "true") {
+            # rascunho que sobrou de uma execucao que falhou: apaga e publica de novo
+            Write-Host "v$ver existe como rascunho (execucao anterior falhou): apagando."
+            gh release delete "v$ver" --repo "${{ github.repository }}" --yes
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            "exists=false" >> $env:GITHUB_OUTPUT
+          }
+          elseif ($LASTEXITCODE -eq 0) { "exists=true" >> $env:GITHUB_OUTPUT; Write-Host "v$ver já publicada, nada a fazer." }
           else { "exists=false" >> $env:GITHUB_OUTPUT }
           exit 0
 
@@ -103,8 +111,8 @@ jobs:
           Write-Host "SHA-256 instalador: $hi"
           Write-Host "SHA-256 portatil:   $hp"
 
-      # 1o o instalador (cria a release)...
-      - name: Publicar (instalador)
+      # 1o o instalador (cria a release como RASCUNHO: ninguem a ve ainda)...
+      - name: Criar rascunho (instalador)
         if: steps.ver.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
@@ -113,10 +121,11 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: dist-installer/StreamDeck-Instalador.exe
           body_path: notas.md
-          make_latest: true
+          draft: true
+          make_latest: false
 
       # ...depois o portatil: tem de ser o ULTIMO .exe (apps ate a 2.4.0)
-      - name: Publicar (StreamDeck.exe portátil, por último)
+      - name: Enviar StreamDeck.exe portátil (por último)
         if: steps.ver.outputs.exists == 'false'
         shell: pwsh
         env:
@@ -129,14 +138,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $rel = gh api "repos/${{ github.repository }}/releases/tags/v${{ steps.ver.outputs.version }}" | ConvertFrom-Json
+          # releases/tags/... nao enxerga rascunhos: procura na lista (que inclui rascunhos)
+          $tag = "v${{ steps.ver.outputs.version }}"
+          $rel = @(gh api --paginate "repos/${{ github.repository }}/releases?per_page=100" | ConvertFrom-Json | ForEach-Object { $_ } | Where-Object { $_.tag_name -eq $tag -and $_.draft })[0]
+          if (-not $rel) { Write-Host "::error::rascunho $tag nao encontrado"; exit 1 }
           $exes = @($rel.assets | Sort-Object id | Where-Object { $_.name.ToLower().EndsWith(".exe") })
           # tambem na ordem crua da API (e a que os apps antigos percorrem)
           $raw = @($rel.assets | Where-Object { $_.name.ToLower().EndsWith(".exe") })
           Write-Host ("arquivos .exe (API): " + (($raw | ForEach-Object { "$($_.name)#$($_.id)" }) -join ", "))
           if ($raw.Count -ne 2 -or $raw[-1].name -ne "StreamDeck.exe" -or $exes[-1].name -ne "StreamDeck.exe") {
-            Write-Host "::error::o ultimo .exe da release nao e o StreamDeck.exe: apps ate a 2.4.0 baixariam o arquivo errado. Corrija a release AGORA (apague e reenvie o StreamDeck.exe)."
+            Write-Host "::error::o ultimo .exe do rascunho nao e o StreamDeck.exe: apps ate a 2.4.0 baixariam o arquivo errado. Rascunho apagado, nada foi publicado."
+            gh release delete $tag --repo "${{ github.repository }}" --yes
             exit 1
           }
-          if (-not ($raw | Where-Object { $_.name -eq "StreamDeck-Instalador.exe" })) { Write-Host "::error::instalador faltando"; exit 1 }
+          if (-not ($raw | Where-Object { $_.name -eq "StreamDeck-Instalador.exe" })) {
+            Write-Host "::error::instalador faltando. Rascunho apagado, nada foi publicado."
+            gh release delete $tag --repo "${{ github.repository }}" --yes
+            exit 1
+          }
           Write-Host "ok: StreamDeck.exe e o ultimo .exe"
+
+      # so agora a versao aparece para os apps (releases/latest)
+      - name: Publicar a versão
+        if: steps.ver.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "v${{ steps.ver.outputs.version }}" --repo "${{ github.repository }}" --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

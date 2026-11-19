@@ -115,6 +115,8 @@
     <label class="item" id="autoWrap"><span class="t">Iniciar o Stream Deck junto com o Windows</span><input type="checkbox" id="auto"></label>
     <div class="item btn"><button id="sounds">Abrir pasta de sons</button></div>
     <div class="item btn"><button id="data">Abrir pasta de dados</button></div>
+    <div class="item btn"><span class="t"><button id="quit" class="danger">Fechar o Stream Deck</button>
+      <span class="s" id="quitMsg">Desliga o programa neste PC. Os aparelhos param de funcionar até abrir de novo.</span></span></div>
   </div>
   <p class="foot">Seus botões, abas e sons ficam em <span id="datapath">…</span>. Eles são mantidos nas atualizações.</p>
 
@@ -305,6 +307,18 @@ function diagLoop() {
 }
 document.addEventListener("visibilitychange", diagLoop);
 diagLoop();
+$("quit").onclick = function () {
+  if (!confirm("Fechar o Stream Deck? Os aparelhos param de funcionar até você abrir o programa de novo.")) return;
+  var b = $("quit");
+  b.disabled = true;
+  fetch("/api/local/quit", { method: "POST", headers: { "X-StreamDeck": "1", "Content-Type": "application/json" }, body: "{}" })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); })
+    .then(function () {
+      clearInterval(diagTimer);
+      b.textContent = "Stream Deck fechado";
+      $("quitMsg").textContent = "Stream Deck fechado. Para usar de novo, abra o programa pelo menu Iniciar ou pelo atalho.";
+    }, function (e) { b.disabled = false; alert("Não consegui fechar: " + e.message); });
+};
 $("openlog").onclick = function () {
   api("/api/local/openlog", {}).then(function (r) { if (!r.ok) alert("Não abriu o log: " + r.error); });
 };

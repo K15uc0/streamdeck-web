@@ -23,6 +23,7 @@ ID_SAIR = 1099
 SEP = None   # id de separador
 
 UPDATE_POLL = 60.0   # segundos entre conferencias de atualizacao
+START_WAIT = 15.0    # espera do start(): maior que as tentativas do loop (10 x 1 s)
 
 _STATE = {"running": False, "thread": None, "hwnd": None, "post_quit": None}
 
@@ -70,6 +71,28 @@ def update_balloon(update, shown):
     shown.add(v)
     return ("Atualização disponível",
             "Stream Deck %s está disponível. Clique em Conectar para atualizar." % v)
+
+
+def click_event(st, ev):
+    """Maquina de estados do clique esquerdo (testavel sem Win32).
+
+    st: dict {"dbl": bool, "skip_up": bool}; ev: "up", "dbl" ou "timer".
+    Devolve a acao: "start_timer" (esperar o tempo do duplo clique),
+    "open" (abrir /conectar e matar o timer), "menu" (mostrar o menu) ou None.
+    Depois do duplo clique o Windows manda mais um WM_LBUTTONUP: ele e ignorado."""
+    if ev == "dbl":
+        st["dbl"] = True
+        st["skip_up"] = True
+        return "open"
+    if ev == "up":
+        if st.get("skip_up"):
+            st["skip_up"] = False
+            return None
+        st["dbl"] = False
+        return "start_timer"
+    if ev == "timer":
+        return None if st.get("dbl") else "menu"
+    return None
 
 
 # ---------------------------------------------------------------- console
@@ -130,7 +153,8 @@ def start(port, srv, version=None):
     t = threading.Thread(target=run, name="bandeja", daemon=True)
     _STATE.update(running=True, thread=t)
     t.start()
-    ready.wait(5.0)
+    # o loop tenta o icone por ate ~10 s (Explorer ainda abrindo no logon)
+    ready.wait(START_WAIT)
     return ok[0]
 
 
@@ -171,6 +195,8 @@ class _Tray:
         self.port, self.srv, self.version = port, srv, version
         self.shown_updates = set()
         self.last_click = 0.0
+        self.taskbar_created = 0     # antes da janela: o wndproc ja pode receber mensagens
+        self.click = {"dbl": False, "skip_up": False}
         self.u32 = ctypes.WinDLL("user32", use_last_error=True)
         self.k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self.sh32 = ctypes.WinDLL("shell32", use_last_error=True)
@@ -362,19 +388,20 @@ class _Tray:
             if msg == self.WM_TRAY:
                 ev = lparam & 0xFFFF
                 if ev == self.WM_LBUTTONDBLCLK:
-                    self.dbl = True
+                    click_event(self.click, "dbl")
+                    self.u32.KillTimer(hwnd, 2)
                     self._open("/conectar")
                 elif ev in (self.WM_RBUTTONUP, self.WM_CONTEXTMENU):
                     self.show_menu()
                 elif ev == self.WM_LBUTTONUP:
                     # espera o tempo do duplo clique para nao abrir menu + pagina
-                    self.dbl = False
-                    self.u32.SetTimer(hwnd, 2, self.u32.GetDoubleClickTime(), None)
+                    if click_event(self.click, "up") == "start_timer":
+                        self.u32.SetTimer(hwnd, 2, self.u32.GetDoubleClickTime(), None)
                 return 0
             if msg == self.WM_TIMER:
                 if wparam == 2:
                     self.u32.KillTimer(hwnd, 2)
-                    if not self.dbl:
+                    if click_event(self.click, "timer") == "menu":
                         self.show_menu()
                 elif wparam == 1:
                     self.check_update()
@@ -401,7 +428,6 @@ class _Tray:
 
     def loop(self, ready, ok):
         ct, w, u = self.ct, self.w, self.u32
-        self.dbl = False
         self._proc = self.WNDPROC(self.wndproc)   # manter referencia viva
         hinst = self.k32.GetModuleHandleW(None)
         wc = self.WNDCLASSW()

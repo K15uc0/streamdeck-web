@@ -109,6 +109,26 @@ class Tee:
         return False
 
 
+def _has_console():
+    """True se ha uma janela/terminal onde Ctrl+C funciona."""
+    if not IS_WINDOWS:
+        return True
+    try:
+        import ctypes
+        return bool(ctypes.windll.kernel32.GetConsoleWindow())
+    except Exception:
+        return False
+
+
+def stop_hint(tray_on, has_console):
+    """Como fechar o programa, conforme o que existe nesta execucao."""
+    if tray_on:
+        return "icone do Stream Deck perto do relogio > Sair."
+    if has_console:
+        return "Ctrl+C nesta janela (ou feche a janela)."
+    return "feche pelo Gerenciador de Tarefas ou pela tela Conectar > Fechar o Stream Deck."
+
+
 def main():
     sys.stdout = Tee(sys.stdout, paths.LOG_PATH)
     sys.stderr = sys.stdout
@@ -149,8 +169,6 @@ def main():
     print()
     print(" Tela de conexao com QR code (neste PC):")
     print("   http://127.0.0.1:%d/conectar" % port)
-    print()
-    print(" Para parar: icone do Stream Deck perto do relogio > Sair.")
     print("=" * 56)
     threading.Thread(target=updates.update_loop, daemon=True).start()
     threading.Thread(target=updates.cleanup_old_exe, daemon=True).start()
@@ -164,6 +182,7 @@ def main():
             print("  aviso: icone na bandeja indisponivel (%s)" % e)
     if tray_on:
         print(" Icone na bandeja ativo (perto do relogio).")
+    print(" Para parar: %s" % stop_hint(tray_on, _has_console()))
     if minimized:
         # com o icone, a janela some (volta pelo menu "Mostrar janela do log")
         if not (tray_on and tray.show_console(False)):

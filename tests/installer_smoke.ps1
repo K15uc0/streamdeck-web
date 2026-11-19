@@ -65,7 +65,7 @@ if (Get-ItemProperty -Path $runKey -Name StreamDeck -ErrorAction SilentlyContinu
 
 # 1) instala
 Run-Setup ($silent + @("/DIR=`"$app`"", "/LOG=`"$(Join-Path $tmp 'instalar.log')`""))
-foreach ($f in @($exe, (Join-Path $app "_internal"), (Join-Path $app "unins000.exe"))) {
+foreach ($f in @($exe, (Join-Path $app "_internal"), (Join-Path $app "unins000.exe"), (Join-Path $app "instalado.txt"))) {
   if (-not (Test-Path $f)) { Fail "faltando depois de instalar: $f" }
 }
 Write-Host "ok instalado em $app"
