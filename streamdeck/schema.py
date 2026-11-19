@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Validacao e migracao do config.json (v1 -> v2). Formato em docs/ARQUITETURA.md."""
 import copy
+import json
 
 from . import actions
 from .audio import TARGETS as FADER_TARGETS
@@ -158,26 +159,26 @@ def _mixer_sections(pg, cols, cap):
     rest = [x for x in b[0:6] if _used(x)]
     rest += [fill_icon(x, "updown") for x in b[46:48] if _used(x)]
 
-    banks = []
-    for k in range(4):
-        pads = [x for x in b[6 + k * 8:14 + k * 8] if _used(x)]
-        if pads:
-            banks.append((k + 1, pads))
+    # os 4 bancos viram uma pagina so; botoes repetidos (ex.: "Parar sons" em
+    # todos os bancos) entram uma vez
+    pads, seen = [], set()
+    for x in b[6:38]:
+        if _used(x):
+            sig = json.dumps([x.get("label"), x.get("action")], sort_keys=True, ensure_ascii=False)
+            if sig not in seen:
+                seen.add(sig)
+                pads.append(x)
     chat = [fill_icon(x, "chat") for x in b[38:42] if _used(x)]
 
     main_nav = []
-    if banks:
-        main_nav.append(("Pads", "music", "pads%d" % banks[0][0]))
+    if pads:
+        main_nav.append(("Pads", "music", "pads"))
     if chat:
         main_nav.append(("Chat", "chat", "chat"))
     main = _arrange(faders, onair, mutes, rest, len(main_nav), cols, cap)
     sections = [("main", name, main, main_nav)]
-    for i, (n, pads) in enumerate(banks):
-        nav = []
-        if i + 1 < len(banks):
-            nav.append(("Pads %d" % banks[i + 1][0], "forward", "pads%d" % banks[i + 1][0]))
-        nav.append(("Voltar", "back", "main"))
-        sections.append(("pads%d" % n, "%s · Pads %d" % (name, n), pads, nav))
+    if pads:
+        sections.append(("pads", "%s · Pads" % name, pads, [("Voltar", "back", "main")]))
     if chat:
         sections.append(("chat", "%s · Chat" % name, chat, [("Voltar", "back", "main")]))
     return sections

@@ -79,7 +79,7 @@ Migração v1 -> v2 (automática ao carregar, com cópia `config.v1.bak.json`):
 - sem `version` = v1. Páginas `layout: "grid"` ficam iguais (só remove `layout`).
 - Página `layout: "mixer"` (48 posições fixas, ver `tools/pagina_mixer.py` no histórico)
   vira páginas comuns: "Rádio" (3 faders master/effects/mic, ON AIR como `toggle`,
-  botões de mudo e controles do Deck A), "Rádio · Pads 1..4" (8 pads de cada banco, só os
+  botões de mudo e controles do Deck A), "Rádio · Pads" (pads dos 4 bancos juntos, sem repetidos e
   não vazios) e "Rádio · Chat" (mensagens). Ações `page` (`to`) são remapeadas.
 
 ## API (todas exigem `X-StreamDeck: 1`; código via cookie `sdk` ou `?k=`)
