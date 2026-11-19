@@ -60,6 +60,12 @@ def update_loop():
 def cleanup_old_exe():
     if not paths.FROZEN:
         return
+    part = paths.EXE_PATH + ".download"
+    if os.path.exists(part):
+        try:
+            os.remove(part)
+        except OSError:
+            pass
     old = paths.EXE_PATH + ".old"
     for _ in range(30):
         if not os.path.exists(old):
@@ -113,6 +119,11 @@ def apply_update():
         time.sleep(1.5)
         os._exit(0)
     except Exception as e:
+        try:
+            if os.path.exists(exe + ".download"):
+                os.remove(exe + ".download")
+        except OSError:
+            pass
         UPDATE["state"] = "error"
         UPDATE["error"] = "falha ao atualizar: %s" % e
         print("! " + UPDATE["error"])

@@ -149,11 +149,7 @@ def _autostart_command():
     from . import paths
     if paths.FROZEN:
         return '"%s" --minimizado' % paths.EXE_PATH
-    exe = sys.executable
-    w = os.path.join(os.path.dirname(exe), "pythonw.exe")
-    if os.path.exists(w):
-        exe = w
-    return '"%s" "%s"' % (exe, paths.SCRIPT)
+    return '"%s" "%s" --minimizado' % (sys.executable, paths.SCRIPT)
 
 
 def autostart_enabled():

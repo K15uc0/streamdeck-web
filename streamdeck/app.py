@@ -46,7 +46,7 @@ def stop_old_instances():
         except Exception:
             # porta ocupada sem /hello: pode ser a versao anterior fechando
             # sozinha depois de se atualizar; espera ate 5 s antes de seguir
-            if _port_busy(port):
+            if port == PORTS[0] and _port_busy(port):
                 for _ in range(50):
                     time.sleep(0.1)
                     if not _port_busy(port):
