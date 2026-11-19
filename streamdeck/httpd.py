@@ -443,11 +443,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def local_quit(self, body):
         """Uma copia nova pediu a porta: responde e fecha este servidor."""
-        print("* outra copia do Stream Deck foi aberta; encerrando esta.")
+        print("* pedido para fechar pela API local (outra copia, instalador ou tela Conectar); encerrando.")
         self._json(200, {"ok": True})
 
         def bye():
             time.sleep(0.3)
+            try:
+                from . import tray
+                tray.stop()       # tira o icone da bandeja antes de sair
+            except Exception:
+                pass
             os._exit(0)
         threading.Thread(target=bye, daemon=True).start()
 

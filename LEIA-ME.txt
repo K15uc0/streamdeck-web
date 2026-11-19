@@ -5,9 +5,14 @@ O PC roda um pequeno servidor; o tablet abre a pagina no navegador e cada
 botao dispara um atalho, abre um programa ou roda um comando no PC.
 
 COMO COMECAR
-1. Baixe o StreamDeck.exe:
+1. Baixe o instalador (recomendado):
+   https://github.com/K15uc0/streamdeck-web/releases/latest/download/StreamDeck-Instalador.exe
+   Nao pede administrador: instala so para o seu usuario, cria o atalho
+   "Stream Deck" no Menu Iniciar e, se marcar, na Area de Trabalho e
+   "Iniciar com o Windows". Desinstala em Configuracoes > Aplicativos.
+   Sem instalar: baixe o StreamDeck.exe portatil (um arquivo so, qualquer pasta):
    https://github.com/K15uc0/streamdeck-web/releases/latest/download/StreamDeck.exe
-2. Abra o StreamDeck.exe (pode deixar em qualquer pasta).
+2. Instale e abra o Stream Deck (ou abra o StreamDeck.exe portatil).
    - Se aparecer "O Windows protegeu o computador": clique em
      "Mais informacoes" > "Executar assim mesmo".
    - Na pergunta do firewall: marque Redes privadas E Redes publicas > Permitir.
@@ -18,7 +23,7 @@ Deixe a janela do Stream Deck aberta (pode minimizar). Na tela de conexao da
 para marcar "Iniciar junto com o Windows".
 
 Seus dados (botoes, abas, codigo de acesso e sons) ficam em
-Documentos\StreamDeck e sao mantidos nas atualizacoes.
+Documentos\StreamDeck e sao mantidos nas atualizacoes e ao desinstalar.
 
 WINDOWS BLOQUEOU O PROGRAMA?
 O programa nao tem assinatura digital paga, entao o Windows as vezes desconfia.
@@ -27,7 +32,8 @@ O programa nao tem assinatura digital paga, entao o Windows as vezes desconfia.
 - Defender apagou/colocou em quarentena: Seguranca do Windows > Protecao contra
   virus e ameacas > Historico de protecao > clique no item > Restaurar
   (ou Acoes > Permitir no dispositivo).
-- Confira o arquivo: no PowerShell, Get-FileHash .\StreamDeck.exe deve dar o
+- Confira o arquivo: no PowerShell, Get-FileHash .\StreamDeck-Instalador.exe
+  (ou .\StreamDeck.exe) deve dar o
   mesmo SHA-256 que aparece nas notas da versao (pagina Releases).
 - Avise a Microsoft do falso positivo: https://www.microsoft.com/wdsi/filesubmission
 
@@ -35,6 +41,9 @@ ATUALIZACOES
 - Quando sai versao nova, aparece "Atualizacao" em verde no topo do app (e na
   tela de conexao do PC). Toque, veja o que mudou e toque em "Atualizar agora".
   O programa baixa a versao nova, reinicia sozinho e mantem tudo o que voce fez.
+  - Instalado: baixa o instalador novo, confere o SHA-256, fecha, instala por
+    cima em silencio e abre de novo.
+  - Portatil: baixa o StreamDeck.exe novo, confere o SHA-256, troca e reinicia.
 
 SEGURANCA
 - So aparelhos da sua rede local conseguem acessar; nada vindo da internet.

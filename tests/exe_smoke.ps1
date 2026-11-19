@@ -2,8 +2,11 @@
 # testes.yml e release.yml: abre o .exe com dados numa pasta temporaria,
 # espera /api/local/hello, confere /api/config, /api/actions e
 # /api/local/windows e fecha pelo /api/local/quit. (No modo --onefile o PID do
-# hello e o do processo filho, nao o do Start-Process.)
+# hello e o do processo filho, nao o do Start-Process.) Serve para o .exe de
+# arquivo unico e para o da versao em pasta (--onedir --noconsole): nao depende
+# da saida do console, so da API e do streamdeck.log.
 # Uso: pwsh tests/exe_smoke.ps1 [-Exe dist/StreamDeck.exe]
+#      pwsh tests/exe_smoke.ps1 -Exe dist/onedir/StreamDeck/StreamDeck.exe
 param([string]$Exe = "dist/StreamDeck.exe", [int]$Timeout = 60)
 $ErrorActionPreference = "Stop"
 
@@ -17,13 +20,11 @@ $env:STREAMDECK_UPDATE_URL = "http://127.0.0.1:9/sem-rede"
 
 $base = "http://127.0.0.1:8765"
 $h = @{ "X-StreamDeck" = "1" }
-$out = Join-Path $data "saida.txt"
-$err = Join-Path $data "erros.txt"
-$p = Start-Process -FilePath $exePath -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
+$p = Start-Process -FilePath $exePath -WorkingDirectory (Split-Path $exePath) -ArgumentList "--sem-bandeja" -PassThru
 $null = $p.Handle   # sem isto o ExitCode pode vir vazio no pwsh
 
 function Show-Log {
-  foreach ($f in @($out, $err, (Join-Path $data "streamdeck.log"))) {
+  foreach ($f in @((Join-Path $data "streamdeck.log"))) {
     if (Test-Path $f) { Write-Host "--- $f"; Get-Content $f -ErrorAction SilentlyContinue | Write-Host }
   }
 }
