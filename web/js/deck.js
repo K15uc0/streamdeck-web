@@ -461,8 +461,8 @@
     var g = geo;
     for (var i = 0; i < list.length; i++) {
       var k = list[i];
-      var w = k.gw * g.w + (k.gw - 1) * g.gap, h = k.gh * g.h + (k.gh - 1) * g.gap;
-      k.x = g.x0 + k.gx * (g.w + g.gap); k.y = g.y0 + k.gy * (g.h + g.gap);
+      var rc = g.rect(k.gx, k.gy, k.gw, k.gh), w = rc.w, h = rc.h;
+      k.x = rc.x; k.y = rc.y;
       var st = k.cell.style;
       st.left = px(k.x); st.top = px(k.y); st.width = px(w); st.height = px(h);
       SD.paintTile(k, w, h);
@@ -477,25 +477,11 @@
     if (!SD.cfg) { SD.renderNav(); return; }
     var d = dims();
     if (!built || built.cfg !== SD.cfg || built.page !== SD.page || built.cols !== d.cols || built.rows !== d.rows) renderGrid(d);
-    var W = frame.w, H = frame.h;
-    var top = nav.offsetHeight, bottom = Math.max(sa.b, 4) + 26;
-    var side = 12;
-    var aw = W - sa.l - sa.r - side * 2, ah = H - top - bottom - 6;
-    var gap = Math.max(8, Math.min(20, Math.round(Math.min(aw, ah) * 0.03)));
-    var cols = d.cols, rows = d.rows;
-    var w = (aw - gap * (cols - 1)) / cols, h = (ah - gap * (rows - 1)) / rows;
-    if (w > h * 1.35) w = h * 1.35;
-    if (h > w * 1.15) h = w * 1.15;
-    var cap = 230;
-    if (w > cap * 1.2) w = cap * 1.2;
-    if (h > cap) h = cap;
-    w = Math.max(24, Math.floor(w)); h = Math.max(24, Math.floor(h));
-    var gw = w * cols + gap * (cols - 1), gh = h * rows + gap * (rows - 1);
-    var x0 = Math.round(sa.l + side + (aw - gw) / 2), y0 = Math.round(top + 3 + (ah - gh) / 2);
-    geo = { cols: cols, rows: rows, w: w, h: h, gap: gap, x0: x0, y0: y0 };
+    var area = SD.deviceArea(sa);
+    geo = SD.geometry(frame.w, frame.h, d.cols, d.rows, area);
     placeTiles(keys);
     if (folder) placeTiles(fkeys);
-    dotsEl.style.bottom = px(Math.max(sa.b, 4));
+    dotsEl.style.bottom = px(area.dotsBottom);
     SD.renderNav();
   };
   var layoutT = null;

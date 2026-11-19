@@ -15,18 +15,28 @@
     ["timer", "Cronômetro (desde que ligou)"]];
   var LIVE_SAMPLE = { clock: "", date: "", "volume:master": "75%", "volume:effects": "100%", "volume:mic": "80%", timer: "00:00" };
   var SIZES = [[1, 1], [2, 1], [1, 2], [2, 2]];
-  var GAP = 12;
   var RECENT_KEY = "sd_ed_recent_colors";
 
   var cfg = null;            /* config em edicao */
   var page = 0;              /* pagina mostrada */
   var folder = -1;           /* indice da pasta aberta na pagina (-1 = pagina) */
-  var orient = "land";       /* land | port */
+  var orient = "land";       /* land | port (segue o aparelho escolhido) */
+  /* aparelho da pre-visualizacao (tamanho da tela em px CSS, como no celular) */
+  var DEV_KEY = "sd_ed_device";
+  var DEVICES = [
+    ["phone-p", "Celular (em pé)", 390, 844],
+    ["phone-l", "Celular (deitado)", 844, 390],
+    ["tab-p", "Tablet (em pé)", 820, 1180],
+    ["tab-l", "Tablet (deitado)", 1180, 820],
+    ["custom", "Personalizado", 0, 0]
+  ];
+  var dev = { id: "phone-l", w: 844, h: 390 };
+  var geoEd = null;          /* SD.geometry da pre-visualizacao */
+  var devScale = 1;          /* escala da moldura do aparelho na tela do editor */
   var sel = -1;              /* indice selecionado na lista (pode passar do fim = posicao vazia) */
   var msel = [];             /* selecao multipla (indices); contem sel */
   var clip = null;           /* blocos copiados (lista) */
   var sounds = [], images = [], windows = null;
-  var cellSize = 80;         /* tamanho atual de uma celula na grade (px) */
   var rec = null;            /* gravacao de atalho em andamento */
   var appPath = false;       /* campo "app": guardar caminho em vez do exe */
 
@@ -425,6 +435,55 @@
     s.onchange = function () { onChange(parseInt(s.value, 10)); };
     return s;
   }
+  function loadDev() {
+    var o = null;
+    try { o = JSON.parse(window.localStorage.getItem(DEV_KEY)); } catch (e) { o = null; }
+    if (o && o.id) setDev(o.id, o.w, o.h, true);
+    else setDev(dev.id, dev.w, dev.h, true);
+  }
+  function setDev(id, w, h, quiet) {
+    var p = null;
+    for (var k = 0; k < DEVICES.length; k++) if (DEVICES[k][0] === id) p = DEVICES[k];
+    if (!p) { p = DEVICES[1]; id = p[0]; }
+    if (id !== "custom") { w = p[2]; h = p[3]; }
+    w = Math.max(240, Math.min(3000, parseInt(w, 10) || 0)); h = Math.max(240, Math.min(3000, parseInt(h, 10) || 0));
+    dev = { id: id, w: w, h: h };
+    orient = w >= h ? "land" : "port";
+    if (!quiet) try { window.localStorage.setItem(DEV_KEY, JSON.stringify(dev)); } catch (e) {}
+  }
+  /* Horizontal/Vertical: gira o aparelho escolhido */
+  function setOrient(o) {
+    if (o === orient) return;
+    var map = { "phone-p": "phone-l", "phone-l": "phone-p", "tab-p": "tab-l", "tab-l": "tab-p" };
+    if (map[dev.id]) setDev(map[dev.id]);
+    else setDev("custom", dev.h, dev.w);
+  }
+  function renderDevPick() {
+    var dp = $("devpick");
+    dp.innerHTML = "";
+    el("span", null, "Aparelho:", dp);
+    var s = el("select", null, null, dp);
+    s.id = "devSel";
+    for (var k = 0; k < DEVICES.length; k++) opt(s, DEVICES[k][0], DEVICES[k][1], dev.id);
+    s.onchange = function () { setDev(s.value, dev.w, dev.h); renderAll(); };
+    if (dev.id === "custom") {
+      var iw = el("input", "num", null, dp), ih;
+      iw.type = "number"; iw.id = "devW"; iw.value = dev.w; iw.min = 240; iw.max = 3000; iw.title = "Largura (px)";
+      el("span", "x", "×", dp);
+      ih = el("input", "num", null, dp);
+      ih.type = "number"; ih.id = "devH"; ih.value = dev.h; ih.min = 240; ih.max = 3000; ih.title = "Altura (px)";
+      el("span", "x", "px", dp);
+      iw.onchange = ih.onchange = function () {
+        setDev("custom", iw.value, ih.value);
+        /* espera o foco ir para o proximo campo e devolve o foco depois de redesenhar */
+        setTimeout(function () {
+          var a = document.activeElement, id = a && a.id;
+          renderAll();
+          if (id && document.getElementById(id)) { try { document.getElementById(id).focus(); } catch (e) {} }
+        }, 0);
+      };
+    } else el("span", "x", dev.w + " × " + dev.h, dp);
+  }
   function renderBar() {
     /* caminho: Pagina > Pasta */
     var cr = $("crumb");
@@ -442,12 +501,13 @@
       el("span", "crh", "Editando os botões de dentro da pasta", cr);
     } else cr.style.display = "none";
 
+    renderDevPick();
     var o = $("orient");
     o.innerHTML = "";
     [["land", "Horizontal"], ["port", "Vertical"]].forEach(function (x) {
       var b = el("button", orient === x[0] ? "on" : "", x[1], o);
       b.id = "or-" + x[0];
-      b.onclick = function () { orient = x[0]; renderAll(); };
+      b.onclick = function () { setOrient(x[0]); renderAll(); };
     });
     var s = $("sizes");
     s.innerHTML = "";
@@ -519,6 +579,7 @@
     var t = el("div", "tile");
     t.style.width = W + "px"; t.style.height = H + "px";
     var size = Math.min(W, H);
+    t.style.borderRadius = Math.round(Math.min(size, 110) * 0.22) + "px";
     if (edEmpty(b)) {
       SD.setClass(t, "empty", true);
       var ps = Math.round(size * 0.3);
@@ -619,24 +680,43 @@
     return null;
   }
 
+  /* moldura do aparelho: mesma barra de cima, faixa dos pontos e SD.geometry do celular,
+     desenhada no tamanho real (px CSS) e reduzida por escala para caber no centro */
+  function layoutDevice(d) {
+    var stage = $("stage"), box = $("devbox"), devEl = $("device");
+    var area = SD.deviceArea(null);
+    var g = SD.geometry(dev.w, dev.h, d.c, d.r, area);
+    geoEd = g;
+    var aw = Math.max(100, stage.clientWidth - 24), ah = Math.max(100, stage.clientHeight - 56);
+    var s = Math.min(aw / dev.w, ah / dev.h, 1);
+    devScale = s;
+    devEl.style.width = dev.w + "px"; devEl.style.height = dev.h + "px";
+    SD.css(devEl, "transform", "scale(" + s + ")");
+    box.style.width = Math.round(dev.w * s) + "px"; box.style.height = Math.round(dev.h * s) + "px";
+    var nav = $("dnav");
+    nav.style.height = area.nav + "px";
+    nav.innerHTML = '<span class="dn-l">‹ Páginas</span><b>' +
+      esc(folder >= 0 ? (SD.trim((fold() || {}).label) || "Pasta") : pageName(page)) + "</b>";
+    var dots = $("ddots"), h = "";
+    dots.style.bottom = area.dotsBottom + "px"; dots.style.height = area.dots + "px";
+    if (folder < 0 && cfg.pages.length > 1) for (var k = 0; k < cfg.pages.length; k++) h += "<i" + (k === page ? ' class="on"' : "") + "></i>";
+    dots.innerHTML = h;
+    return g;
+  }
+
   var dragFrom = -1;
   function renderGrid() {
     var L = layout(), d = L.d, bs = list();
-    var stage = $("stage"), grid = $("grid");
-    var W = stage.clientWidth - 60, H = stage.clientHeight - 60, gap = GAP;
-    var size = Math.floor(Math.min((W - gap * (d.c - 1)) / d.c, (H - gap * (d.r - 1)) / d.r, 130));
-    size = Math.max(40, size);
-    cellSize = size;
-    grid.style.gridTemplateColumns = "repeat(" + d.c + ", " + size + "px)";
-    grid.style.gridTemplateRows = "repeat(" + d.r + ", " + size + "px)";
+    var grid = $("grid");
+    var g = layoutDevice(d);
     grid.innerHTML = "";
     var items = L.flow.concat(L.free);
     for (var n = 0; n < items.length; n++) (function (r) {
       var i = r.i, b = r.virt ? null : bs[i];
-      var tw = r.w * size + (r.w - 1) * gap, th = r.h * size + (r.h - 1) * gap;
-      var t = paintTile(b, tw, th);
-      t.style.gridColumn = (r.x + 1) + " / span " + r.w;
-      t.style.gridRow = (r.y + 1) + " / span " + r.h;
+      var rc = g.rect(r.x, r.y, r.w, r.h);
+      var t = paintTile(b, rc.w, rc.h);
+      t.style.position = "absolute";
+      t.style.left = rc.x + "px"; t.style.top = rc.y + "px";
       t.setAttribute("data-i", i);
       if (isSel(i)) SD.setClass(t, msel.length > 1 ? "msel" : "sel", true);
       if (bad[bkey(i)]) {
@@ -663,6 +743,9 @@
       if (i === sel && msel.length === 1 && b && !edEmpty(b)) {
         var hz = el("div", "rz", null, t);
         hz.title = "Arraste para mudar o tamanho";
+        /* puxador no tamanho de sempre na tela, apesar da escala da moldura */
+        var hs = Math.round(18 / devScale), ho = Math.round(6 / devScale);
+        hz.style.width = hs + "px"; hz.style.height = hs + "px"; hz.style.right = ho + "px"; hz.style.bottom = ho + "px";
         hz.onmousedown = function (e) { startResize(e, i, t); };
         hz.onclick = function (e) { e.stopPropagation(); };
       }
@@ -705,13 +788,14 @@
   function startResize(e, i, tileEl) {
     e.preventDefault(); e.stopPropagation();
     tileEl.draggable = false;
-    var b = list()[i], d = dims(orient), step = cellSize + GAP;
+    var b = list()[i], d = dims(orient);
+    var stepX = (geoEd.w + geoEd.gap) * devScale, stepY = (geoEd.h + geoEd.gap) * devScale;
     var x0 = e.clientX, y0 = e.clientY, w0 = clampSpan(b.w), h0 = clampSpan(b.h);
     var maxW = Math.min(4, d.c), maxH = Math.min(4, d.r), key = "size:" + Math.random();
     SD.setClass(document.body, "resizing", true);
     function mv(ev) {
-      var nw = Math.max(1, Math.min(maxW, w0 + Math.round((ev.clientX - x0) / step)));
-      var nh = Math.max(1, Math.min(maxH, h0 + Math.round((ev.clientY - y0) / step)));
+      var nw = Math.max(1, Math.min(maxW, w0 + Math.round((ev.clientX - x0) / stepX)));
+      var nh = Math.max(1, Math.min(maxH, h0 + Math.round((ev.clientY - y0) / stepY)));
       var cur = list()[i];
       if (clampSpan(cur.w) !== nw || clampSpan(cur.h) !== nh) {
         change(function () { setSpan(list()[i], nw, nh); }, key);
@@ -1772,6 +1856,7 @@
     $("reloadSounds").onclick = loadInfo;
     setupSoundDrop();
     setupMenu();
+    loadDev();
     document.addEventListener("keydown", onKey);
     window.addEventListener("resize", function () { if (cfg) renderGrid(); });
     window.addEventListener("beforeunload", function (e) {

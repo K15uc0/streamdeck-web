@@ -271,6 +271,44 @@
     return out;
   };
 
+  /* Area util da tela do celular (mesma conta no celular e no editor do PC):
+     barra de cima (44px + margem segura de cima) e faixa dos pontos das paginas
+     embaixo (26px + margem segura de baixo, no minimo 4px).
+     sa = margens seguras {t, r, b, l} (opcional). Devolve as margens da area dos blocos. */
+  SD.NAV_H = 44;
+  SD.DOTS_H = 26;
+  SD.deviceArea = function (sa) {
+    sa = sa || {};
+    var t = sa.t || 0, r = sa.r || 0, b = sa.b || 0, l = sa.l || 0;
+    var dotsBottom = Math.max(b, 4);
+    return { t: t + SD.NAV_H, r: r, b: dotsBottom + SD.DOTS_H, l: l,
+             nav: SD.NAV_H, navTop: t, dots: SD.DOTS_H, dotsBottom: dotsBottom };
+  };
+
+  /* Medidas da grade (funcao pura): tela W x H, grade cols x rows, margens da area
+     (SD.deviceArea). Os blocos esticam para ocupar toda a area (largura e altura
+     independentes). Devolve {cols, rows, w, h, gap, x0, y0, rect(x, y, cw, ch)}. */
+  SD.geometry = function (W, H, cols, rows, ins) {
+    ins = ins || {};
+    cols = Math.max(1, cols || 1); rows = Math.max(1, rows || 1);
+    var side = Math.max(8, Math.min(16, Math.round(Math.min(W, H) * 0.03)));
+    var aw = W - (ins.l || 0) - (ins.r || 0) - side * 2, ah = H - (ins.t || 0) - (ins.b || 0) - 6;
+    var cell = Math.min(aw / cols, ah / rows);
+    var gap = Math.max(6, Math.min(20, Math.round(cell * 0.09)));
+    var w = Math.max(24, Math.floor((aw - gap * (cols - 1)) / cols));
+    var h = Math.max(24, Math.floor((ah - gap * (rows - 1)) / rows));
+    var gw = w * cols + gap * (cols - 1), gh = h * rows + gap * (rows - 1);
+    var g = { cols: cols, rows: rows, w: w, h: h, gap: gap,
+              x0: Math.round((ins.l || 0) + side + (aw - gw) / 2), y0: Math.round((ins.t || 0) + 3 + (ah - gh) / 2),
+              gw: gw, gh: gh };
+    g.rect = function (x, y, cw, ch) {
+      cw = cw || 1; ch = ch || 1;
+      return { x: g.x0 + x * (w + gap), y: g.y0 + y * (h + gap),
+               w: cw * w + (cw - 1) * gap, h: ch * h + (ch - 1) * gap };
+    };
+    return g;
+  };
+
   /* endereco de uma imagem da biblioteca (Documentos\\StreamDeck\\imagens), com o codigo
      no mesmo esquema de SD.req (?k=) para funcionar tambem sem o cookie */
   SD.imgUrl = function (name) {
