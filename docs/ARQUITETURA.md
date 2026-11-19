@@ -89,7 +89,7 @@ Migração v1 -> v2 (automática ao carregar, com cópia `config.v1.bak.json`):
 | GET | `/api/config` | config v2; cabeçalho `X-Config-Version` |
 | POST | `/api/config` | `{ok, v}`; 400 `{ok:false, error}`; 403 se ação perigosa vinda de fora do PC |
 | GET | `/api/actions` | `{ok, actions:[ActionSchema]}` |
-| GET | `/api/info` | `{ok, name, code, sounds, tabs, version, local, remote_admin, update}` |
+| GET | `/api/info` | `{ok, name, code, sounds, tabs, version, local, update}` |
 | GET | `/api/press?p=&b=` | `{ok, toggles?}` ; erro `{ok:false, error}` |
 | GET | `/api/state?levels=1` | `{ok, v, update, toggles:{"p:b":true}, levels?}` |
 | GET | `/api/volume?c=master&v=40` ou `?c=mic&mute=toggle` | `{ok, levels:{master:{v,muted}, effects:{...}, mic:{...}}}` |
@@ -107,7 +107,6 @@ ActionSchema:
   "group": "Rádio",
   "icon": "sound",
   "help": "Coloque MP3/WAV na pasta sons.",
-  "dangerous": false,
   "fields": [
     { "key": "file", "label": "Arquivo", "kind": "sound", "required": true },
     { "key": "volume", "label": "Volume", "kind": "number", "min": 0, "max": 100, "default": 100 },
@@ -121,10 +120,6 @@ Tipos de campo (`kind`): `text`, `textarea`, `keys` (lista de teclas; editada co
 [{value, label}]`), `sound` (nome de arquivo; opções vêm de `/api/info.sounds`),
 `page` (índice de página), `steps` (lista de ações, sem `page`/`multi`).
 Opcionais em qualquer campo: `placeholder`, `help`, `default`, `required`.
-
-`dangerous: true` = só pode ser criada/alterada no próprio PC, salvo se liberado em
-Conectar > Segurança (`remote_admin`). Para `open`, endereços http/https não contam
-como perigosos (o servidor decide; o editor só avisa).
 
 ## Como adicionar uma função
 

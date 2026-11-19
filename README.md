@@ -8,7 +8,7 @@ Transforma qualquer celular ou tablet, inclusive Android antigo, num painel de b
    - Se aparecer *"O Windows protegeu o computador"*: **Mais informações → Executar assim mesmo**.
    - Na pergunta do firewall: marque **Redes privadas e Redes públicas** → **Permitir**.
 2. Abre no PC a tela **Conectar um aparelho** com um QR code. Aponte a câmera do celular ou tablet (no mesmo Wi-Fi) e abra o link.
-3. Pronto. Toque em **✎ Editar** para personalizar os botões.
+3. Pronto. Para personalizar os botões, clique em **Editar botões** na tela Conectar do PC. O celular fica só para usar (com tela cheia e orientação nos Ajustes).
 
 Deixe a janela do Stream Deck aberta (pode minimizar) ou marque **Iniciar junto com o Windows** na tela de conexão (`http://127.0.0.1:8765/conectar` no PC).
 
@@ -16,7 +16,7 @@ Deixe a janela do Stream Deck aberta (pode minimizar) ou marque **Iniciar junto 
 
 - Atalhos de teclado, teclas de mídia, abrir sites e programas, rodar comandos, sequências de ações
 - Funções para rádio: efeitos sonoros (MP3/WAV), parar sons, mensagens no chat e chamadas à API do programa
-- Várias páginas, ícones e cores, tudo editável no próprio app
+- Várias páginas, ícones e cores, tudo editável no PC
 - Abas para vários PCs (casa, trabalho…); só a aba aberta controla o PC dela
 - **Atualizações**: o app avisa quando sai versão nova e atualiza com um toque, mantendo botões, abas e sons
 

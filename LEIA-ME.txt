@@ -48,14 +48,20 @@ RODAR PELO CODIGO-FONTE (opcional)
 Com Python 3.8+ instalado: de dois cliques em "Iniciar Stream Deck.bat".
 Nesse modo os dados ficam na propria pasta do programa e a atualizacao e manual.
 
-EDITAR NO PROPRIO APP
-- Toque em "Editar" no topo. Toque em qualquer botao (ou num espaco com +)
-  para mudar o que ele faz, texto, icone e cor. "Salvar" grava na hora.
-- "Mover": toque em Mover e depois no lugar de destino (troca os dois).
-- No topo: renomear, criar e excluir paginas e mudar a grade (ex.: 4x3).
-- Toque nas bolinhas embaixo para trocar de pagina. "Concluir" sai da edicao.
-- Fica mais confortavel editar pelo PC: abra o mesmo endereco no navegador do PC.
+EDITAR OS BOTOES (SO PELO PC)
+- No PC, abra a tela Conectar (http://127.0.0.1:8765/conectar) e clique em
+  "Editar botoes" (ou abra http://127.0.0.1:8765/editar).
+- Esquerda: paginas (criar, renomear com dois cliques, arrastar, excluir).
+  Centro: a grade; arraste para mover. Direita: o botao selecionado.
+- Horizontal/Vertical no centro: tamanho da grade com o celular deitado e em pe.
+- Salva sozinho. Ctrl+Z desfaz, Ctrl+C/Ctrl+V copia, Delete limpa.
+- O celular e so para usar: nao edita botoes.
 - A versao anterior fica salva em config.bak.json.
+
+NO CELULAR
+- Engrenagem (Ajustes): tela cheia, abrir sempre em tela cheia, orientacao
+  (Automatica, Vertical, Horizontal), PCs e atualizacoes. Vale so para aquele aparelho.
+- iPhone: para tela cheia, use Compartilhar > Adicionar a Tela de Inicio.
 
 ABAS (VARIOS PCs, EX.: CASA E TRABALHO)
 - Cada PC roda o seu proprio servidor. No topo da pagina aparecem as abas.
@@ -64,10 +70,10 @@ ABAS (VARIOS PCs, EX.: CASA E TRABALHO)
 - Toque numa aba para ir para aquele PC. So a aba aberta controla o PC dela.
 - A bolinha verde indica que o PC respondeu; vermelha, que nao esta acessivel
   (por exemplo, o PC do trabalho quando voce esta em casa).
-- Para renomear ou excluir uma aba: "Editar" e toque na aba.
+- Para renomear ou excluir uma aba: Ajustes > Computadores.
 
 RADIO (EFEITOS SONOROS, PLAYLIST E CHAT)
-No editor, em "O que ele faz":
+No editor do PC, em "Acao":
 - Radio: tocar efeito sonoro  -> toca MP3/WAV pelo proprio PC. Coloque os
   arquivos na pasta "sons" (dentro de StreamDeck); eles aparecem numa lista.
   Da para ajustar o volume e escolher se para os outros sons antes.

@@ -26,7 +26,7 @@ PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x
          b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
 
 MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript",
-        ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml",
+        ".css": "text/css", ".png": "image/png", ".json": "application/manifest+json", ".svg": "image/svg+xml",
         ".jpg": "image/jpeg", ".ico": "image/x-icon"}
 
 CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
