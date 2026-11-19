@@ -52,27 +52,13 @@ def vk_of(name):
     raise ValueError("tecla desconhecida: %s" % name)
 
 
-def send_keys(keys):
-    codes = [vk_of(k) for k in keys]
-    if not IS_WINDOWS:
-        print("  [simulado] teclas:", "+".join(keys))
-        return
-    import ctypes
-    user32 = ctypes.windll.user32
-    KEYUP = 0x0002
-    for c in codes:
-        user32.keybd_event(c, 0, 1 if c in EXTENDED else 0, 0)
-        time.sleep(0.01)
-    for c in reversed(codes):
-        user32.keybd_event(c, 0, (1 if c in EXTENDED else 0) | KEYUP, 0)
-        time.sleep(0.01)
+_SENDINPUT = []
 
 
-# ----------------------------------------------------------- digitar texto ---
-def type_text(text, enter=False):
-    if not IS_WINDOWS:
-        print("  [simulado] digitar:", repr(text), "+ Enter" if enter else "")
-        return
+def _sendinput():
+    """Estruturas do SendInput (montadas uma vez). Devolve press(vk, scan, flags, up)."""
+    if _SENDINPUT:
+        return _SENDINPUT[0]
     import ctypes
     from ctypes import wintypes
 
@@ -94,15 +80,46 @@ def type_text(text, enter=False):
     class INPUT(ctypes.Structure):
         _fields_ = [("type", wintypes.DWORD), ("u", _U)]
 
-    KEYUP, UNICODE = 0x0002, 0x0004
     send = ctypes.windll.user32.SendInput
 
+    def key(vk=0, scan=0, flags=0):
+        """Um evento de tecla (flags pode ter KEYUP)."""
+        arr = (INPUT * 1)()
+        arr[0].type = 1                    # INPUT_KEYBOARD
+        arr[0].u.ki = KEYBDINPUT(vk, scan, flags, 0, 0)
+        send(1, arr, ctypes.sizeof(INPUT))
+
+    _SENDINPUT.append(key)
+    return key
+
+
+KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE = 0x0001, 0x0002, 0x0004
+
+
+def send_keys(keys):
+    codes = [vk_of(k) for k in keys]
+    if not IS_WINDOWS:
+        print("  [simulado] teclas:", "+".join(keys))
+        return
+    key = _sendinput()
+    for c in codes:
+        key(vk=c, flags=KEYEVENTF_EXTENDEDKEY if c in EXTENDED else 0)
+        time.sleep(0.01)
+    for c in reversed(codes):
+        key(vk=c, flags=(KEYEVENTF_EXTENDEDKEY if c in EXTENDED else 0) | KEYEVENTF_KEYUP)
+        time.sleep(0.01)
+
+
+# ----------------------------------------------------------- digitar texto ---
+def type_text(text, enter=False):
+    if not IS_WINDOWS:
+        print("  [simulado] digitar:", repr(text), "+ Enter" if enter else "")
+        return
+    key = _sendinput()
+
     def press(vk=0, scan=0, flags=0):
-        arr = (INPUT * 2)()
-        for i, f in enumerate((flags, flags | KEYUP)):
-            arr[i].type = 1
-            arr[i].u.ki = KEYBDINPUT(vk, scan, f, 0, 0)
-        send(2, arr, ctypes.sizeof(INPUT))
+        key(vk, scan, flags)
+        key(vk, scan, flags | KEYEVENTF_KEYUP)
 
     data = text.replace("\r\n", "\n").encode("utf-16-le")
     for i in range(0, len(data), 2):
@@ -110,7 +127,7 @@ def type_text(text, enter=False):
         if unit == 10:
             press(vk=0x0D)
         else:
-            press(scan=unit, flags=UNICODE)
+            press(scan=unit, flags=KEYEVENTF_UNICODE)
         time.sleep(0.005)
     if enter:
         time.sleep(0.05)
@@ -118,30 +135,79 @@ def type_text(text, enter=False):
 
 
 # ------------------------------------------------------- iniciar com o Windows ---
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+RUN_NAME = "StreamDeck"
+
+
 def startup_file():
+    """Arquivo .cmd antigo (ate a 2.3.0) na pasta Inicializar."""
     appdata = os.environ.get("APPDATA", "")
     return os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "StreamDeck.cmd")
 
 
+def _autostart_command():
+    from . import paths
+    if paths.FROZEN:
+        return '"%s" --minimizado' % paths.EXE_PATH
+    exe = sys.executable
+    w = os.path.join(os.path.dirname(exe), "pythonw.exe")
+    if os.path.exists(w):
+        exe = w
+    return '"%s" "%s"' % (exe, paths.SCRIPT)
+
+
 def autostart_enabled():
-    return IS_WINDOWS and os.path.exists(startup_file())
+    if not IS_WINDOWS:
+        return False
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
+            val, _t = winreg.QueryValueEx(k, RUN_NAME)
+        return bool(val)
+    except OSError:
+        return False
 
 
 def set_autostart(on):
     if not IS_WINDOWS:
         raise RuntimeError("so no Windows")
-    from . import paths
-    path = startup_file()
-    if on:
-        if paths.FROZEN:
-            line = '@start "Stream Deck" /min "%s"\r\n' % paths.EXE_PATH
+    import winreg
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+        if on:
+            winreg.SetValueEx(k, RUN_NAME, 0, winreg.REG_SZ, _autostart_command())
         else:
-            line = '@cd /d "%s"\r\n@start "Stream Deck" /min "%s" "%s"\r\n' % (
-                paths.APP_DIR, sys.executable, paths.SCRIPT)
-        with open(path, "w", encoding="mbcs") as f:
-            f.write(line)
-    elif os.path.exists(path):
-        os.remove(path)
+            try:
+                winreg.DeleteValue(k, RUN_NAME)
+            except FileNotFoundError:
+                pass
+
+
+def migrate_autostart():
+    """Troca o .cmd antigo da pasta Inicializar pelo registro do usuario."""
+    if not IS_WINDOWS:
+        return
+    old = startup_file()
+    if not os.path.exists(old):
+        return
+    try:
+        set_autostart(True)
+        os.remove(old)
+        print("  iniciar com o Windows: passou a usar o registro do usuario")
+    except Exception as e:
+        print("  aviso: nao consegui migrar o iniciar com o Windows (%s)" % e)
+
+
+def minimize_console():
+    """Minimiza a janela do console (usado com --minimizado)."""
+    if not IS_WINDOWS:
+        return
+    try:
+        import ctypes
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 6)   # SW_MINIMIZE
+    except Exception:
+        pass
 
 
 def open_folder(path):

@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 """main(): log, config, copias antigas, porta e tela Conectar."""
+import json
 import os
-import subprocess
+import socket
 import sys
 import threading
 import time
+import urllib.request
 import webbrowser
 
-from . import VERSION, paths, state, storage, updates
+from . import VERSION, paths, state, storage, updates, winapi
 from .httpd import Handler, Server
 from .security import lan_ip
 
@@ -15,44 +17,55 @@ IS_WINDOWS = paths.IS_WINDOWS
 PORTS = paths.PORTS
 
 
-def stop_old_instances():
-    """Encerra copias antigas do Stream Deck que ainda estejam escutando nas
-    nossas portas (so processos nessas portas, nada mais)."""
-    if not IS_WINDOWS:
-        return
+def _local_call(port, path, method="GET", timeout=1.0):
+    """Pedido ao Stream Deck que (talvez) esteja nesta porta do proprio PC."""
+    req = urllib.request.Request("http://127.0.0.1:%d%s" % (port, path), method=method,
+                                 data=b"{}" if method == "POST" else None,
+                                 headers={"X-StreamDeck": "1", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def _port_busy(port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.3)
     try:
-        out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True,
-                             timeout=10, creationflags=0x08000000).stdout
-    except Exception as e:
-        print("  aviso: nao consegui verificar copias antigas (%s)" % e)
-        return
-    pids = set()
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) >= 5 and parts[3].upper() in ("LISTENING", "ESCUTANDO"):
-            port = parts[1].rsplit(":", 1)[-1]
-            if port.isdigit() and int(port) in PORTS and parts[4].isdigit():
-                pid = int(parts[4])
-                if pid != os.getpid():
-                    pids.add(pid)
-    killed = 0
-    for pid in pids:
+        return s.connect_ex(("127.0.0.1", port)) == 0
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def stop_old_instances():
+    """Pede para copias antigas do Stream Deck (nas nossas portas) fecharem
+    sozinhas, pela propria API local. Nunca mexe em outros programas."""
+    for port in PORTS:
         try:
-            info = subprocess.run(["tasklist", "/FI", "PID eq %d" % pid, "/FO", "CSV", "/NH"],
-                                  capture_output=True, text=True, timeout=10,
-                                  creationflags=0x08000000).stdout.lower()
+            hello = _local_call(port, "/api/local/hello", timeout=1.0)
         except Exception:
+            # porta ocupada sem /hello: pode ser a versao anterior fechando
+            # sozinha depois de se atualizar; espera ate 5 s antes de seguir
+            if _port_busy(port):
+                for _ in range(50):
+                    time.sleep(0.1)
+                    if not _port_busy(port):
+                        break
+            continue      # outro programa: nao mexe
+        if not (isinstance(hello, dict) and hello.get("app") == "streamdeck"):
             continue
-        # so encerra se for o proprio Stream Deck (python ou StreamDeck.exe)
-        if "python" not in info and "streamdeck" not in info:
-            print("  aviso: porta ocupada por outro programa (PID %d), nao foi encerrado" % pid)
+        if hello.get("pid") == os.getpid():
             continue
-        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True,
-                       creationflags=0x08000000)
-        print("  copia antiga encerrada (PID %d)" % pid)
-        killed += 1
-    if killed:
-        time.sleep(1)
+        try:
+            _local_call(port, "/api/local/quit", method="POST", timeout=2.0)
+        except Exception as e:
+            print("  aviso: copia antiga na porta %d nao respondeu (%s)" % (port, e))
+            continue
+        for _ in range(30):     # espera ate 3 s a porta liberar
+            if not _port_busy(port):
+                break
+            time.sleep(0.1)
+        print("  copia antiga encerrada (porta %d, PID %s)" % (port, hello.get("pid")))
 
 
 class Tee:
@@ -99,6 +112,7 @@ def main():
     os.makedirs(paths.SOUNDS_DIR, exist_ok=True)
     os.makedirs(paths.IMAGES_DIR, exist_ok=True)
     token = storage.token()
+    winapi.migrate_autostart()
     stop_old_instances()
     srv = port = None
     for port in PORTS:
@@ -128,7 +142,10 @@ def main():
     print("=" * 56)
     threading.Thread(target=updates.update_loop, daemon=True).start()
     threading.Thread(target=updates.cleanup_old_exe, daemon=True).start()
-    if first_run or "--conectar" in sys.argv:
+    minimized = "--minimizado" in sys.argv
+    if minimized:
+        winapi.minimize_console()
+    if (first_run and not minimized) or "--conectar" in sys.argv:
         threading.Timer(1.0, webbrowser.open, ["http://127.0.0.1:%d/conectar" % port]).start()
     try:
         srv.serve_forever()

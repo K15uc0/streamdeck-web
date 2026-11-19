@@ -7,3 +7,6 @@ sons/
 abas.json
 streamdeck.log
 diagnostico.txt
+build/
+dist/
+*.spec

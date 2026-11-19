@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Verificacao e aplicacao de atualizacoes (releases do GitHub)."""
+import hashlib
 import json
 import os
 import subprocess
@@ -8,7 +9,7 @@ import urllib.request
 
 from . import VERSION, REPO, paths
 
-UPDATE = {"available": False, "latest": None, "notes": "", "page": None, "asset": None,
+UPDATE = {"available": False, "latest": None, "notes": "", "page": None, "asset": None, "digest": None,
           "error": None, "checked": None, "state": "idle"}
 
 
@@ -28,15 +29,17 @@ def check_updates():
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode("utf-8"))
         tag = data.get("tag_name", "")
-        asset = None
+        asset = digest = None
         for a in data.get("assets", []):
             link = a.get("browser_download_url") or ""
             if a.get("name", "").lower().endswith(".exe") and \
                     link.startswith("https://github.com/%s/releases/download/" % REPO):
                 asset = link
+                dg = str(a.get("digest") or "")
+                digest = dg[7:].lower() if dg.lower().startswith("sha256:") else None
         was = UPDATE["available"]
         UPDATE.update(latest=tag.lstrip("vV"), notes=data.get("body") or "", page=data.get("html_url"),
-                      asset=asset, error=None, checked=time.strftime("%d/%m %H:%M"),
+                      asset=asset, digest=digest, error=None, checked=time.strftime("%d/%m %H:%M"),
                       available=parse_ver(tag) > parse_ver(VERSION))
         if UPDATE["available"] and not was:
             print("* nova versao disponivel: %s (instalada: %s)" % (UPDATE["latest"], VERSION))
@@ -79,7 +82,8 @@ def apply_update():
     try:
         UPDATE["state"] = "downloading"
         print("* baixando versao %s..." % UPDATE["latest"])
-        new = exe + ".new"
+        new = exe + ".download"
+        sha = hashlib.sha256()
         req = urllib.request.Request(UPDATE["asset"], headers={"User-Agent": "StreamDeck/" + VERSION})
         with urllib.request.urlopen(req, timeout=120) as r, open(new, "wb") as f:
             while True:
@@ -87,11 +91,17 @@ def apply_update():
                 if not chunk:
                     break
                 f.write(chunk)
+                sha.update(chunk)
         with open(new, "rb") as f:
             head = f.read(2)
         if head != b"MZ" or os.path.getsize(new) < 1000000:
             os.remove(new)
             raise RuntimeError("arquivo baixado invalido")
+        if UPDATE.get("digest"):
+            if sha.hexdigest().lower() != UPDATE["digest"]:
+                os.remove(new)
+                raise RuntimeError("SHA-256 do arquivo baixado nao confere com o da versao publicada")
+            print("* SHA-256 conferido: %s" % UPDATE["digest"])
         old = exe + ".old"
         if os.path.exists(old):
             os.remove(old)

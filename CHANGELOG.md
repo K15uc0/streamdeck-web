@@ -1,5 +1,14 @@
 # Novidades
 
+## 2.3.1
+
+- Menos chances de o Windows ou o antivírus bloquear o programa:
+  - ao abrir de novo, a cópia antiga é avisada e fecha sozinha (sem forçar o encerramento de processos);
+  - "Iniciar junto com o Windows" agora usa o registro do usuário (quem já tinha marcado é migrado sozinho) e abre minimizado;
+  - a atualização automática confere o SHA-256 do arquivo baixado com o da versão publicada;
+  - envio de teclas pelo método atual do Windows (SendInput);
+  - o StreamDeck.exe agora traz informações de versão e o SHA-256 aparece nas notas de cada versão.
+
 ## 2.3.0
 
 - Os botões agora esticam para preencher toda a tela do celular e do tablet, em pé e deitado, sem sobras nas bordas.

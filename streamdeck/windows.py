@@ -41,7 +41,7 @@ def _make_api():
     user32.SetForegroundWindow.argtypes = [wintypes.HWND]
     user32.BringWindowToTop.argtypes = [wintypes.HWND]
     user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
-    user32.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
+    user32.SwitchToThisWindow.argtypes = [wintypes.HWND, wintypes.BOOL]
     user32.IsWindow.argtypes = [wintypes.HWND]
     kernel32.OpenProcess.restype = wintypes.HANDLE
     kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
@@ -164,7 +164,7 @@ def find_window(exe):
 def focus(hwnd):
     """Traz a janela para a frente (restaura se minimizada). O Windows so deixa
     o processo em foco trocar o foco: usa o truque de "anexar" a fila de
-    entrada da janela em foco e, se nao bastar, um toque na tecla Alt."""
+    entrada da janela em foco e, se nao bastar, SwitchToThisWindow."""
     if not IS_WINDOWS:
         print("  [simulado] focar janela", hwnd)
         return True
@@ -176,7 +176,6 @@ def focus(hwnd):
         user32.ShowWindow(hwnd, 9)        # SW_RESTORE
     else:
         user32.ShowWindow(hwnd, 5)        # SW_SHOW
-    user32.AllowSetForegroundWindow(0xFFFFFFFF)   # ASFW_ANY
     fg = user32.GetForegroundWindow()
     me = kernel32.GetCurrentThreadId()
     fg_tid = _hwnd_pid(fg)[1] if fg else 0
@@ -192,10 +191,10 @@ def focus(hwnd):
         for tid in attached:
             user32.AttachThreadInput(me, tid, False)
     if not ok or user32.GetForegroundWindow() != hwnd.value:
-        # truque da tecla Alt: o Windows libera a troca de foco apos uma tecla
-        user32.keybd_event(0x12, 0, 0, 0)
-        user32.keybd_event(0x12, 0, 2, 0)
-        ok = user32.SetForegroundWindow(hwnd)
+        # alternativas sem simular teclas
+        user32.SwitchToThisWindow(hwnd, True)
+        user32.BringWindowToTop(hwnd)
+        ok = user32.SetForegroundWindow(hwnd) or user32.GetForegroundWindow() == hwnd.value
     time.sleep(0.05)
     return bool(ok)
 
