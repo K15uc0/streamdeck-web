@@ -10,6 +10,7 @@ Ordem das barreiras (nao mudar):
 """
 import json
 import os
+import posixpath
 import re
 import socket
 import sys
@@ -26,7 +27,7 @@ PIXEL = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x
          b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
 
 MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript",
-        ".css": "text/css", ".png": "image/png", ".json": "application/manifest+json", ".svg": "image/svg+xml",
+        ".css": "text/css", ".png": "image/png", ".json": "application/json", ".svg": "image/svg+xml",
         ".jpg": "image/jpeg", ".ico": "image/x-icon"}
 
 CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
@@ -60,6 +61,34 @@ ROUTES = {
 # paginas e arquivos que so abrem no proprio PC
 LOCAL_PAGES = ("/conectar", "/conectar.html", "/editar", "/editar.html",
                "/css/editar.css", "/js/editar.js")
+
+
+def _norm_path(path):
+    """Caminho do pedido normalizado (// viram /, sem . e .., minusculo)."""
+    p = re.sub(r"/+", "/", (path or "/").replace("\\", "/"))
+    p = posixpath.normpath(p).lower()
+    return p if p.startswith("/") else "/" + p
+
+
+def _local_files():
+    """Arquivos reais (normcase) das paginas que so abrem no proprio PC."""
+    out = set()
+    for p in LOCAL_PAGES:
+        if p.endswith((".html", ".css", ".js")):
+            out.add(os.path.normcase(os.path.realpath(os.path.join(paths.WEB_DIR, p.lstrip("/")))))
+    return out
+
+
+def is_local_only(path, full=None):
+    """O pedido (ou o arquivo resolvido full) so pode ser atendido no proprio PC?"""
+    n = _norm_path(path)
+    if n in LOCAL_PAGES or n.startswith("/api/local/") or n == "/api/local":
+        return True
+    if full is not None and os.path.normcase(os.path.realpath(full)) in _local_files():
+        return True
+    return False
+
+
 NO_CODE = {("GET", "/api/local/info")}       # ja restritas ao proprio PC
 # do proprio PC (tela Conectar/Editar) a API nao pede o codigo de acesso
 
@@ -249,7 +278,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, PIXEL, "image/gif", cors_img=True)
 
         # tela de conexao: so no proprio PC
-        if url.path in LOCAL_PAGES or url.path.startswith("/api/local/"):
+        if is_local_only(url.path):
             if not self._local():
                 return self._send(403, "Abra esta pagina no proprio PC.", TEXT)
         if url.path in ("/conectar", "/editar"):
@@ -295,10 +324,15 @@ class Handler(BaseHTTPRequestHandler):
         full = os.path.join(paths.WEB_DIR, path.lstrip("/").replace("\\", "/"))
         if not paths.inside(full, paths.WEB_DIR) or not os.path.isfile(full):
             return self._send(404, "nao encontrado", "text/plain")
+        if is_local_only(path, full) and not self._local():
+            return self._send(403, "Abra esta pagina no proprio PC.", TEXT)
         with open(full, "rb") as f:
             data = f.read()
         ext = os.path.splitext(full)[1].lower()
-        self._send(200, data, MIME.get(ext, "application/octet-stream"))
+        ctype = MIME.get(ext, "application/octet-stream")
+        if _norm_path(path) == "/manifest.json":
+            ctype = "application/manifest+json"
+        self._send(200, data, ctype)
 
     # ======================================================== rotas GET ===
     def local_info(self, q):

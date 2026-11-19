@@ -22,14 +22,11 @@
 
   /* salvamento */
   var savedV = null, dirty = false, inflight = false, saveT = null, seq = 0;
+  var retryMs = 0;           /* espera atual antes de tentar de novo (falha de rede/PC) */
+  var bad = {};              /* "pagina:posicao" -> campo faltando (acao incompleta) */
 
   /* ========================================================= utilidades === */
-  function isEmpty(b) {
-    if (!b) return true;
-    if (b.kind === "fader") return false;
-    var t = b.action && b.action.type;
-    return (!t || t === "none") && !SD.trim(b.label) && !b.icon && !b.toggle;
-  }
+  var isEmpty = SD.isEmpty;   /* mesma regra do celular */
   function curPage() { return cfg.pages[page]; }
   function buttons() { var pg = curPage(); if (!pg.buttons) pg.buttons = []; return pg.buttons; }
   function used(pg) {
@@ -87,19 +84,64 @@
   function updUndo() { $("undo").disabled = pos <= 0; $("redo").disabled = pos >= hist.length - 1; }
 
   /* ======================================================== salvamento === */
+  function blank(v) {
+    return v === undefined || v === null || (typeof v === "string" && !SD.trim(v)) ||
+      (v && typeof v === "object" && (v.length === 0 || (v.length === undefined && !Object.keys(v).length)));
+  }
+  /* primeiro campo obrigatorio vazio da acao (ou null se esta completa).
+     Passos incompletos sao tirados da lista (fixSteps) para nao travar o salvamento. */
+  function missing(a, fixSteps) {
+    var s = SD.schemaOf(a);
+    if (!s) return null;   /* tipo desconhecido: o PC decide */
+    var fs = s.fields || [];
+    for (var i = 0; i < fs.length; i++) {
+      var v = a[fs[i].key];
+      if (fs[i].kind === "steps" && v && v.length) {
+        var keep = [], miss = null;
+        for (var j = 0; j < v.length; j++) {
+          var m = v[j] && v[j].type ? missing(v[j], fixSteps) : "tipo do passo";
+          if (m) { if (!miss) miss = "passo " + (j + 1) + ": " + m; } else keep.push(v[j]);
+        }
+        if (miss && fixSteps) a[fs[i].key] = keep;
+        if (miss && !fixSteps) return miss;
+        if (fs[i].required && !keep.length && miss) return miss;
+        continue;
+      }
+      if (fs[i].required && blank(v)) return fs[i].label;
+    }
+    return null;
+  }
   function cleaned() {
-    /* posicoes vazias no fim da pagina nao precisam ir para o arquivo */
+    /* posicoes vazias no fim da pagina nao precisam ir para o arquivo.
+       Acao incompleta vai como "nenhuma" (o rascunho continua no editor). */
     var c = clone(cfg);
+    bad = {};
     for (var p = 0; p < c.pages.length; p++) {
       var bs = c.pages[p].buttons || [];
+      for (var k = 0; k < bs.length; k++) {
+        var b = bs[k];
+        if (!b || b.kind === "fader" || !b.action || !b.action.type || b.action.type === "none") continue;
+        var orig = missing(b.action, false);
+        if (!orig) continue;
+        bad[p + ":" + k] = orig;
+        if (missing(b.action, true)) b.action = { type: "none" };
+      }
       while (bs.length && isEmpty(bs[bs.length - 1])) bs.pop();
       for (var i = 0; i < bs.length; i++) if (isEmpty(bs[i])) bs[i] = SD.emptyButton();
     }
     return c;
   }
+  function badText() {
+    for (var key in bad) if (bad.hasOwnProperty(key)) {
+      var pk = key.split(":");
+      return "Botão " + (+pk[1] + 1) + " da página " + (+pk[0] + 1) + " incompleto: preencha " + bad[key];
+    }
+    return "";
+  }
   function scheduleSave() {
     dirty = true; seq++;
     setStatus("Alterações não salvas…", "busy");
+    retryMs = 0;
     clearTimeout(saveT);
     saveT = setTimeout(save, 600);
   }
@@ -108,13 +150,29 @@
     inflight = true;
     var mySeq = seq;
     setStatus("Salvando…", "busy");
-    SD.req("POST", "/api/config", JSON.stringify(cleaned()), function (ok, data, status) {
+    var body = JSON.stringify(cleaned());
+    if (cfg) renderGrid();   /* marca os blocos incompletos */
+    SD.req("POST", "/api/config", body, function (ok, data, status) {
       inflight = false;
       if (ok) {
+        retryMs = 0;
         if (data && data.v != null) savedV = String(data.v);
-        if (mySeq === seq) { dirty = false; setStatus("Salvo ✓", "ok"); }
+        if (mySeq === seq) {
+          dirty = false;
+          var w = badText();
+          if (w) setStatus(w, "err"); else setStatus("Salvo ✓", "ok");
+        }
+      } else if (status === 400) {
+        /* erro de validacao: tentar de novo nao adianta; espera a proxima mudanca */
+        retryMs = 0;
+        setStatus("Não salvou: " + SD.errText(data, status, "dados inválidos"), "err");
       } else {
-        setStatus("Não salvou: " + SD.errText(data, status, "erro no PC"), "err");
+        /* rede ou PC com problema: tenta de novo com espera crescente (2s, 4s, 8s... ate 30s) */
+        retryMs = retryMs ? Math.min(retryMs * 2, 30000) : 2000;
+        setStatus("Não salvou: " + SD.errText(data, status, "erro no PC") +
+          " — tentando de novo em " + Math.round(retryMs / 1000) + " s", "err");
+        clearTimeout(saveT);
+        saveT = setTimeout(function () { if (dirty) save(); }, retryMs);
       }
     });
   }
@@ -388,6 +446,11 @@
       var t = paintTile(bs[i], size);
       t.setAttribute("data-i", i);
       if (i === sel) SD.setClass(t, "sel", true);
+      if (bad[page + ":" + i]) {
+        SD.setClass(t, "warn", true);
+        var bd = el("div", "badge", "!", t);
+        bd.title = "Incompleto: preencha " + bad[page + ":" + i];
+      }
       t.onclick = function () { sel = i; renderGrid(); renderInspector(); };
       if (!isEmpty(bs[i])) {
         t.draggable = true;

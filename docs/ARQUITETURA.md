@@ -35,10 +35,14 @@ streamdeck/
 web/
   index.html              casca (HTML mínimo)
   conectar.html           tela do PC (QR code)
+  editar.html             editor do PC (só no PC)
+  manifest.json           "Adicionar à tela inicial"
+  icons/                  ícones do manifest e apple-touch-icon
   css/app.css
+  css/editar.css          estilos do editor do PC
   js/core.js              rede, utilidades, ícones, estado global SD
   js/deck.js              grade, toque, páginas, faders, liga/desliga
-  js/editor.js            modo edição, folhas, formulário a partir do schema
+  js/editar.js            editor do PC: grade, formulário a partir do schema, autosave
   js/settings.js          ajustes, páginas, PCs (abas), atualizações
 ```
 

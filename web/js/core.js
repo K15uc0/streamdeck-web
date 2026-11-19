@@ -226,8 +226,13 @@
   SD.dropCache = function () { try { window.localStorage.removeItem(CFG_KEY); } catch (e) {} };
 
   SD.emptyButton = function () { return { kind: "button", label: "", icon: "", color: "", action: { type: "none" } }; };
+  /* regra unica (celular e editor): vazio = nao e fader, acao nenhuma
+     e sem texto, icone, liga/desliga ou cor */
   SD.isEmpty = function (b) {
-    return !b || (b.kind !== "fader" && (!b.action || !b.action.type || b.action.type === "none"));
+    if (!b) return true;
+    if (b.kind === "fader") return false;
+    var t = b.action && b.action.type;
+    return (!t || t === "none") && !SD.trim(b.label) && !b.icon && !b.toggle && !b.color;
   };
   SD.padButtons = function (pg, n) {
     if (!pg.buttons) pg.buttons = [];

@@ -153,3 +153,6 @@ input[type=checkbox]:checked:after { transform: translateX(16px); }
 #toast.err { color: #ff453a; }
 
 @media (max-width: 1100px) { #app { grid-template-columns: 220px 1fr 320px; } }
+.tile.warn { box-shadow: 0 0 0 3px #000, 0 0 0 6px #ff453a; }
+.tile .badge { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%;
+  background: #ff453a; color: #fff; font: 700 12px/18px system-ui, sans-serif; text-align: center; z-index: 2; }
