@@ -448,6 +448,11 @@ class Handler(BaseHTTPRequestHandler):
 
         def bye():
             time.sleep(0.3)
+            try:
+                from . import tray
+                tray.stop()       # tira o icone da bandeja antes de sair
+            except Exception:
+                pass
             os._exit(0)
         threading.Thread(target=bye, daemon=True).start()
 

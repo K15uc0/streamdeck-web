@@ -69,7 +69,8 @@ def stop_old_instances():
 
 
 class Tee:
-    """Mostra na janela e grava em streamdeck.log."""
+    """Mostra na janela (se houver) e grava em streamdeck.log.
+    stream pode ser None (exe sem console): ai so grava no log e no diag."""
 
     def __init__(self, stream, path):
         self.stream = stream
@@ -79,11 +80,12 @@ class Tee:
             self.f = None
 
     def write(self, text):
-        try:
-            self.stream.write(text)
-            self.stream.flush()
-        except Exception:
-            pass
+        if self.stream is not None:
+            try:
+                self.stream.write(text)
+                self.stream.flush()
+            except Exception:
+                pass
         if self.f:
             try:
                 self.f.write(text)
@@ -92,10 +94,19 @@ class Tee:
         diag.feed(text)
 
     def flush(self):
-        try:
-            self.stream.flush()
-        except Exception:
-            pass
+        if self.stream is not None:
+            try:
+                self.stream.flush()
+            except Exception:
+                pass
+        if self.f:
+            try:
+                self.f.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        return False
 
 
 def main():
@@ -139,13 +150,24 @@ def main():
     print(" Tela de conexao com QR code (neste PC):")
     print("   http://127.0.0.1:%d/conectar" % port)
     print()
-    print(" Deixe esta janela aberta. Ctrl+C para parar.")
+    print(" Para parar: icone do Stream Deck perto do relogio > Sair.")
     print("=" * 56)
     threading.Thread(target=updates.update_loop, daemon=True).start()
     threading.Thread(target=updates.cleanup_old_exe, daemon=True).start()
     minimized = "--minimizado" in sys.argv
+    tray_on = False
+    if "--sem-bandeja" not in sys.argv:
+        try:
+            from . import tray
+            tray_on = tray.start(port, srv, VERSION)
+        except Exception as e:  # noqa: BLE001 - sem icone o servidor segue igual
+            print("  aviso: icone na bandeja indisponivel (%s)" % e)
+    if tray_on:
+        print(" Icone na bandeja ativo (perto do relogio).")
     if minimized:
-        winapi.minimize_console()
+        # com o icone, a janela some (volta pelo menu "Mostrar janela do log")
+        if not (tray_on and tray.show_console(False)):
+            winapi.minimize_console()
     if (first_run and not minimized) or "--conectar" in sys.argv:
         threading.Timer(1.0, webbrowser.open, ["http://127.0.0.1:%d/conectar" % port]).start()
     try:
