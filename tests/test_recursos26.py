@@ -154,6 +154,52 @@ class PressTest(unittest.TestCase):
         self.assertEqual(audio.PLAYER.sounds()[0]["dur"], 3.0)
 
 
+class FadeTest(unittest.TestCase):
+    """Saida suave age so no retrato do inicio; fader respeita o fator."""
+
+    def setUp(self):
+        self.p = audio.SoundPlayer.__new__(audio.SoundPlayer)
+        self.p.playing, self.p.pcm = [], []
+        import threading
+        self.p.pcm_lock = self.p.tracks_lock = threading.Lock()
+        self.p.tracks, self.p.level, self.p.muted = [], 100, False
+        self.rampas = []
+        self.p._ramp = lambda ms, make: self.rampas.append(make)
+        self.velho = audio.IS_WINDOWS
+
+    def tearDown(self):
+        audio.IS_WINDOWS = self.velho
+
+    def test_retrato(self):
+        t1 = {"done": False}
+        self.p.playing.append(["a1", 100, t1, 1.0, False])
+        audio.IS_WINDOWS = True
+        vols = []
+        self.p._mci_vol = lambda alias, v, f=1.0: vols.append((alias, f))
+        self.p._close = lambda alias: None
+        self.p._handle(("stop", 500))
+        make = self.rampas[0]
+        t2 = {"done": False}
+        self.p.playing.append(["a2", 100, t2, 1.0, False])   # comecou durante a saida
+        self.p._handle(make(5))
+        self.assertEqual(self.p.playing[0][3], 0.5)
+        self.assertEqual(self.p.playing[1][3], 1.0)
+        # fader mexeu no meio: mantem o fator
+        vols[:] = []
+        self.p._handle(("vol",))
+        self.assertEqual(vols, [("a1", 0.5), ("a2", 1.0)])
+        self.p._handle(make(audio.FADE_STEPS))
+        self.assertEqual([e[0] for e in self.p.playing], ["a2"])
+        self.assertTrue(t1["done"])
+        self.assertFalse(t2["done"])
+
+    def test_play_poda(self):
+        self.p.q = type("Q", (), {"put": lambda s, x: None})()
+        for i in range(50):
+            self.p.play("/x/nao.wav", key="k%d" % i, exclusive=True)
+        self.assertEqual(len(self.p.tracks), 1)
+
+
 class ObsRotasTest(unittest.TestCase):
     def tearDown(self):
         data = storage.load_settings()

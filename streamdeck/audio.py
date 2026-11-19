@@ -84,7 +84,7 @@ class SoundPlayer:
 
     def __init__(self):
         self.q = queue.Queue()
-        self.playing = []          # [[alias, volume do botao, faixa]] pelo MCI
+        self.playing = []          # [[alias, volume do botao, faixa, fator de fade, saindo]] pelo MCI
         self.pcm = []              # [PcmSound] pelo waveOut
         self.pcm_lock = threading.Lock()
         self.tracks = []           # faixas tocando (dicts)
@@ -124,6 +124,8 @@ class SoundPlayer:
             if exclusive:
                 for t in self.tracks:
                     t["done"] = True
+            # poda as faixas encerradas (lista limitada mesmo sem /api/state)
+            self.tracks = [t for t in self.tracks if _track_alive(t, now)]
             self.tracks.append(track)
         self.q.put(("play", path, volume, exclusive, track, _ms(fade_in)))
 
@@ -149,7 +151,7 @@ class SoundPlayer:
             for t in self.tracks:
                 pos = now - t["start"]
                 dur = t["dur"]
-                if t["done"] or (t["end"] and now >= t["end"]) or (dur is not None and pos > dur + 0.3):
+                if not _track_alive(t, now):
                     continue
                 keep.append(t)
                 out.append({"key": t["key"], "file": t["file"], "pos": round(min(pos, dur or pos), 2),
@@ -164,7 +166,7 @@ class SoundPlayer:
     # ---------------------------------------------------------- MCI ---
     def _stop_pcm(self, fade=0):
         with self.pcm_lock:
-            for snd in self.pcm:
+            for snd in list(self.pcm):
                 if fade:
                     snd.fade_out(fade)
                 else:
@@ -218,7 +220,7 @@ class SoundPlayer:
             self._mci("play " + alias)
             if track is not None:
                 track["start"] = time.time()
-            self.playing.append([alias, volume, track])
+            self.playing.append([alias, volume, track, 0.0 if fade_in else 1.0, False])
             if fade_in:
                 self._ramp(fade_in, lambda i: ("setvol", alias, volume, i / float(FADE_STEPS)))
         except Exception as e:
@@ -256,31 +258,52 @@ class SoundPlayer:
 
     def _handle(self, item):
         if item[0] == "vol":           # fader mexeu: ajusta o que ja esta tocando
-            if IS_WINDOWS:
-                for alias, vol, _t in self.playing:
-                    self._mci_vol(alias, vol)
+            if IS_WINDOWS:             # mantem o fator de fade de cada som
+                for e in self.playing:
+                    self._mci_vol(e[0], e[1], e[3])
             return                     # os sons PCM leem o ganho a cada bloco
         if item[0] == "setvol":        # degrau de entrada suave
-            if IS_WINDOWS and any(e[0] == item[1] for e in self.playing):
-                self._mci_vol(item[1], item[2], item[3])
+            for e in self.playing:
+                if e[0] == item[1] and not e[4]:   # saindo: a saida manda
+                    e[3] = item[3]
+                    if IS_WINDOWS:
+                        self._mci_vol(e[0], e[1], e[3])
             return
-        if item[0] == "scale":         # degrau de saida suave (todos)
-            if IS_WINDOWS:
-                for alias, vol, _t in self.playing:
-                    self._mci_vol(alias, vol, item[1])
+        if item[0] == "scale":         # degrau de saida suave (so os do retrato)
+            for e in self.playing:
+                if e[0] in item[1]:
+                    e[3] = min(e[3], item[2])
+                    if IS_WINDOWS:
+                        self._mci_vol(e[0], e[1], e[3])
+            return
+        if item[0] == "stopset":       # fim da saida suave: para so os do retrato
+            keep = []
+            for e in self.playing:
+                if e[0] in item[1]:
+                    if IS_WINDOWS:
+                        self._close(e[0])
+                    self._finish(e[2])
+                else:
+                    keep.append(e)
+            self.playing = keep
             return
         if item[0] == "mci":           # PCM falhou: toca pelo MCI a ate 100%
             self._mci_play(item[1], item[2], item[3], item[4])
             return
         if item[0] == "stop" and item[1] and IS_WINDOWS:
             # saida suave: PCM abaixa sozinho; MCI em degraus e depois para
+            # retrato dos sons atuais: os que comecarem durante a saida seguem
             self._stop_pcm(item[1])
-            if self.playing:
-                self._ramp(item[1], lambda i: ("scale", 1.0 - i / float(FADE_STEPS))
-                           if i < FADE_STEPS else ("stop", 0))
+            snap = frozenset(e[0] for e in self.playing)
+            for e in self.playing:
+                e[4] = True
+            if snap:
+                self._ramp(item[1], lambda i: ("scale", snap, 1.0 - i / float(FADE_STEPS))
+                           if i < FADE_STEPS else ("stopset", snap))
             return
         if item[0] == "stop" or (item[0] == "play" and item[3]):
-            for alias, _vol, t in self.playing:
+            for e in self.playing:
+                alias, t = e[0], e[2]
                 if IS_WINDOWS:
                     self._close(alias)
                 self._finish(t)
@@ -301,6 +324,14 @@ class SoundPlayer:
             snd.start()
         else:
             self._mci_play(path, volume, track)
+
+
+def _track_alive(t, now):
+    """Faixa ainda tocando (nao encerrada, nem expirada pelo fim ou duracao)."""
+    dur = t["dur"]
+    if t["done"] or (t["end"] and now >= t["end"]):
+        return False
+    return dur is None or now - t["start"] <= dur + 0.3
 
 
 # --------------------------------------------- PCM: decodificar e tocar ---

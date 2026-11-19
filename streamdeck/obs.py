@@ -23,6 +23,8 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4455
 RETRY = 5.0                # segundos entre tentativas de conexao
 TIMEOUT = 3.0              # espera maxima de um pedido
+IDLE = 15.0                # silencio maximo antes do keepalive (GetVersion)
+FETCH_TRIES = 3            # tentativas de carregar o estado inicial
 MAX_MSG = 16 * 1024 * 1024
 MAX_MUTE_INPUTS = 40       # fontes de audio consultadas ao conectar
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -81,6 +83,18 @@ def _mask(data, key):
     return (int.from_bytes(data, "big") ^ int.from_bytes(k, "big")).to_bytes(n, "big")
 
 
+def _kill(sock):
+    """Derruba o socket (shutdown desbloqueia um recv parado em outra thread)."""
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
+
+
 def _recv_exact(sock, n):
     buf = bytearray()
     while len(buf) < n:
@@ -126,10 +140,16 @@ def decode_frame(data):
 class WebSocket(object):
     """Conexao WebSocket de cliente (sem TLS; o OBS fica na rede local)."""
 
-    def __init__(self, host, port, path="/", timeout=TIMEOUT, protocol="obswebsocket.json"):
+    def __init__(self, host, port, path="/", timeout=TIMEOUT, protocol="obswebsocket.json", on_sock=None):
         self.sock = socket.create_connection((host, port), timeout=timeout)
+        try:
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        except OSError:
+            pass
         self.send_lock = threading.Lock()
         self.closed = False
+        if on_sock is not None:
+            on_sock(self.sock)    # permite derrubar a conexao durante o handshake
         try:
             self._handshake(host, port, path, protocol)
         except Exception:
@@ -174,7 +194,7 @@ class WebSocket(object):
         None quando a conexao fecha."""
         parts, first_op = [], None
         while True:
-            fin, op, data = read_frame(lambda n: _recv_exact(self.sock, n))
+            fin, op, data = read_frame(self._frame_reader())
             if op == OP_PING:
                 self._send(OP_PONG, data)
                 continue
@@ -199,6 +219,30 @@ class WebSocket(object):
                     return msg.decode("utf-8")
                 parts, first_op = [], None   # binario: ignora
 
+    def _frame_reader(self):
+        """recv(n) para um quadro: timeout so escapa antes do primeiro byte;
+        no meio do quadro espera mais um pouco (senao o fluxo se perderia)."""
+        started = [False]
+
+        def recv(n):
+            buf, tries = bytearray(), 0
+            while len(buf) < n:
+                try:
+                    chunk = self.sock.recv(n - len(buf))
+                except socket.timeout:
+                    if not started[0] and not buf:
+                        raise
+                    tries += 1
+                    if tries > 3:
+                        raise ConnectionError("quadro incompleto do OBS")
+                    continue
+                if not chunk:
+                    raise ConnectionError("conexao fechada")
+                started[0] = True
+                buf += chunk
+            return bytes(buf)
+        return recv
+
     def close(self):
         if not self.closed:
             self.closed = True
@@ -206,10 +250,7 @@ class WebSocket(object):
                 self._send(OP_CLOSE, struct.pack("!H", 1000))
             except OSError:
                 pass
-        try:
-            self.sock.close()
-        except OSError:
-            pass
+        _kill(self.sock)
 
 
 # ------------------------------------------------------------- obs-websocket ---
@@ -235,6 +276,10 @@ class ObsClient(object):
         self.stopped = False
         self.thread = None
         self.retry = RETRY
+        self.idle = IDLE
+        self.gen = 0               # geracao dos ajustes (reconnect/stop incrementa)
+        self.neg = None            # socket em negociacao (antes do Identified)
+        self.mute_ev = {}          # fonte -> instante do ultimo evento de mute
 
     # --------------------------------------------------------- ciclo ---
     def start(self):
@@ -244,25 +289,40 @@ class ObsClient(object):
 
     def stop(self):
         self.stopped = True
+        self._bump()
         self.wake.set()
         self._drop()
 
     def reconnect(self):
-        """Ajustes mudaram: derruba a conexao e tenta de novo ja."""
+        """Ajustes mudaram: derruba a conexao (inclusive a em negociacao) e
+        tenta de novo ja."""
+        self._bump()
+        self.error = ""
         self._drop()
         self.wake.set()
         self.start()
 
+    def _bump(self):
+        with self.lock:
+            self.gen += 1
+            sock, self.neg = self.neg, None
+        if sock is not None:
+            _kill(sock)
+
     def connected(self):
-        return self.ws is not None and self.state["ok"]
+        ws = self.ws
+        return ws is not None and not ws.closed
 
     def _loop(self):
         while not self.stopped:
             self.wake.clear()
+            gen = self.gen
             try:
-                self._session()
+                self._session(gen)
             except Exception as e:
-                self.error = _friendly(e)
+                # queda pedida por reconnect/stop nao e erro
+                if gen == self.gen and not self.stopped:
+                    self.error = _friendly(e)
             self._drop()
             if self.stopped:
                 break
@@ -272,17 +332,68 @@ class ObsClient(object):
         with self.lock:
             ws, self.ws = self.ws, None
             self.state = dict(_empty_state())
+            self.mute_ev = {}
             for item in self.pending.values():
                 item[0].set()
             self.pending = {}
         if ws is not None:
             ws.close()
 
-    def _session(self):
+    def _session(self, gen=None):
+        if gen is None:
+            gen = self.gen
         cfg = self.settings() or {}
         host = cfg.get("host") or DEFAULT_HOST
         port = int(cfg.get("port") or DEFAULT_PORT)
-        ws = WebSocket(host, port)
+
+        def hold(sock):
+            with self.lock:
+                if gen == self.gen and not self.stopped:
+                    self.neg = sock
+                    return
+            _kill(sock)
+            raise ObsError("conexao cancelada")
+        ws = WebSocket(host, port, on_sock=hold)
+        try:
+            self._negotiate(ws, cfg)
+        finally:
+            with self.lock:
+                if self.neg is ws.sock:
+                    self.neg = None
+        with self.lock:
+            if self.stopped or gen != self.gen:
+                stale = True
+            else:
+                stale = False
+                self.ws = ws
+                self.state = dict(_empty_state())
+                self.state["ok"] = True
+        if stale:
+            ws.close()
+            return
+        self.error = ""
+        threading.Thread(target=self._fetch_all, args=(ws,), daemon=True).start()
+        ws.sock.settimeout(self.idle)
+        waiting = False
+        while True:
+            try:
+                msg = ws.recv_text()
+            except socket.timeout:
+                if waiting:
+                    raise ObsError("o OBS parou de responder")
+                waiting = True
+                # keepalive leve; a resposta (sem pedido pendente) e ignorada
+                ws.send_text(json.dumps({"op": 6, "d": {"requestType": "GetVersion", "requestId": "ka"}}))
+                continue
+            waiting = False
+            if msg is None:
+                raise ObsError("o OBS fechou a conexao")
+            try:
+                self._dispatch(json.loads(msg))
+            except (ValueError, TypeError, AttributeError, KeyError):
+                pass
+
+    def _negotiate(self, ws, cfg):
         ws.sock.settimeout(TIMEOUT)
         hello = json.loads(ws.recv_text() or "{}")
         if hello.get("op") != 0:
@@ -305,22 +416,6 @@ class ObsClient(object):
         if json.loads(msg).get("op") != 2:
             ws.close()
             raise ObsError("resposta inesperada do OBS")
-        ws.sock.settimeout(None)
-        with self.lock:
-            if self.stopped:
-                ws.close()
-                return
-            self.ws = ws
-        self.error = ""
-        threading.Thread(target=self._fetch_all, daemon=True).start()
-        while True:
-            msg = ws.recv_text()
-            if msg is None:
-                raise ObsError("o OBS fechou a conexao")
-            try:
-                self._dispatch(json.loads(msg))
-            except (ValueError, TypeError, AttributeError, KeyError):
-                pass
 
     def _dispatch(self, m):
         op, d = m.get("op"), m.get("d") or {}
@@ -343,25 +438,42 @@ class ObsClient(object):
             st["record"] = bool(data.get("outputActive"))
         elif kind == "InputMuteStateChanged":
             muted = dict(st["muted"])     # copia: snapshot() pode estar lendo
-            muted[data.get("inputName", "")] = bool(data.get("inputMuted"))
+            name = data.get("inputName", "")
+            muted[name] = bool(data.get("inputMuted"))
+            self.mute_ev[name] = time.time()
             st["muted"] = muted
         elif kind == "SceneListChanged":
             self.scenes = [s.get("sceneName", "") for s in reversed(data.get("scenes") or [])]
         elif kind in ("InputCreated", "InputRemoved", "InputNameChanged"):
             threading.Thread(target=self._fetch_inputs, daemon=True).start()
 
-    def _fetch_all(self):
-        try:
-            r = self.request("GetCurrentProgramScene")
-            self.state["scene"] = r.get("currentProgramSceneName") or r.get("sceneName") or ""
-            self.state["stream"] = bool(self.request("GetStreamStatus").get("outputActive"))
-            self.state["record"] = bool(self.request("GetRecordStatus").get("outputActive"))
-            scenes = self.request("GetSceneList").get("scenes") or []
-            self.scenes = [s.get("sceneName", "") for s in reversed(scenes)]   # ordem da lista do OBS
-            self._fetch_inputs()
-            self.state["ok"] = True
-        except Exception as e:
-            self.error = _friendly(e)
+    def _fetch_all(self, ws=None):
+        """Carrega o estado inicial; falha nao derruba a conexao: tenta de
+        novo algumas vezes com espera crescente."""
+        delay = 0.5
+        for n in range(FETCH_TRIES):
+            if ws is not None and self.ws is not ws:
+                return
+            try:
+                self._fetch_once()
+                return
+            except Exception as e:
+                if ws is not None and self.ws is not ws:
+                    return
+                self.error = _friendly(e)
+                print("  obs: falha ao carregar o estado (tentativa %d): %s" % (n + 1, self.error))
+            time.sleep(delay)
+            delay *= 2
+
+    def _fetch_once(self):
+        r = self.request("GetCurrentProgramScene")
+        self.state["scene"] = r.get("currentProgramSceneName") or r.get("sceneName") or ""
+        self.state["stream"] = bool(self.request("GetStreamStatus").get("outputActive"))
+        self.state["record"] = bool(self.request("GetRecordStatus").get("outputActive"))
+        scenes = self.request("GetSceneList").get("scenes") or []
+        self.scenes = [s.get("sceneName", "") for s in reversed(scenes)]   # ordem da lista do OBS
+        self._fetch_inputs()
+        self.error = ""
 
     def _fetch_inputs(self):
         inputs = self.request("GetInputList").get("inputs") or []
@@ -370,13 +482,20 @@ class ObsClient(object):
         audio = [i.get("inputName", "") for i in inputs
                  if "audio" in str(i.get("inputKind", "")) or "wasapi" in str(i.get("inputKind", ""))]
         names = list(dict.fromkeys(wanted + audio))[:MAX_MUTE_INPUTS]
-        muted = {}
+        got = {}
         for name in names:
+            t0 = time.time()
             try:
-                muted[name] = bool(self.request("GetInputMute", {"inputName": name}).get("inputMuted"))
+                got[name] = (bool(self.request("GetInputMute", {"inputName": name}).get("inputMuted")), t0)
             except ObsError:
                 pass   # fonte sem audio
-        self.state["muted"] = muted
+        # junta por fonte sem passar por cima de eventos mais novos que o pedido
+        with self.lock:
+            muted = dict(self.state["muted"])
+            for name, (val, t0) in got.items():
+                if self.mute_ev.get(name, 0) < t0:
+                    muted[name] = val
+            self.state["muted"] = muted
 
     # ------------------------------------------------------- pedidos ---
     def request(self, kind, data=None, timeout=TIMEOUT):
@@ -433,6 +552,22 @@ def load_settings():
     from . import storage
     obs = storage.load_settings().get("obs")
     return obs if isinstance(obs, dict) else {}
+
+
+_CACHE = {"obs": None}
+
+
+def cached_settings():
+    """Ajustes do OBS em memoria (renovados quando seguranca.json e salvo)."""
+    c = _CACHE["obs"]
+    if c is None:
+        c = _CACHE["obs"] = load_settings()
+    return c
+
+
+def _settings_saved(data):
+    obs = data.get("obs") if isinstance(data, dict) else None
+    _CACHE["obs"] = dict(obs) if isinstance(obs, dict) else {}
 
 
 def save_settings(body):
@@ -494,6 +629,15 @@ def lit_inputs():
 CLIENT = ObsClient(load_settings, lit_inputs)
 
 
+def _register_hook():
+    from . import storage
+    if _settings_saved not in storage.SETTINGS_HOOKS:
+        storage.SETTINGS_HOOKS.append(_settings_saved)
+
+
+_register_hook()
+
+
 def status():
     """GET /api/local/obs."""
     s = load_settings()
@@ -503,7 +647,7 @@ def status():
 
 def state_for_api():
     """Bloco "obs" do /api/state, ou None se nunca configurado nem conectado."""
-    if CLIENT.ws is None and not load_settings():
+    if CLIENT.ws is None and not cached_settings():
         return None
     return CLIENT.snapshot()
 

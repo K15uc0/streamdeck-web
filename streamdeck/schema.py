@@ -20,9 +20,9 @@ MAX_FOLDER = 60            # botoes dentro de uma pasta
 MAX_APPS = 20              # apps por pagina (troca automatica)
 LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer",
         "obs:stream", "obs:record", "obs:scene", "sound")
-MAX_LIT = 120
+MAX_LIT = 130
 # botao aceso pelo estado do OBS
-LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,100})$")
+LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,120})$")
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()\-]{0,99}$")
 # nome de executavel: letras/digitos (inclusive acentos), espaco e pontuacao

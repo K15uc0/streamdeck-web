@@ -81,6 +81,7 @@ class FakeObs(object):
         self.requests = []
         self.conns = []
         self.identify = None
+        self.mudo = False
         fake = self
 
         class H(socketserver.BaseRequestHandler):
@@ -159,6 +160,8 @@ class FakeObs(object):
                         return
                     self._send(sock, {"op": 2, "d": {"negotiatedRpcVersion": 1}})
                 elif m["op"] == 6:
+                    if self.mudo:
+                        continue
                     self._request(sock, m["d"])
         except (ConnectionError, OSError, ValueError):
             return
@@ -235,6 +238,7 @@ class ClienteTest(unittest.TestCase):
         self.conectar()
         self.assertEqual(self.fake.identify["eventSubscriptions"] & obs.SUB_OUTPUTS, obs.SUB_OUTPUTS)
         self.assertNotIn("authentication", self.fake.identify)
+        self.assertTrue(esperar(lambda: self.cli.snapshot()["muted"].get("Desktop")))
         snap = self.cli.snapshot()
         self.assertEqual(snap, {"ok": True, "stream": False, "record": False, "scene": "Cena 1",
                                 "muted": {"Mic/Aux": False, "Desktop": True}})
@@ -291,6 +295,78 @@ class ClienteTest(unittest.TestCase):
             self.cli.request("ToggleStream")
         self.assertIn("OBS nao esta conectado", str(cm.exception))
         self.assertEqual(self.cli.snapshot()["ok"], False)
+
+
+class RobustezTest(unittest.TestCase):
+    def setUp(self):
+        self.fake = FakeObs()
+        self.cfg = {"host": "127.0.0.1", "port": self.fake.port}
+        self.cli = obs.ObsClient(lambda: self.cfg, lambda: [])
+        self.cli.retry = 0.1
+
+    def tearDown(self):
+        self.cli.stop()
+        self.fake.stop()
+
+    def test_keepalive_e_queda_silenciosa(self):
+        self.cli.idle = 0.3
+        self.cli.start()
+        self.assertTrue(esperar(self.cli.connected))
+        self.assertTrue(esperar(lambda: any(r[0] == "GetVersion" for r in self.fake.requests)))
+        self.assertTrue(self.cli.connected())     # respondeu: segue
+        # OBS para de responder (sem fechar): cai e reconecta
+        self.fake.mudo = True
+        self.assertTrue(esperar(lambda: not self.cli.connected(), 3))
+        self.fake.mudo = False
+        self.assertTrue(esperar(self.cli.connected, 3))
+
+    def test_reconnect_limpa_erro_e_nao_marca_erro(self):
+        self.cli.start()
+        self.assertTrue(esperar(self.cli.connected))
+        self.cli.error = "velho"
+        g = self.cli.gen
+        self.cli.reconnect()
+        self.assertEqual(self.cli.error, "")
+        self.assertGreater(self.cli.gen, g)
+        self.assertTrue(esperar(self.cli.connected))
+        time.sleep(0.2)
+        self.assertEqual(self.cli.error, "")
+
+    def test_geracao_muda_no_handshake(self):
+        def lento(sock):
+            self.cli.gen += 1          # ajustes mudaram durante a negociacao
+        velho = obs.WebSocket.__init__
+
+        def init(ws, *a, **k):
+            k.pop("on_sock", None)
+            velho(ws, *a, on_sock=lento, **k)
+        obs.WebSocket.__init__ = init
+        try:
+            self.cli._session(self.cli.gen)
+        finally:
+            obs.WebSocket.__init__ = velho
+        self.assertIsNone(self.cli.ws)
+
+    def test_mute_evento_mais_novo_vence(self):
+        self.cli.state["muted"] = {"Desktop": True}
+        self.cli.mute_ev["Mic/Aux"] = time.time() + 10
+        self.cli.state["muted"]["Mic/Aux"] = True
+        respostas = {"GetInputList": {"inputs": [{"inputName": "Mic/Aux", "inputKind": "wasapi"},
+                                                 {"inputName": "Desktop", "inputKind": "wasapi"}]},
+                     "GetInputMute": {"inputMuted": False}}
+        self.cli.request = lambda kind, data=None: respostas[kind]
+        self.cli._fetch_inputs()
+        self.assertEqual(self.cli.state["muted"], {"Mic/Aux": True, "Desktop": False})
+
+    def test_cache_de_ajustes(self):
+        from streamdeck import storage
+        data = storage.load_settings()
+        data["obs"] = {"host": "h", "port": 1}
+        storage.save_settings(data)
+        self.assertEqual(obs.cached_settings()["host"], "h")
+        data.pop("obs")
+        storage.save_settings(data)
+        self.assertEqual(obs.cached_settings(), {})
 
 
 class SenhaTest(unittest.TestCase):
