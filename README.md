@@ -24,5 +24,8 @@ Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão
 
 ## Para desenvolvedores
 
-- Rodar pelo código: Python 3.8+, `python server.py` (sem dependências).
-- Publicar versão: altere `VERSION` em `server.py`, adicione a seção no `CHANGELOG.md` e envie para a `main`. O GitHub Actions gera o `StreamDeck.exe` e publica a release; os programas instalados avisam os usuários.
+- Rodar pelo código: Python 3.8+, `python server.py` (sem dependências). O código do servidor fica no pacote `streamdeck/`; `server.py` só chama `streamdeck.app.main()`.
+- Arquitetura, formato do `config.json` (v2) e API: [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+- Nova função para os botões: um arquivo em `streamdeck/actions/` com `@action(...)` e o import em `_load()` (exemplo em [docs/ARQUITETURA.md](docs/ARQUITETURA.md#como-adicionar-uma-função)). O editor monta o formulário sozinho a partir de `/api/actions`.
+- Testar fora do Windows: `STREAMDECK_DATA=/tmp/sd python3 server.py` (as ações são simuladas e aparecem como `[simulado]` na janela).
+- Publicar versão: altere `VERSION` em `streamdeck/__init__.py`, adicione a seção no `CHANGELOG.md` e envie para a `main`. O GitHub Actions gera o `StreamDeck.exe` e publica a release; os programas instalados avisam os usuários.

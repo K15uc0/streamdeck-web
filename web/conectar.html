@@ -3,39 +3,63 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
 <title>Stream Deck · Conectar aparelho</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #0d1117; color: #e6edf3; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
-  main { max-width: 920px; margin: 0 auto; padding: 32px 24px 48px; }
-  h1 { font-size: 26px; font-weight: 600; margin: 0 0 4px; }
-  .sub { color: #8b949e; margin: 0 0 28px; }
-  .grid { display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 22px; }
-  #qr { background: #fff; border-radius: 10px; padding: 14px; display: flex; justify-content: center; }
+  html { background: #000; }
+  body { margin: 0; background: #000; color: #fff; -webkit-font-smoothing: antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 17px; letter-spacing: -0.2px; }
+  main { max-width: 940px; margin: 0 auto; padding: 44px 24px 56px; }
+  h1 { font-size: 34px; font-weight: 700; letter-spacing: 0.3px; margin: 0 0 6px; }
+  .sub { color: rgba(235,235,245,0.6); margin: 0 0 30px; font-size: 17px; }
+  .grid { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
+  .card { background: #1c1c1e; border-radius: 14px; padding: 20px; }
+  .hdr { font-size: 13px; text-transform: uppercase; color: rgba(235,235,245,0.6); margin: 32px 16px 8px; letter-spacing: -0.08px; }
+  .foot { font-size: 13px; line-height: 18px; color: rgba(235,235,245,0.6); margin: 8px 16px 0; }
+  #qr { background: #fff; border-radius: 12px; padding: 14px; display: flex; justify-content: center; }
   #qr svg, #qr img { display: block; width: 100%; height: auto; }
-  .url { font-family: Consolas, monospace; font-size: 15px; background: #0d1117; border: 1px solid #30363d;
-    border-radius: 8px; padding: 10px 12px; margin-top: 14px; word-break: break-all; user-select: all; }
-  ol { margin: 0; padding-left: 20px; line-height: 1.6; }
-  ol li { margin-bottom: 12px; }
-  ol b { color: #fff; }
-  .tip { margin-top: 18px; padding: 14px 16px; border-radius: 10px; background: #1c2128; border-left: 4px solid #d29922;
-    color: #c9d1d9; font-size: 14px; line-height: 1.5; }
-  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; }
-  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-  button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 8px; padding: 9px 16px;
-    font-size: 14px; cursor: pointer; }
-  button:hover { background: #30363d; }
-  button.primary { background: #1f6feb; border-color: #1f6feb; }
-  button.primary:hover { background: #388bfd; }
-  label.sw { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; }
-  label.sw input { width: 18px; height: 18px; }
-  #upd { font-size: 14px; color: #c9d1d9; line-height: 1.6; }
-  #upd .new { color: #3fb950; font-weight: 600; }
-  #notes { white-space: pre-wrap; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px;
-    font-size: 13px; color: #c9d1d9; margin-top: 10px; display: none; max-height: 220px; overflow: auto; }
-  .muted { color: #8b949e; font-size: 13px; }
-  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .url { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 14px; background: #2c2c2e; border-radius: 10px;
+    padding: 11px 12px; margin-top: 14px; word-break: break-all; user-select: all; text-align: center; color: #fff; }
+  ol { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+  ol li { position: relative; padding: 2px 0 18px 46px; line-height: 1.45; color: rgba(235,235,245,0.75); counter-increment: s; }
+  ol li:before { content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 15px;
+    background: #0a84ff; color: #fff; font-weight: 600; font-size: 15px; line-height: 30px; text-align: center; }
+  ol b { color: #fff; font-weight: 600; }
+  .tip { margin-top: 4px; padding: 14px 16px; border-radius: 12px; background: rgba(255,159,10,0.12);
+    color: rgba(235,235,245,0.8); font-size: 15px; line-height: 1.45; }
+  .tip b { color: #ff9f0a; }
+  .list { background: #1c1c1e; border-radius: 12px; overflow: hidden; }
+  .item { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 16px; position: relative; }
+  .item + .item:before { content: ""; position: absolute; left: 16px; right: 0; top: 0; height: 1px; background: rgba(84,84,88,0.55); transform: scaleY(0.5); }
+  .item .t { flex: 1; line-height: 1.35; }
+  .item .s { display: block; font-size: 13px; color: rgba(235,235,245,0.6); margin-top: 2px; }
+  label.item { cursor: pointer; }
+  /* checkbox como chave do iOS */
+  input[type=checkbox] { -webkit-appearance: none; appearance: none; flex: none; position: relative; width: 51px; height: 31px;
+    border-radius: 16px; background: rgba(120,120,128,0.32); cursor: pointer; margin: 0; transition: background 0.25s; outline: none; }
+  input[type=checkbox]:after { content: ""; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 14px;
+    background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.15); transition: transform 0.25s; }
+  input[type=checkbox]:checked { background: #30d158; }
+  input[type=checkbox]:checked:after { transform: translateX(20px); }
+  button { background: none; border: 0; padding: 0; color: #0a84ff; font: inherit; font-size: 17px; cursor: pointer; text-align: left; }
+  button:hover { opacity: 0.75; }
+  button.danger { color: #ff453a; }
+  button.primary { font-weight: 600; }
+  .item.btn { cursor: pointer; }
+  .item.btn:hover { background: #2c2c2e; }
+  .item.btn > button { flex: 1; min-height: 28px; }
+  #applyRow:has(#apply[style*="none"]) { display: none; }
+  #upd { line-height: 1.55; color: rgba(235,235,245,0.85); }
+  #upd b { color: #fff; font-weight: 600; }
+  #upd .new { color: #30d158; font-weight: 600; }
+  #upd a { color: #0a84ff; }
+  #notes { white-space: pre-wrap; background: #2c2c2e; border-radius: 10px; padding: 10px 12px;
+    font-size: 14px; color: rgba(235,235,245,0.85); margin-top: 10px; display: none; max-height: 220px; overflow: auto; }
+  .muted { color: rgba(235,235,245,0.6); font-size: 13px; }
+  .warn { margin: 0; padding: 12px 16px; background: rgba(255,159,10,0.12); color: #ff9f0a; font-size: 14px; line-height: 1.4; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 28px 16px 40px; } h1 { font-size: 28px; } }
 </style>
 </head>
 <body>
@@ -52,7 +76,7 @@
       <ol>
         <li>Conecte o celular ou tablet <b>no mesmo Wi-Fi</b> deste PC.</li>
         <li><b>Aponte a câmera para o QR code</b> e abra o link. Se o aparelho não lê QR code, digite o endereço que aparece embaixo dele no navegador.</li>
-        <li>Pronto. Depois do primeiro acesso, basta abrir <b id="short">…</b>. Salve nos favoritos ou na tela inicial.</li>
+        <li>Pronto. Depois do primeiro acesso, basta abrir <b id="short">…</b>. Salve nos favoritos ou na tela de início.</li>
       </ol>
       <div class="tip">
         <b>Não abriu no aparelho?</b> Na primeira vez, o Windows pergunta sobre o firewall: marque
@@ -62,41 +86,32 @@
     </div>
   </div>
 
-  <h2>Opções</h2>
-  <div class="card">
-    <div class="row" style="justify-content: space-between">
-      <label class="sw" id="autoWrap"><input type="checkbox" id="auto"> Iniciar o Stream Deck junto com o Windows</label>
-      <div class="row">
-        <button id="sounds">Abrir pasta de sons</button>
-        <button id="data">Abrir pasta de dados</button>
-      </div>
-    </div>
-    <p class="muted" style="margin:14px 0 0">Seus botões, abas e sons ficam em <span id="datapath">…</span>. Eles são mantidos nas atualizações.</p>
+  <div class="hdr">Opções</div>
+  <div class="list">
+    <label class="item" id="autoWrap"><span class="t">Iniciar o Stream Deck junto com o Windows</span><input type="checkbox" id="auto"></label>
+    <div class="item btn"><button id="sounds">Abrir pasta de sons</button></div>
+    <div class="item btn"><button id="data">Abrir pasta de dados</button></div>
   </div>
+  <p class="foot">Seus botões, abas e sons ficam em <span id="datapath">…</span>. Eles são mantidos nas atualizações.</p>
 
-  <h2>Segurança</h2>
-  <div class="card">
-    <p class="muted" style="margin:0 0 14px">O Stream Deck só aceita aparelhos da sua rede local, exige o código de acesso
-      e bloqueia sites que tentem usar o seu navegador para acionar botões.</p>
-    <div id="weak" class="tip" style="display:none;margin:0 0 14px">Seu código de acesso é curto (de uma versão antiga).
+  <div class="hdr">Segurança</div>
+  <div class="list">
+    <div id="weak" class="warn" style="display:none">Seu código de acesso é curto (de uma versão antiga).
       Gere um novo para mais segurança. Depois, leia o QR code de novo em cada aparelho.</div>
-    <label class="sw"><input type="checkbox" id="remote"> Permitir que os aparelhos criem botões que rodam comandos, abrem programas/arquivos ou chamam APIs</label>
-    <p class="muted" style="margin:6px 0 14px 28px">Desligado é mais seguro: esses botões só são criados aqui no PC.
-      Botões assim que já existem continuam funcionando.</p>
-    <div class="row">
-      <button id="newcode">Gerar novo código de acesso</button>
-      <span class="muted">Desconecta todos os aparelhos. Use se achar que alguém pegou o código.</span>
-    </div>
+    <label class="item"><span class="t">Permitir que os aparelhos criem botões que rodam comandos, abrem programas/arquivos ou chamam APIs
+      <span class="s">Desligado é mais seguro: esses botões só são criados aqui no PC. Botões assim que já existem continuam funcionando.</span></span>
+      <input type="checkbox" id="remote"></label>
+    <div class="item btn"><span class="t"><button id="newcode" class="danger">Gerar novo código de acesso</button>
+      <span class="s">Desconecta todos os aparelhos. Use se achar que alguém pegou o código.</span></span></div>
   </div>
+  <p class="foot">O Stream Deck só aceita aparelhos da sua rede local, exige o código de acesso
+    e bloqueia sites que tentem usar o seu navegador para acionar botões.</p>
 
-  <h2>Atualizações</h2>
-  <div class="card">
-    <div id="upd">Verificando…</div>
-    <div id="notes"></div>
-    <div class="row" style="margin-top:14px">
-      <button id="check">Verificar agora</button>
-      <button id="apply" class="primary" style="display:none">Atualizar agora</button>
-    </div>
+  <div class="hdr">Atualizações</div>
+  <div class="list">
+    <div class="item"><div class="t"><div id="upd">Verificando…</div><div id="notes"></div></div></div>
+    <div class="item btn"><button id="check">Verificar agora</button></div>
+    <div class="item btn" id="applyRow"><button id="apply" class="primary" style="display:none">Atualizar agora</button></div>
   </div>
 </main>
 

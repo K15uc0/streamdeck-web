@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "title": "Stream Deck",
   "columns": 5,
   "rows": 3,
@@ -508,18 +509,41 @@
     },
     {
       "name": "Rádio",
-      "layout": "mixer",
       "buttons": [
         {
-          "label": "Anterior",
-          "icon": "prev",
-          "color": "",
+          "kind": "fader",
+          "label": "Master",
+          "icon": "sound",
+          "color": "#0a84ff",
+          "target": "master"
+        },
+        {
+          "kind": "fader",
+          "label": "Efeitos",
+          "icon": "music",
+          "color": "#ff9f0a",
+          "target": "effects"
+        },
+        {
+          "kind": "fader",
+          "label": "Mic",
+          "icon": "mic",
+          "color": "#30d158",
+          "target": "mic"
+        },
+        {
+          "label": "ON AIR",
+          "icon": "",
+          "color": "#ef4444",
           "action": {
             "type": "hotkey",
             "keys": [
-              "prev"
+              "ctrl",
+              "alt",
+              "f12"
             ]
-          }
+          },
+          "toggle": true
         },
         {
           "label": "Play/Pausa",
@@ -529,6 +553,44 @@
             "type": "hotkey",
             "keys": [
               "playpause"
+            ]
+          }
+        },
+        {
+          "label": "Mudo PC",
+          "icon": "mute",
+          "color": "",
+          "action": {
+            "type": "mute",
+            "target": "master"
+          }
+        },
+        {
+          "label": "Mudo efeitos",
+          "icon": "mute",
+          "color": "",
+          "action": {
+            "type": "mute",
+            "target": "effects"
+          }
+        },
+        {
+          "label": "Mudo mic",
+          "icon": "mic",
+          "color": "",
+          "action": {
+            "type": "mute",
+            "target": "mic"
+          }
+        },
+        {
+          "label": "Anterior",
+          "icon": "prev",
+          "color": "",
+          "action": {
+            "type": "hotkey",
+            "keys": [
+              "prev"
             ]
           }
         },
@@ -581,61 +643,28 @@
           }
         },
         {
-          "label": "",
-          "icon": "",
-          "color": "",
+          "label": "Sons",
+          "icon": "sound",
+          "color": "#0a3069",
           "action": {
-            "type": "none"
+            "type": "page",
+            "to": 4
           }
         },
         {
-          "label": "",
-          "icon": "",
-          "color": "",
+          "label": "Chat",
+          "icon": "chat",
+          "color": "#0a3069",
           "action": {
-            "type": "none"
+            "type": "page",
+            "to": 5
           }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
+        }
+      ]
+    },
+    {
+      "name": "Rádio · Sons",
+      "buttons": [
         {
           "label": "Parar sons",
           "icon": "stop",
@@ -645,200 +674,22 @@
           }
         },
         {
-          "label": "",
-          "icon": "",
-          "color": "",
+          "label": "Voltar",
+          "icon": "back",
+          "color": "#0a3069",
           "action": {
-            "type": "none"
+            "type": "page",
+            "to": 3
           }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "Parar sons",
-          "icon": "stop",
-          "color": "#7f1d1d",
-          "action": {
-            "type": "stopsound"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "Parar sons",
-          "icon": "stop",
-          "color": "#7f1d1d",
-          "action": {
-            "type": "stopsound"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "none"
-          }
-        },
-        {
-          "label": "Parar sons",
-          "icon": "stop",
-          "color": "#7f1d1d",
-          "action": {
-            "type": "stopsound"
-          }
-        },
+        }
+      ]
+    },
+    {
+      "name": "Rádio · Chat",
+      "buttons": [
         {
           "label": "Bom dia, ouvintes!",
-          "icon": "",
+          "icon": "chat",
           "color": "",
           "action": {
             "type": "text",
@@ -848,7 +699,7 @@
         },
         {
           "label": "Peça sua música!",
-          "icon": "",
+          "icon": "chat",
           "color": "",
           "action": {
             "type": "text",
@@ -858,7 +709,7 @@
         },
         {
           "label": "Já volto!",
-          "icon": "",
+          "icon": "chat",
           "color": "",
           "action": {
             "type": "text",
@@ -868,7 +719,7 @@
         },
         {
           "label": "Obrigado pela audiência!",
-          "icon": "",
+          "icon": "chat",
           "color": "",
           "action": {
             "type": "text",
@@ -877,65 +728,12 @@
           }
         },
         {
-          "label": "ON AIR",
-          "icon": "",
-          "color": "#ef4444",
+          "label": "Voltar",
+          "icon": "back",
+          "color": "#0a3069",
           "action": {
-            "type": "hotkey",
-            "keys": [
-              "ctrl",
-              "alt",
-              "f12"
-            ]
-          }
-        },
-        {
-          "label": "MUDO",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "mute",
-            "target": "master"
-          }
-        },
-        {
-          "label": "MUDO",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "mute",
-            "target": "effects"
-          }
-        },
-        {
-          "label": "MUTE",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "mute",
-            "target": "mic"
-          }
-        },
-        {
-          "label": "Subir na lista",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "hotkey",
-            "keys": [
-              "up"
-            ]
-          }
-        },
-        {
-          "label": "Descer na lista",
-          "icon": "",
-          "color": "",
-          "action": {
-            "type": "hotkey",
-            "keys": [
-              "down"
-            ]
+            "type": "page",
+            "to": 3
           }
         }
       ]

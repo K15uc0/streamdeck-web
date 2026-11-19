@@ -1,5 +1,16 @@
 # Novidades
 
+## 2.0.0
+
+Visual novo no estilo iOS e programa reorganizado:
+- Botões como os blocos do app Atalhos; página atual no topo e pontinhos embaixo; deslize para trocar de página.
+- Modo edição como a tela de início do iPhone: segure um botão ou toque em Editar; os botões tremem, arraste para trocar de lugar, "−" para remover, "+" para criar.
+- Editor em folha que sobe de baixo, com prévia do botão, ícones, cores do iOS e lista de ações por grupo.
+- Novos tipos de botão: Liga/desliga (fica aceso em todos os aparelhos, como o ON AIR) e Fader (controle de volume do PC, efeitos ou microfone, como na Central de Controle).
+- A página Mixer de DJ foi convertida sozinha em páginas comuns (Rádio, Pads com os 4 bancos juntos, Chat); a configuração antiga fica salva em config.v1.bak.json.
+- Tela Conectar no PC com o mesmo visual.
+- Para quem programa: cada ação é um arquivo em streamdeck/actions e o editor monta o formulário sozinho (veja docs/ARQUITETURA.md).
+
 ## 1.3.0
 
 Novo layout Mixer de DJ (página "Rádio"):
