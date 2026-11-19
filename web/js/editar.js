@@ -1832,12 +1832,78 @@
       });
     });
   }
+  /* versoes anteriores (copias guardadas pelo PC a cada salvamento) */
+  function two(n) { return (n < 10 ? "0" : "") + n; }
+  function fmtWhen(epoch) {
+    var d = new Date(epoch * 1000);
+    return two(d.getDate()) + "/" + two(d.getMonth() + 1) + "/" + d.getFullYear() + " às " + two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds());
+  }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function openVersions() {
+    var m = modal("Versões anteriores", "verModal");
+    el("div", "help", "O PC guarda as últimas 20 versões dos botões (uma a cada salvamento). Escolha uma para ver as páginas e restaurar.", m.head);
+    m.body.className += " vbody";
+    var listBox = el("div", "vlist", null, m.body);
+    var side = el("div", "vside", null, m.body);
+    var chosen = null;
+    el("div", "none", "Carregando…", listBox);
+    el("div", "none", "Selecione uma versão.", side);
+    function preview(b) {
+      side.innerHTML = "";
+      el("div", "vtitle", esc(fmtWhen(b.when)), side);
+      var pv = el("div", "vpages", null, side);
+      el("div", "none", "Carregando…", pv);
+      var go = el("button", "vrestore", "Restaurar esta versão", side);
+      go.id = "verRestore";
+      go.onclick = function () { doRestore(b); };
+      SD.req("GET", "/api/local/backups/" + encodeURIComponent(b.name), null, function (ok, data, status) {
+        if (chosen !== b) return;
+        pv.innerHTML = "";
+        if (!ok || !data || !data.pages) { el("div", "none", "Não abriu: " + esc(SD.errText(data, status)), pv); return; }
+        el("div", "lg", "Páginas", pv);
+        var ul = el("ol", "vnames", null, pv);
+        data.pages.forEach(function (p, i) {
+          var n = (p.buttons || []).filter(function (x) { return x && ((x.label && SD.trim(String(x.label))) || (x.action && x.action.type && x.action.type !== "none")); }).length;
+          el("li", null, "<b>" + esc(p.name || ("Página " + (i + 1))) + "</b><span>" + esc(plural(n, "botão", "botões")) + "</span>", ul);
+        });
+      });
+    }
+    function doRestore(b) {
+      if (dirty || inflight) { SD.toast("Aguarde salvar as mudanças atuais e tente de novo", true); return; }
+      if (!window.confirm("Restaurar a versão de " + fmtWhen(b.when) + "?\n\nOs botões e páginas atuais serão substituídos. A versão atual fica guardada nesta lista, então dá para voltar depois.")) return;
+      setStatus("Restaurando…", "busy");
+      SD.req("POST", "/api/local/backups/restore", JSON.stringify({ name: b.name }), function (ok, data, status) {
+        if (!ok || !data || !data.ok) { setStatus("Não restaurou: " + SD.errText(data, status), "err"); SD.toast("Não restaurou: " + SD.errText(data, status), true); return; }
+        m.close();
+        dirty = false; clearTimeout(saveT);
+        page = 0; folder = -1; selectOne(-1);
+        loadConfig(false, "Versão de " + fmtWhen(b.when) + " restaurada ✓");
+      });
+    }
+    SD.req("GET", "/api/local/backups", null, function (ok, data, status) {
+      listBox.innerHTML = "";
+      if (!ok || !data || !data.backups) { el("div", "none", "Não carregou: " + esc(SD.errText(data, status)), listBox); return; }
+      if (!data.backups.length) { el("div", "none", "Nenhuma versão guardada ainda. Elas aparecem aqui depois que você muda algum botão.", listBox); return; }
+      data.backups.forEach(function (b, i) {
+        var r = el("button", "vrow", "<b>" + esc(fmtWhen(b.when)) + (b.current ? " <em>atual</em>" : "") + "</b><span>" +
+          esc(plural(b.pages, "página", "páginas") + " · " + plural(b.buttons, "botão", "botões")) + "</span>", listBox);
+        r.onclick = function () {
+          var all = listBox.querySelectorAll(".vrow");
+          for (var k = 0; k < all.length; k++) all[k].className = "vrow";
+          r.className = "vrow on";
+          chosen = b;
+          preview(b);
+        };
+      });
+    });
+  }
   function setupMenu() {
     var btn = $("backupBtn"), menu = $("backupMenu");
     btn.onclick = function (e) { e.stopPropagation(); menu.style.display = menu.style.display === "block" ? "none" : "block"; };
     document.addEventListener("click", function () { menu.style.display = "none"; });
     $("exportBtn").onclick = function () { menu.style.display = "none"; exportZip(); };
     $("importBtn").onclick = function () { menu.style.display = "none"; importZip(); };
+    $("versionsBtn").onclick = function () { menu.style.display = "none"; if (!$("verModal")) openVersions(); };
   }
 
   /* ============================================================= inicio === */

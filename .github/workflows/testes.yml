@@ -1,0 +1,86 @@
+name: Testes
+
+# Roda em pull requests, em pushes fora da main e manualmente. A main e coberta
+# pelo release.yml (que roda os mesmos testes antes de publicar).
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # o setup-python nao tem 3.8 para o Ubuntu 24.04
+          - python: "3.8"
+            os: ubuntu-22.04
+          - python: "3.12"
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Testes Python (unittest)
+        run: python -m unittest discover -s tests -v
+
+      - uses: actions/setup-node@v4
+        if: matrix.python == '3.12'
+        with:
+          node-version: "20"
+
+      - name: Testes JavaScript (core.js)
+        if: matrix.python == '3.12'
+        run: node tests/js/flow.test.js
+
+      - name: Instalar Playwright (Chromium)
+        if: matrix.python == '3.12'
+        run: |
+          npm install --no-save --no-package-lock playwright@1.48.2
+          npx playwright install --with-deps chromium
+
+      - name: Teste no navegador (celular e editor)
+        if: matrix.python == '3.12'
+        env:
+          PYTHON: python
+        run: node tests/e2e/smoke.js
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Testes Python (unittest)
+        run: python -m unittest discover -s tests -v
+
+      # bootloader pronto (mais rapido); o release.yml compila o bootloader
+      - name: Instalar PyInstaller
+        run: pip install pyinstaller==6.10.0
+
+      - name: Gerar StreamDeck.exe
+        run: |
+          python tools/versao.py
+          pyinstaller --onefile --console --noupx --name StreamDeck --icon icon.ico --version-file build/version_info.txt --add-data "web;web" --add-data "config.padrao.json;." --collect-submodules streamdeck server.py
+
+      - name: Testar o .exe (abrir, API, fechar)
+        shell: pwsh
+        run: ./tests/exe_smoke.ps1 -Exe dist/StreamDeck.exe

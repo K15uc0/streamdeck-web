@@ -157,6 +157,18 @@ def _safe_member(name):
 def import_zip(fileobj):
     """Confere o zip inteiro, depois grava imagens/sons e troca o config
     (o anterior fica em config.bak.json). Devolve (n imagens, n sons)."""
+    if not hasattr(fileobj, "seekable"):
+        # SpooledTemporaryFile so tem seekable() a partir do Python 3.11
+        import tempfile, shutil
+        with tempfile.TemporaryFile() as tmp:
+            fileobj.seek(0)
+            shutil.copyfileobj(fileobj, tmp)
+            tmp.seek(0)
+            return _import_zip(tmp)
+    return _import_zip(fileobj)
+
+
+def _import_zip(fileobj):
     try:
         z = zipfile.ZipFile(fileobj)
     except zipfile.BadZipFile:
@@ -210,7 +222,7 @@ def import_zip(fileobj):
                 n_img += 1
             else:
                 n_snd += 1
-        storage.save_config(cfg)
+        storage.save_config(cfg, force=True)
         if skipped:
             print("  importar: %d arquivo(s) ignorado(s)" % skipped)
         return n_img, n_snd

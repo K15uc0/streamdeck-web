@@ -36,6 +36,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Testes (unittest)
+        if: steps.ver.outputs.exists == 'false'
+        run: python -m unittest discover -s tests -v
+
       - name: Instalar PyInstaller (bootloader compilado aqui)
         if: steps.ver.outputs.exists == 'false'
         env:
@@ -49,6 +53,12 @@ jobs:
         run: |
           python tools/versao.py
           pyinstaller --onefile --console --noupx --name StreamDeck --icon icon.ico --version-file build/version_info.txt --add-data "web;web" --add-data "config.padrao.json;." --collect-submodules streamdeck server.py
+
+      # um .exe que nao abre nunca e publicado
+      - name: Testar o .exe (abrir, API, fechar)
+        if: steps.ver.outputs.exists == 'false'
+        shell: pwsh
+        run: ./tests/exe_smoke.ps1 -Exe dist/StreamDeck.exe
 
       - name: Notas da versão
         if: steps.ver.outputs.exists == 'false'

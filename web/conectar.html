@@ -68,6 +68,15 @@
   a.edit .ego { flex: none; background: #fff; color: #0a84ff; font-weight: 600; font-size: 15px; padding: 9px 16px; border-radius: 18px; }
   .muted { color: rgba(235,235,245,0.6); font-size: 13px; }
   .warn { margin: 0; padding: 12px 16px; background: rgba(255,159,10,0.12); color: #ff9f0a; font-size: 14px; line-height: 1.4; }
+  .kv { display: flex; gap: 12px; }
+  .kv .k { flex: none; width: 150px; color: rgba(235,235,245,0.6); font-size: 15px; }
+  .kv .v { flex: 1; min-width: 0; font-size: 15px; word-break: break-all; }
+  .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: #30d158; margin-right: 8px; vertical-align: 1px; }
+  .dot.old { background: rgba(235,235,245,0.3); }
+  .err { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px; color: #ff6961; word-break: break-word; }
+  .err .muted { font-family: inherit; margin-right: 8px; }
+  #diagCopy { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 28px 16px 40px; } h1 { font-size: 28px; } }
 </style>
 </head>
@@ -126,6 +135,19 @@
     <div class="item btn"><button id="check">Verificar agora</button></div>
     <div class="item btn" id="applyRow"><button id="apply" class="primary" style="display:none">Atualizar agora</button></div>
   </div>
+
+  <div class="hdr">Diagnóstico</div>
+  <div class="list" id="diag">
+    <div class="item"><span class="t kv"><span class="k">Versão</span><span class="v" id="dVer">…</span></span></div>
+    <div class="item"><span class="t kv"><span class="k">Endereços</span><span class="v mono" id="dAddr">…</span></span></div>
+    <div class="item"><span class="t kv"><span class="k">Ligado há</span><span class="v" id="dUp">…</span></span></div>
+    <div class="item"><span class="t kv"><span class="k">Aparelhos conectados</span><span class="v" id="dCli">…</span></span></div>
+    <div class="item"><span class="t kv"><span class="k">Últimos erros</span><span class="v" id="dErr">…</span></span></div>
+    <div class="item btn"><button id="openlog">Abrir log</button></div>
+    <div class="item btn"><button id="copydiag">Copiar diagnóstico</button></div>
+  </div>
+  <p class="foot" id="dFoot">Ao pedir ajuda, use “Copiar diagnóstico” e cole na mensagem.</p>
+  <textarea id="diagCopy" readonly aria-hidden="true" tabindex="-1"></textarea>
 </main>
 
 <script src="/qrcode.js"></script>
@@ -204,6 +226,102 @@ $("apply").onclick = async () => {
 };
 
 load();
+
+/* ------------------------------------------------------- diagnostico --- */
+var diagData = null, diagTimer = null;
+function ago(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return "agora";
+  var m = Math.floor(sec / 60);
+  if (m < 60) return "há " + m + " min";
+  var h = Math.floor(m / 60);
+  if (h < 24) return "há " + h + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
+  return "há " + Math.floor(h / 24) + " d";
+}
+function dur(sec) {
+  var d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  if (d) return d + " d " + h + " h";
+  if (h) return h + " h " + m + " min";
+  return m + " min";
+}
+function hhmm(epoch) {
+  var d = new Date(epoch * 1000);
+  function two(n) { return (n < 10 ? "0" : "") + n; }
+  return two(d.getDate()) + "/" + two(d.getMonth() + 1) + " " + two(d.getHours()) + ":" + two(d.getMinutes());
+}
+function addrList(d) {
+  var a = (d.addresses && d.addresses.length) ? d.addresses : [d.lan_ip];
+  return a.map(function (ip) { return ip + ":" + d.port; });
+}
+function showDiag(d) {
+  diagData = d;
+  var now = Date.now() / 1000;
+  $("dVer").innerHTML = esc(d.version) + ' <span class="muted">· Python ' + esc(d.python) + (d.frozen ? " · .exe" : "") + " · " + esc(d.platform) + "</span>";
+  $("dAddr").innerHTML = addrList(d).map(esc).join("<br>");
+  $("dUp").textContent = dur(d.uptime_s);
+  if (!d.clients.length) $("dCli").innerHTML = '<span class="muted">Nenhum aparelho desde que o Stream Deck abriu</span>';
+  else $("dCli").innerHTML = d.clients.map(function (c) {
+    var age = now - c.last_seen;
+    return '<span class="dot' + (age > 120 ? " old" : "") + '"></span><span class="mono">' + esc(c.ip) + "</span> " +
+      '<span class="muted">' + esc(ago(age)) + (c.user_agent ? " · " + esc(c.user_agent) : "") + "</span>";
+  }).join("<br>");
+  if (!d.recent_errors.length) $("dErr").innerHTML = '<span class="muted">Nenhum erro</span>';
+  else $("dErr").innerHTML = d.recent_errors.slice(-8).reverse().map(function (e) {
+    return '<div class="err"><span class="muted">' + esc(hhmm(e.when)) + "</span>" + esc(e.text) + "</div>";
+  }).join("");
+  $("dFoot").textContent = "Log em " + d.log_path + ". Ao pedir ajuda, use “Copiar diagnóstico” e cole na mensagem.";
+}
+function diagText(d) {
+  var now = Date.now() / 1000, L = [];
+  L.push("Stream Deck " + d.version + (d.frozen ? " (.exe)" : " (Python " + d.python + ")"));
+  L.push("Sistema: " + d.platform);
+  L.push("Dados: " + d.data_dir);
+  L.push("Log: " + d.log_path);
+  L.push("Endereços: " + addrList(d).join(", "));
+  L.push("Ligado há: " + dur(d.uptime_s));
+  if (d.autostart != null) L.push("Iniciar com o Windows: " + (d.autostart ? "sim" : "não"));
+  if (d.update) L.push("Atualização: " + (d.update.available ? "disponível " + d.update.latest : "em dia") + (d.update.error ? " (erro: " + d.update.error + ")" : ""));
+  L.push("Aparelhos (" + d.clients.length + "):");
+  d.clients.forEach(function (c) { L.push("  " + c.ip + " - " + ago(now - c.last_seen) + (c.user_agent ? " - " + c.user_agent : "")); });
+  L.push("Últimos erros (" + d.recent_errors.length + "):");
+  if (!d.recent_errors.length) L.push("  nenhum");
+  d.recent_errors.forEach(function (e) { L.push("  [" + hhmm(e.when) + "] " + e.text); });
+  return L.join("\n");
+}
+function loadDiag() {
+  var x = new XMLHttpRequest();
+  x.open("GET", "/api/local/diag?t=" + Date.now(), true);
+  x.setRequestHeader("X-StreamDeck", "1");
+  x.onload = function () {
+    try { var d = JSON.parse(x.responseText); if (d && d.ok) showDiag(d); } catch (e) { /* ignora */ }
+  };
+  x.send(null);
+}
+function diagLoop() {
+  clearInterval(diagTimer);
+  if (document.hidden) return;
+  loadDiag();
+  diagTimer = setInterval(function () { if (!document.hidden) loadDiag(); }, 5000);
+}
+document.addEventListener("visibilitychange", diagLoop);
+diagLoop();
+$("openlog").onclick = function () {
+  api("/api/local/openlog", {}).then(function (r) { if (!r.ok) alert("Não abriu o log: " + r.error); });
+};
+$("copydiag").onclick = function () {
+  if (!diagData) return;
+  var text = diagText(diagData), b = $("copydiag");
+  function done() { b.textContent = "Copiado ✓"; setTimeout(function () { b.textContent = "Copiar diagnóstico"; }, 2000); }
+  function fallback() {
+    var ta = $("diagCopy");
+    ta.value = text; ta.focus(); ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    if (ok) done(); else { ta.style.cssText = "position:static;width:100%;height:200px;margin-top:8px"; ta.select(); b.textContent = "Selecione e copie (Ctrl+C)"; }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+  else fallback();
+};
 </script>
 </body>
 </html>
