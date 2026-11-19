@@ -142,3 +142,27 @@ def beep(a):
 e importar o módulo em `streamdeck/actions/__init__.py` (`_load()`). A validação
 básica (obrigatórios, limites, opções) vem dos campos; validações extras vão em
 `validate=func`.
+
+## 2.1: edição só no PC, tela cheia e orientação
+
+**Edição só no PC.** `POST /api/config` só é aceito do próprio PC (127.0.0.1/::1);
+de outro aparelho responde 403 `{ok:false, error:"edite pelo PC"}`. A opção
+`remote_admin` (Conectar > Segurança) e o bloqueio de "ações perigosas" vindas do
+celular deixam de existir (o celular não salva mais nada). `/api/info` perde
+`remote_admin`. `POST /api/tabs` continua aceito do celular (lista de PCs do aparelho).
+
+**Editor do PC.** `GET /editar` (só no PC, como `/conectar`) serve `web/editar.html`
+com `web/css/editar.css` e `web/js/editar.js`, que reutilizam `web/js/core.js`
+(rede, ícones, cores). Rota extra só no PC: `POST /api/local/test` com corpo
+`{action}` executa uma ação sem salvar (botão "Testar").
+
+**Grade por orientação.** `columns`/`rows` = grade na horizontal. Opcional
+`"portrait": {"columns": 3, "rows": 5}` = grade na vertical (1..10 x 1..8). Sem
+`portrait`, a vertical é a horizontal transposta quando `columns > rows` (como hoje).
+A mesma lista de botões é distribuída linha a linha em cada grade; se a grade
+atual tiver menos posições que a lista, os excedentes não aparecem (o editor avisa).
+
+**Celular (só uso).** Sem modo edição. Ajustes por aparelho em localStorage
+(`sd_prefs`): `orientation` = `auto|portrait|landscape`, `autoFullscreen` bool.
+Tela cheia pela barra; trava via `screen.orientation.lock` quando possível, senão
+gira o conteúdo por CSS. `web/manifest.json` + ícones para "Adicionar à tela inicial".
