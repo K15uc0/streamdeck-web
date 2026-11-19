@@ -1885,7 +1885,7 @@
       if (!ok || !data || !data.backups) { el("div", "none", "Não carregou: " + esc(SD.errText(data, status)), listBox); return; }
       if (!data.backups.length) { el("div", "none", "Nenhuma versão guardada ainda. Elas aparecem aqui depois que você muda algum botão.", listBox); return; }
       data.backups.forEach(function (b, i) {
-        var r = el("button", "vrow", "<b>" + esc(fmtWhen(b.when)) + (i === 0 ? " <em>atual</em>" : "") + "</b><span>" +
+        var r = el("button", "vrow", "<b>" + esc(fmtWhen(b.when)) + (b.current ? " <em>atual</em>" : "") + "</b><span>" +
           esc(plural(b.pages, "página", "páginas") + " · " + plural(b.buttons, "botão", "botões")) + "</span>", listBox);
         r.onclick = function () {
           var all = listBox.querySelectorAll(".vrow");

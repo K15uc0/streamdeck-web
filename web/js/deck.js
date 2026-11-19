@@ -648,7 +648,7 @@
     var b = k.b, a = b && b.action;
     if (k.folder) { buzz(10); openFolder(k); return; }
     /* liga/desliga sem acao (ex.: ON AIR) ainda alterna o estado no PC */
-    if ((!a || a.type === "none") && !b.toggle) return;
+    if (!b || ((!a || a.type === "none") && !b.toggle)) return;
     if (a && a.type === "page") { buzz(10); return SD.goPage(parseInt(a.to, 10) || 0); }
     if (repeating && pending > 0) return;   /* nao empilha pedidos se a rede estiver lenta */
     flash(k, true);                          /* resposta visual na hora */

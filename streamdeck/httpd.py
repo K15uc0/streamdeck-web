@@ -119,6 +119,29 @@ def _int(q, name):
     return int(q[name][0])
 
 
+_DIAG_CACHE = {"plat": None, "addr": None, "addr_t": 0.0}
+
+
+def _platform_str():
+    """Texto da plataforma (calculado uma vez so)."""
+    if _DIAG_CACHE["plat"] is None:
+        try:
+            import platform
+            _DIAG_CACHE["plat"] = platform.platform()
+        except Exception:  # noqa: BLE001
+            _DIAG_CACHE["plat"] = sys.platform
+    return _DIAG_CACHE["plat"]
+
+
+def _addresses():
+    """Enderecos IPv4 guardados por 60 s."""
+    now = time.time()
+    if _DIAG_CACHE["addr"] is None or now - _DIAG_CACHE["addr_t"] > 60:
+        _DIAG_CACHE["addr"] = diag.ipv4_addresses()
+        _DIAG_CACHE["addr_t"] = now
+    return _DIAG_CACHE["addr"]
+
+
 class Handler(BaseHTTPRequestHandler):
     # HTTP/1.1: atende "Expect: 100-continue" e conexoes mantidas abertas,
     # que o navegador antigo do Android usa. timeout evita conexoes presas.
@@ -545,18 +568,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def local_backup_get(self, name):
         try:
-            return self._json(200, storage.read_backup(name))
+            return self._json(200, schema.migrate(storage.read_backup(name))[0])
         except ValueError as e:
             return self._json(400, {"ok": False, "error": str(e)})
         except (KeyError, OSError):
             return self._json(404, {"ok": False, "error": "copia nao encontrada"})
 
     def local_diag(self, q):
-        try:
-            import platform
-            plat = platform.platform()
-        except Exception:  # noqa: BLE001
-            plat = sys.platform
+        plat = _platform_str()
         try:
             auto = winapi.autostart_enabled()
         except Exception:  # noqa: BLE001
@@ -564,7 +583,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {
             "ok": True, "version": VERSION, "python": sys.version.split()[0], "frozen": paths.FROZEN,
             "platform": plat, "data_dir": paths.BASE, "port": state.PORT[0], "lan_ip": security.lan_ip(),
-            "addresses": diag.ipv4_addresses(), "uptime_s": int(time.time() - diag.STARTED),
+            "addresses": _addresses(), "uptime_s": int(time.time() - diag.STARTED),
             "clients": diag.clients(), "recent_errors": diag.recent_errors(), "log_path": paths.LOG_PATH,
             "autostart": auto, "update": updates.update_status()})
 

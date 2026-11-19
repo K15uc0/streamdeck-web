@@ -95,6 +95,12 @@ async function phone(browser, base, token, size, errors) {
   await page.locator("#grid .cell", { hasText: "ON AIR" }).click();
   await lit;
 
+  /* toque num bloco vazio nao faz nada (nem erro no console) */
+  var nErr = errors.length;
+  await page.locator("#grid .cell.empty-cell").first().click();
+  await page.waitForTimeout(200);
+  assert.strictEqual(errors.length, nErr, name + ": erro ao tocar bloco vazio: " + errors.slice(nErr).join("; "));
+
   /* pasta abre e fecha */
   await page.locator("#grid .cell", { hasText: "Pasta" }).click();
   await page.locator("#folder").waitFor({ state: "visible", timeout: 5000 });
