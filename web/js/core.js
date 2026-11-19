@@ -232,7 +232,7 @@
     if (!b) return true;
     if (b.kind === "fader") return false;
     var t = b.action && b.action.type;
-    return (!t || t === "none") && !SD.trim(b.label) && !b.icon && !b.toggle && !b.color;
+    return (!t || t === "none") && !SD.trim(b.label) && !b.icon && !b.toggle && !b.color && !b.image && !b.live && !b.textColor;
   };
   /* isEmpty tambem vale para pasta (kind "folder" nunca e vazia) */
   var isEmpty0 = SD.isEmpty;
