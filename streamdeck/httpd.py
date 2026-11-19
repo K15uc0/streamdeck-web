@@ -21,7 +21,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, audio, library, media, paths, schema, security, state, storage, updates, \
+from . import VERSION, actions, audio, diag, library, media, paths, schema, security, state, storage, updates, \
     windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
@@ -59,6 +59,10 @@ ROUTES = {
     ("GET", "/api/images"): "get_images",
     ("GET", "/api/local/windows"): "local_windows",
     ("GET", "/api/local/export"): "local_export",
+    ("GET", "/api/local/backups"): "local_backups",
+    ("GET", "/api/local/diag"): "local_diag",
+    ("POST", "/api/local/backups/restore"): "local_backup_restore",
+    ("POST", "/api/local/openlog"): "local_openlog",
     ("POST", "/api/local/images"): "local_images",
     ("POST", "/api/local/import"): "local_import",
     ("POST", "/api/local/autostart"): "local_autostart",
@@ -106,6 +110,7 @@ def is_local_only(path, full=None):
     return False
 
 
+BACKUP_PREFIX = "/api/local/backups/"   # GET /api/local/backups/<nome>
 NO_CODE = {("GET", "/api/local/info")}       # ja restritas ao proprio PC
 # do proprio PC (tela Conectar/Editar) a API nao pede o codigo de acesso
 
@@ -315,6 +320,8 @@ class Handler(BaseHTTPRequestHandler):
         if not (self._local() or self._authed(q)):
             print("! pedido recusado de %s: codigo de acesso ausente ou errado" % self.client_address[0])
             return self._deny_auth()
+        if not self._local():
+            diag.note_client(self.client_address[0], self.headers.get("User-Agent"))
         return self._route("POST", url.path, q)
 
     # -------------------------------------------------------------- GET ---
@@ -362,6 +369,10 @@ class Handler(BaseHTTPRequestHandler):
             key = ("GET", url.path)
             if key not in NO_CODE and not (self._authed(q) or self._local()):
                 return self._deny_auth()
+            if not self._local():
+                diag.note_client(self.client_address[0], self.headers.get("User-Agent"))
+            if url.path.startswith(BACKUP_PREFIX) and self._local():
+                return self.local_backup_get(url.path[len(BACKUP_PREFIX):])
             return self._route("GET", url.path, q)
 
         return self._static(url.path)
@@ -529,7 +540,54 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
         print("* copia de seguranca exportada (%s)" % name)
 
+    def local_backups(self, q):
+        return self._json(200, {"ok": True, "backups": storage.list_backups()})
+
+    def local_backup_get(self, name):
+        try:
+            return self._json(200, storage.read_backup(name))
+        except ValueError as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        except (KeyError, OSError):
+            return self._json(404, {"ok": False, "error": "copia nao encontrada"})
+
+    def local_diag(self, q):
+        try:
+            import platform
+            plat = platform.platform()
+        except Exception:  # noqa: BLE001
+            plat = sys.platform
+        try:
+            auto = winapi.autostart_enabled()
+        except Exception:  # noqa: BLE001
+            auto = None
+        return self._json(200, {
+            "ok": True, "version": VERSION, "python": sys.version.split()[0], "frozen": paths.FROZEN,
+            "platform": plat, "data_dir": paths.BASE, "port": state.PORT[0], "lan_ip": security.lan_ip(),
+            "addresses": diag.ipv4_addresses(), "uptime_s": int(time.time() - diag.STARTED),
+            "clients": diag.clients(), "recent_errors": diag.recent_errors(), "log_path": paths.LOG_PATH,
+            "autostart": auto, "update": updates.update_status()})
+
     # ======================================================= rotas POST ===
+    def local_backup_restore(self, body):
+        name = body.get("name") if isinstance(body, dict) else None
+        try:
+            v = storage.restore_backup(name)
+        except KeyError:
+            return self._json(404, {"ok": False, "error": "copia nao encontrada"})
+        except (ValueError, OSError) as e:
+            print("! erro ao restaurar copia: %s" % e)
+            return self._json(400, {"ok": False, "error": str(e)})
+        print("* versao anterior restaurada: %s" % name)
+        return self._json(200, {"ok": True, "v": v})
+
+    def local_openlog(self, body):
+        if paths.IS_WINDOWS:
+            os.startfile(paths.LOG_PATH)   # noqa: S606 - arquivo fixo do proprio programa
+        else:
+            print("  (abriria o log: %s)" % paths.LOG_PATH)
+        return self._json(200, {"ok": True})
+
     def local_images(self, q, f):
         name = media.save_image((q.get("name") or [""])[0], f.read())
         print("* imagem adicionada: %s" % name)
@@ -541,6 +599,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {"ok": True, "name": name})
 
     def local_import(self, q, f):
+        storage.backup_current()
         n_img, n_snd = media.import_zip(f)
         print("* copia de seguranca importada: %d imagem(ns), %d som(ns)" % (n_img, n_snd))
         return self._json(200, {"ok": True, "images": n_img, "sounds": n_snd, "v": storage.config_version()})

@@ -67,6 +67,7 @@ def _migrate_file(data, raw):
             f.write(raw)
     except OSError as e:
         print("  aviso: sem copia do config antigo (%s)" % e)
+    _backup_bytes(raw)
     try:
         schema.validate_config(new)
     except ValueError as e:
@@ -104,6 +105,122 @@ def save_config(cfg):
             except OSError as e:
                 print("  aviso: sem copia de seguranca (%s)" % e)
         write_json(paths.CONFIG_PATH, cfg)
+        _backup_file()
+
+
+# ------------------------------------------------------ historico (copias) ---
+BACKUP_KEEP = 20
+BACKUP_RE = re.compile(r"^config-\d{8}-\d{6}(-\d{1,3})?\.json$")
+
+
+def backups_dir():
+    return os.path.join(paths.BASE, "backups")
+
+
+def _backup_names():
+    """Nomes das copias validas, da mais nova para a mais antiga."""
+    try:
+        names = [n for n in os.listdir(backups_dir()) if BACKUP_RE.match(n)]
+    except OSError:
+        return []
+
+    def k(n):
+        base = n[:-5].split("-")
+        return (base[1], base[2], int(base[3]) if len(base) > 3 else 0)
+    return sorted(names, key=k, reverse=True)
+
+
+def _backup_bytes(raw):
+    """Guarda raw como copia com data e hora (se diferente da mais nova) e
+    mantem so as BACKUP_KEEP mais recentes. Nunca levanta erro."""
+    try:
+        if not raw:
+            return None
+        folder = backups_dir()
+        os.makedirs(folder, exist_ok=True)
+        names = _backup_names()
+        if names:
+            try:
+                with open(os.path.join(folder, names[0]), "rb") as f:
+                    if f.read() == raw:
+                        return names[0]
+            except OSError:
+                pass
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        name = "config-%s.json" % stamp
+        n = 1
+        while os.path.exists(os.path.join(folder, name)) and n < 1000:
+            name = "config-%s-%d.json" % (stamp, n)
+            n += 1
+        with open(os.path.join(folder, name), "wb") as f:
+            f.write(raw)
+        for old in _backup_names()[BACKUP_KEEP:]:
+            try:
+                os.remove(os.path.join(folder, old))
+            except OSError:
+                pass
+        return name
+    except Exception as e:  # noqa: BLE001 - copia nunca impede de salvar
+        print("  aviso: sem copia no historico (%s)" % e)
+        return None
+
+
+def _backup_file():
+    try:
+        with open(paths.CONFIG_PATH, "rb") as f:
+            raw = f.read()
+    except OSError:
+        return None
+    return _backup_bytes(raw)
+
+
+def backup_current():
+    """Copia o config.json atual para o historico (antes de importar/restaurar)."""
+    with FILE_LOCK:
+        return _backup_file()
+
+
+def _backup_path(name):
+    if not isinstance(name, str) or not BACKUP_RE.match(name):
+        raise ValueError("nome de copia invalido")
+    full = os.path.join(backups_dir(), name)
+    if not paths.inside(full, backups_dir()) or not os.path.isfile(full):
+        raise KeyError("copia nao encontrada")
+    return full
+
+
+def read_backup(name):
+    with open(_backup_path(name), "rb") as f:
+        return json.loads(f.read().decode("utf-8-sig"))
+
+
+def list_backups():
+    out = []
+    for n in _backup_names():
+        full = os.path.join(backups_dir(), n)
+        item = {"name": n, "when": 0, "size": 0, "pages": 0, "buttons": 0}
+        try:
+            b = n[7:22]
+            item["when"] = int(time.mktime(time.strptime(b, "%Y%m%d-%H%M%S")))
+            item["size"] = os.path.getsize(full)
+            data, _ = schema.migrate(read_backup(n))
+            pages = data.get("pages") or []
+            item["pages"] = len(pages)
+            item["buttons"] = sum(len([x for x in (p.get("buttons") or []) if schema._used(x)])
+                                  for p in pages if isinstance(p, dict))
+        except Exception:  # noqa: BLE001 - copia estragada ainda aparece
+            pass
+        out.append(item)
+    return out
+
+
+def restore_backup(name):
+    """Valida a copia, guarda o atual no historico e restaura."""
+    data, _ = schema.migrate(read_backup(name))
+    schema.validate_config(data)
+    backup_current()
+    save_config(data)
+    return config_version()
 
 
 # ------------------------------------------------------------------ abas ---

@@ -9,7 +9,7 @@ import time
 import urllib.request
 import webbrowser
 
-from . import VERSION, paths, state, storage, updates, winapi
+from . import VERSION, diag, paths, state, storage, updates, winapi
 from .httpd import Handler, Server
 from .security import lan_ip
 
@@ -89,6 +89,7 @@ class Tee:
                 self.f.write(text)
             except Exception:
                 pass
+        diag.feed(text)
 
     def flush(self):
         try:
