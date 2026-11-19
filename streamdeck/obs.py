@@ -25,7 +25,7 @@ RETRY = 5.0                # segundos entre tentativas de conexao
 TIMEOUT = 3.0              # espera maxima de um pedido
 MAX_MSG = 16 * 1024 * 1024
 MAX_MUTE_INPUTS = 40       # fontes de audio consultadas ao conectar
-GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC11B65"
+GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 # inscricoes de eventos (EventSubscription do obs-websocket)
 SUB_GENERAL, SUB_SCENES, SUB_INPUTS, SUB_OUTPUTS = 1 << 0, 1 << 2, 1 << 3, 1 << 6
@@ -342,7 +342,9 @@ class ObsClient(object):
         elif kind == "RecordStateChanged":
             st["record"] = bool(data.get("outputActive"))
         elif kind == "InputMuteStateChanged":
-            st["muted"][data.get("inputName", "")] = bool(data.get("inputMuted"))
+            muted = dict(st["muted"])     # copia: snapshot() pode estar lendo
+            muted[data.get("inputName", "")] = bool(data.get("inputMuted"))
+            st["muted"] = muted
         elif kind == "SceneListChanged":
             self.scenes = [s.get("sceneName", "") for s in reversed(data.get("scenes") or [])]
         elif kind in ("InputCreated", "InputRemoved", "InputNameChanged"):
