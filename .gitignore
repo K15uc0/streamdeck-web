@@ -10,3 +10,4 @@ diagnostico.txt
 build/
 dist/
 *.spec
+dist-installer/

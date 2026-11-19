@@ -76,11 +76,38 @@ jobs:
       - name: Instalar PyInstaller
         run: pip install pyinstaller==6.10.0
 
-      - name: Gerar StreamDeck.exe
+      # arquivo unico (portatil, clientes ate a 2.4.0) e versao em pasta (instalador)
+      - name: Gerar StreamDeck.exe (arquivo unico e pasta)
+        shell: pwsh
         run: |
           python tools/versao.py
-          pyinstaller --onefile --console --noupx --name StreamDeck --icon icon.ico --version-file build/version_info.txt --add-data "web;web" --add-data "config.padrao.json;." --collect-submodules streamdeck server.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pyinstaller --onefile --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --collect-submodules streamdeck --workpath build/onefile --specpath build/onefile --distpath dist server.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pyinstaller --onedir --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --collect-submodules streamdeck --workpath build/onedir --specpath build/onedir --distpath dist/onedir server.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Testar o .exe (abrir, API, fechar)
+      - name: Testar o .exe portatil (abrir, API, fechar)
         shell: pwsh
         run: ./tests/exe_smoke.ps1 -Exe dist/StreamDeck.exe
+
+      - name: Testar o .exe da pasta (abrir, API, fechar)
+        shell: pwsh
+        run: ./tests/exe_smoke.ps1 -Exe dist/onedir/StreamDeck/StreamDeck.exe
+
+      - name: Gerar instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          $ver = (Select-String -Path streamdeck/__init__.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
+          & $iscc "/DMyAppVersion=$ver" installer/streamdeck.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Testar o instalador (instalar, atualizar, desinstalar)
+        shell: pwsh
+        run: ./tests/installer_smoke.ps1 -Installer dist-installer/StreamDeck-Instalador.exe

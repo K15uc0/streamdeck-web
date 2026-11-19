@@ -4,7 +4,8 @@ Transforma qualquer celular ou tablet, inclusive Android antigo, num painel de b
 
 ## Como usar
 
-1. **Baixe o [StreamDeck.exe](https://github.com/K15uc0/streamdeck-web/releases/latest/download/StreamDeck.exe)** e abra.
+1. **Baixe o [StreamDeck-Instalador.exe](https://github.com/K15uc0/streamdeck-web/releases/latest/download/StreamDeck-Instalador.exe)** (recomendado) e instale. Não pede administrador: instala só para o seu usuário em `%LOCALAPPDATA%\Programs\StreamDeck`, cria o atalho **Stream Deck** no Menu Iniciar e, se você marcar, na Área de Trabalho e em **Iniciar com o Windows**. Desinstala por **Configurações → Aplicativos**.
+   - Prefere sem instalar? Baixe o [StreamDeck.exe portátil](https://github.com/K15uc0/streamdeck-web/releases/latest/download/StreamDeck.exe) (um arquivo só, pode ficar em qualquer pasta; abre um pouco mais devagar).
    - Se aparecer *"O Windows protegeu o computador"*: **Mais informações → Executar assim mesmo**.
    - Na pergunta do firewall: marque **Redes privadas e Redes públicas** → **Permitir**.
 2. Abre no PC a tela **Conectar um aparelho** com um QR code. Aponte a câmera do celular ou tablet (no mesmo Wi-Fi) e abra o link.
@@ -18,10 +19,17 @@ O StreamDeck.exe é gratuito e não tem assinatura digital paga, por isso o Wind
 
 - **SmartScreen** (*"O Windows protegeu o computador"*): clique em **Mais informações → Executar assim mesmo**.
 - **Microsoft Defender apagou ou colocou em quarentena**: abra **Segurança do Windows → Proteção contra vírus e ameaças → Histórico de proteção**, clique no item do StreamDeck.exe e escolha **Restaurar** (ou **Ações → Permitir no dispositivo**).
-- **Confira se o arquivo é o original**: as notas de cada versão em [Releases](https://github.com/K15uc0/streamdeck-web/releases) trazem o SHA-256 do StreamDeck.exe. No PowerShell: `Get-FileHash .\StreamDeck.exe` — o valor tem de ser igual.
+- **Confira se o arquivo é o original**: as notas de cada versão em [Releases](https://github.com/K15uc0/streamdeck-web/releases) trazem o SHA-256 do StreamDeck-Instalador.exe e do StreamDeck.exe. No PowerShell: `Get-FileHash .\StreamDeck-Instalador.exe` — o valor tem de ser igual.
 - **Avise a Microsoft do falso positivo**: envie o arquivo em <https://www.microsoft.com/wdsi/filesubmission> (escolha *Software developer* ou *Home customer* e marque *Incorrectly detected*). Depois da análise, o bloqueio costuma sumir para todo mundo.
 
-O programa só abre a porta local, não se instala em lugar nenhum além do registro de "iniciar com o Windows" (se você marcar) e não mexe em outros programas.
+O programa só abre a porta local e não mexe em outros programas. O instalador grava apenas a pasta do programa, os atalhos e (se marcado) o registro de "iniciar com o Windows"; a versão portátil não instala nada. Os seus botões, abas e sons ficam em `Documentos\StreamDeck` e nunca são apagados, nem ao desinstalar.
+
+## Atualizações
+
+O app avisa quando sai versão nova; toque em **Atualizar agora**:
+
+- **Instalado**: baixa o `StreamDeck-Instalador.exe` novo, confere o SHA-256, fecha o programa, instala por cima em silêncio e abre de novo.
+- **Portátil**: baixa o `StreamDeck.exe` novo, confere o SHA-256, troca o arquivo e reinicia.
 
 ## O que dá para fazer
 
@@ -46,6 +54,7 @@ Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão
   - Python, sem instalar nada: `python -m unittest discover -s tests` (validação e migração do config, ações, biblioteca, segurança e a API com o servidor de verdade numa porta livre; os dados ficam numa pasta temporária e nenhuma tecla é enviada de verdade).
   - JavaScript do núcleo (`SD.flow`, `SD.geometry`...), só com Node: `node tests/js/flow.test.js`.
   - No navegador (celular 390x844, tablet 1180x820 e editor do PC): `npm install --no-save playwright@1.48.2`, `npx playwright install chromium` e `node tests/e2e/smoke.js` (sobe o `server.py` sozinho; falha com qualquer erro no console).
-  - `.exe` (Windows, pwsh): depois de gerar com o PyInstaller, `./tests/exe_smoke.ps1 -Exe dist/StreamDeck.exe` abre o programa, confere a API e fecha.
+  - `.exe` (Windows, pwsh): depois de gerar com o PyInstaller (comandos em `.github/workflows/testes.yml`), `./tests/exe_smoke.ps1 -Exe dist/StreamDeck.exe` (portátil) ou `-Exe dist/onedir/StreamDeck/StreamDeck.exe` (pasta) abre o programa, confere a API e fecha.
+  - Instalador (Windows, Inno Setup 6.3+): `iscc /DMyAppVersion=x.y.z installer\streamdeck.iss` gera `dist-installer/StreamDeck-Instalador.exe`; `./tests/installer_smoke.ps1` instala numa pasta temporária, atualiza com o app aberto, desinstala e confere que os dados ficaram.
   - Ação nova: acrescente um exemplo válido e alguns inválidos em `EXEMPLOS` de `tests/test_acoes.py` (o teste avisa se faltar).
-- Publicar versão: altere `VERSION` em `streamdeck/__init__.py`, adicione a seção no `CHANGELOG.md` e envie para a `main`. O GitHub Actions gera o `StreamDeck.exe` e publica a release; os programas instalados avisam os usuários.
+- Publicar versão: altere `VERSION` em `streamdeck/__init__.py`, adicione a seção no `CHANGELOG.md` e envie para a `main`. O GitHub Actions gera o instalador e o `StreamDeck.exe` portátil, testa os dois e publica a release (o instalador primeiro e o `StreamDeck.exe` por último: os apps até a 2.4.0 baixam o último `.exe`); os programas instalados avisam os usuários.

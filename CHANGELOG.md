@@ -1,5 +1,11 @@
 # Novidades
 
+## 2.5.0
+
+- Instalador: baixe o StreamDeck-Instalador.exe (recomendado). Instala só para o seu usuário, sem pedir administrador, com atalho no Menu Iniciar e desinstalador (seus botões em Documentos\StreamDeck nunca são apagados). Abre mais rápido, porque não precisa se extrair a cada vez.
+- Ícone na bandeja (perto do relógio) no lugar da janela preta: Conectar um aparelho, Editar botões, pasta de dados, log, Iniciar com o Windows, aviso de atualização e Sair.
+- A versão avulsa (StreamDeck.exe) continua disponível e se atualiza sozinha como antes.
+
 ## 2.4.0
 
 - Versões anteriores: o programa guarda até 20 versões dos botões (no máximo uma a cada 10 minutos de edição, com o estado de antes de você começar a mexer). No editor, Backup > "Versões anteriores…" mostra cada uma e restaura com um clique (a versão substituída também fica guardada).
