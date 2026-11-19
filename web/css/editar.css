@@ -71,9 +71,20 @@ input, select, textarea { font: inherit; color: #fff; }
 .warnbox { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: rgba(255,159,10,0.14);
   color: #ff9f0a; font-size: 14px; line-height: 1.4; }
 #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px 0; }
-#device { background: #000; border: 2px solid #2c2c2e; border-radius: 34px; padding: 22px;
-  box-shadow: 0 0 0 7px #161617, 0 20px 60px rgba(0,0,0,0.6); }
-#grid { display: grid; gap: 12px; }
+/* moldura do aparelho: #device tem o tamanho real da tela (px CSS) e e reduzido por escala */
+#devbox { position: relative; flex: none; border-radius: 18px; overflow: hidden; background: #000;
+  box-shadow: 0 0 0 2px #2c2c2e, 0 0 0 9px #161617, 0 20px 60px rgba(0,0,0,0.6); }
+#device { position: absolute; left: 0; top: 0; background: #000; overflow: hidden;
+  -webkit-transform-origin: 0 0; transform-origin: 0 0; }
+#dnav { position: absolute; left: 0; top: 0; right: 0; z-index: 2; background: rgba(28,28,30,0.72);
+  border-bottom: 0.5px solid rgba(84,84,88,0.45); line-height: 44px; text-align: center; pointer-events: none;
+  font: 600 17px/44px -apple-system, system-ui, sans-serif; letter-spacing: -0.4px; color: #fff; white-space: nowrap; overflow: hidden; }
+#dnav .dn-l { position: absolute; left: 12px; top: 0; color: #0a84ff; font-weight: 400; }
+#ddots { position: absolute; left: 0; right: 0; text-align: center; line-height: 0; pointer-events: none; }
+#ddots i { display: inline-block; width: 7px; height: 7px; border-radius: 4px; margin: 9px 4.5px; background: rgba(255,255,255,0.3); }
+#ddots i.on { background: #fff; }
+#grid { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+#devpick input.num { width: 70px; background: #1c1c1e; border: 0; border-radius: 8px; padding: 6px 8px; }
 .hint { text-align: center; font-size: 12px; color: rgba(235,235,245,0.45); margin: 0; }
 
 /* ----------------------------------------------- blocos (como no celular) --- */
@@ -192,7 +203,6 @@ input[type=checkbox]:checked:after { transform: translateX(16px); }
   background: linear-gradient(135deg, transparent 50%, #0a84ff 50%); border-bottom-right-radius: 40%; }
 .tile.sel:hover, body.resizing .tile { transform: none; }
 body.resizing, body.resizing * { cursor: nwse-resize !important; }
-#grid .tile { justify-self: start; align-self: start; }
 
 /* inspetor */
 .preview { gap: 18px; align-items: flex-end; }

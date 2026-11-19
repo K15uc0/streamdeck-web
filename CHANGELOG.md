@@ -1,5 +1,10 @@
 # Novidades
 
+## 2.3.0
+
+- Os botões agora esticam para preencher toda a tela do celular e do tablet, em pé e deitado, sem sobras nas bordas.
+- Editor do PC: escolha o aparelho (celular ou tablet, em pé ou deitado, ou tamanho personalizado) e veja a prévia exatamente como vai ficar na tela.
+
 ## 2.2.0
 
 - Botões maiores: cada botão pode ocupar até 4x4 espaços (estique pela alça no editor).
