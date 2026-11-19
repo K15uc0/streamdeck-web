@@ -6,18 +6,21 @@ formulario (o editor do aparelho monta a tela a partir de /api/actions).
 Para criar uma nova: um arquivo em streamdeck/actions/ e um import em _load().
 Veja docs/ARQUITETURA.md."""
 import re
+import threading
 
 from ..winapi import vk_of
 
 FIELD_KINDS = ("text", "textarea", "keys", "number", "bool", "select", "sound", "page", "steps",
-               "app", "color")
+               "app", "color", "obs_scene", "obs_input")
 NO_STEP = ("page", "multi")   # tipos que nao podem ser passos de uma sequencia
 
 REGISTRY = {}   # tipo -> Action (na ordem de registro)
 # ordem no editor das acoes que vem com o programa; as novas vao no fim
 ORDER = ("none", "hotkey", "open", "command", "page", "multi",
          "sound", "stopsound", "text", "http", "mute",
-         "app", "apphotkey", "site", "tab")
+         "app", "apphotkey", "site", "tab",
+         "obs_scene", "obs_stream", "obs_record", "obs_mute")
+CONTEXT = threading.local()   # CONTEXT.key = "p:b[:f]" do botao que disparou (ou None)
 
 
 class Field(object):
@@ -74,12 +77,24 @@ def get(type):
     return REGISTRY.get(type)
 
 
-def run(a):
-    """Executa a acao (dict com "type")."""
+def run(a, key=None):
+    """Executa a acao (dict com "type"). key: botao de origem ("p:b[:f]"),
+    visivel para a acao em current_key() (passos de sequencia herdam)."""
     act = REGISTRY.get(a.get("type")) if isinstance(a, dict) else None
     if act is None:
         raise ValueError("tipo de acao desconhecido: %s" % (a.get("type") if isinstance(a, dict) else a))
-    return act.fn(a)
+    if key is None:
+        return act.fn(a)
+    old = getattr(CONTEXT, "key", None)
+    CONTEXT.key = key
+    try:
+        return act.fn(a)
+    finally:
+        CONTEXT.key = old
+
+
+def current_key():
+    return getattr(CONTEXT, "key", None)
 
 
 def schema():
@@ -107,6 +122,9 @@ def _check_field(f, a, n_pages, where):
     name = "\"%s\"" % f.label
     if f.kind in ("text", "textarea", "sound"):
         if not isinstance(v, (str, int, float)):
+            raise ValueError("%s: %s invalido" % (where, name))
+    elif f.kind in ("obs_scene", "obs_input"):
+        if not isinstance(v, str) or len(v) > 120 or "\n" in v:
             raise ValueError("%s: %s invalido" % (where, name))
     elif f.kind == "app":
         if not isinstance(v, str) or len(v) > 260 or "\n" in v:
@@ -159,7 +177,7 @@ def validate(a, n_pages, where):
 
 def _load():
     # imports explicitos: o PyInstaller enxerga e inclui os modulos
-    from . import flow, keyboard, system, audio, web, apps  # noqa: F401  (ordem = ordem no editor)
+    from . import flow, keyboard, system, audio, web, apps, obs  # noqa: F401  (ordem = ordem no editor)
 
 
 _load()

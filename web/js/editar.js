@@ -12,8 +12,17 @@
   var NO_STEP = { page: 1, multi: 1 };
   var LIVE = [["", "Nenhum (mostra o rótulo)"], ["clock", "Relógio (hora)"], ["date", "Data"],
     ["volume:master", "Volume do PC"], ["volume:effects", "Volume dos efeitos"], ["volume:mic", "Volume do microfone"],
-    ["timer", "Cronômetro (desde que ligou)"]];
-  var LIVE_SAMPLE = { clock: "", date: "", "volume:master": "75%", "volume:effects": "100%", "volume:mic": "80%", timer: "00:00" };
+    ["timer", "Cronômetro (desde que ligou)"], ["obs:stream", "OBS: transmissão"], ["obs:record", "OBS: gravação"],
+    ["obs:scene", "OBS: cena atual"], ["sound", "Progresso do som"]];
+  var LIVE_SAMPLE = { clock: "", date: "", "volume:master": "75%", "volume:effects": "100%", "volume:mic": "80%", timer: "00:00",
+    "obs:stream": "AO VIVO", "obs:record": "REC", "obs:scene": "Cena", sound: "0:12" };
+  /* "acender quando" (lit): estado do OBS */
+  var LIT = [["", "Nunca (normal)"], ["obs:stream", "OBS transmitindo"], ["obs:record", "OBS gravando"],
+    ["obs:scene", "Cena do OBS for…"], ["obs:mute", "Fonte do OBS estiver mutada…"]];
+  /* teclas que repetem ao segurar no celular (igual ao deck.js) */
+  var REPEAT = { volumeup: 1, volumedown: 1, left: 1, right: 1, up: 1, down: 1, pageup: 1, pagedown: 1 };
+  var GESTURES = [["hold", "Ao segurar"], ["double", "Toque duplo"]];
+  var obsList = null;        /* {ok, scenes, inputs} de /api/local/obs/scenes (null = nao carregado) */
   var SIZES = [[1, 1], [2, 1], [1, 2], [2, 2]];
   var RECENT_KEY = "sd_ed_recent_colors";
 
@@ -51,7 +60,7 @@
   /* ========================================================= utilidades === */
   var isEmpty = SD.isEmpty;   /* mesma regra do celular */
   /* vazio para o editor: alem da regra do celular, imagem/texto ao vivo/cor do texto contam como conteudo */
-  function edEmpty(b) { return isEmpty(b) && !(b && (b.image || b.live || b.textColor)); }
+  function edEmpty(b) { return isEmpty(b) && !(b && (b.image || b.live || b.textColor || b.hold || b.double || b.lit)); }
   function curPage() { return cfg.pages[page]; }
   function fold() {
     var bs = curPage().buttons || [];
@@ -193,6 +202,15 @@
         continue;
       }
       if (b.on && blank(b.on)) delete b.on;
+      if (b.kind === "fader") { delete b.hold; delete b.double; delete b.confirm; delete b.lit; continue; }
+      if (!b.confirm) delete b.confirm;
+      if (!b.lit || /=$/.test(b.lit)) delete b.lit;
+      for (var g = 0; g < GESTURES.length; g++) {
+        var gk = GESTURES[g][0], ga = b[gk];
+        if (!ga || !ga.type || ga.type === "none") { delete b[gk]; continue; }
+        var gm = missing(ga, false);
+        if (gm) { if (!bad[prefix + k]) bad[prefix + k] = GESTURES[g][1].toLowerCase() + ": " + gm; if (missing(ga, true)) delete b[gk]; }
+      }
       if (b.kind === "fader" || !b.action || !b.action.type || b.action.type === "none") continue;
       var orig = missing(b.action, false);
       if (!orig) continue;
@@ -652,6 +670,18 @@
       dot.style.width = ds + "px"; dot.style.height = ds + "px";
       dot.style.right = pad + "px"; dot.style.top = pad + "px";
     }
+    var gb = [];
+    if (b.hold && b.hold.type && b.hold.type !== "none") gb.push(["●", "Ao segurar"]);
+    if (b.double && b.double.type && b.double.type !== "none") gb.push(["●●", "Toque duplo"]);
+    if (b.confirm) gb.push(["!", "Pede confirmação"]);
+    if (b.lit) gb.push(["\u26a1\ufe0e", "Acende conforme o OBS"]);
+    if (gb.length && b.kind !== "folder" && size >= 40) {
+      var gw = el("div", "gbadges", null, t);
+      gw.style.right = (b.toggle ? pad + Math.max(6, Math.round(size * 0.08)) + 4 : Math.round(pad * 0.6)) + "px";
+      gw.style.top = Math.round(pad * 0.6) + "px";
+      gb.forEach(function (x) { var s0 = el("span", null, x[0], gw); s0.title = x[1]; });
+      gw.title = gb.map(function (x) { return x[1]; }).join(" · ");
+    }
     if (b.kind === "folder") {
       var fb = el("div", "fbadge", SD.svg("folder", 12, "#fff") + (b.buttons ? "<span>" + count(b) + "</span>" : ""), t);
       fb.title = "Pasta";
@@ -1083,6 +1113,9 @@
       fs.onchange = function () { edit(function (x) { x.target = fs.value; }); };
     } else if (kind !== "folder") {
       renderAction(box, b);
+      renderConfirm(box, b);
+      renderGestures(box, b);
+      renderLit(box, b);
       if (kind === "toggle") renderOn(box, b);
     }
 
@@ -1094,6 +1127,101 @@
     test.onclick = function () { testAction(curBtn().action); };
     var clr = el("button", "clear", "Limpar", acts);
     clr.onclick = clearSel;
+  }
+
+  /* ----------------------------------------- confirmacao, gestos, acender --- */
+  function renderConfirm(box, b) {
+    var cf = field(box, null, "O celular pede “Toque de novo para confirmar” antes de executar. Bom para desligar, fechar, apagar…");
+    var lab = el("label", "chk", null, cf);
+    var c = el("input", null, null, lab);
+    c.type = "checkbox"; c.id = "confirm"; c.checked = !!b.confirm;
+    el("span", null, "Pedir confirmação", lab);
+    c.onchange = function () { edit(function (x) { if (c.checked) x.confirm = true; else delete x.confirm; }); };
+  }
+  /* a acao do toque repete ao segurar (volume, setas)? */
+  function repeats(a) {
+    return !!(a && a.type === "hotkey" && a.keys && a.keys.length === 1 && REPEAT[String(a.keys[0]).toLowerCase()]);
+  }
+  function renderGestures(box, b) {
+    var s = section(box, "Gestos", "gestSec");
+    GESTURES.forEach(function (g) {
+      var gk = g[0], a = b[gk] || { type: "none" };
+      var help = null;
+      if (gk === "double") help = "Com toque duplo, o toque simples espera um instante (~0,3 s) antes de executar.";
+      if (gk === "hold" && repeats(b.action)) help = "Botões de volume/setas repetem ao segurar; o “ao segurar” substitui a repetição.";
+      var f = field(s, g[1], help);
+      var sl = actionSelect(f, a.type, false, function (t) {
+        edit(function (x) { if (t === "none") delete x[gk]; else x[gk] = newAction(t); });
+      });
+      sl.id = gk + "Action";
+      /* garante a opcao "Nenhuma" mesmo se a lista do servidor nao tiver "none" */
+      var on0 = sl.querySelector("option[value=none]");
+      if (on0) on0.textContent = "Nenhuma";
+      else { var o = el("option", null, "Nenhuma"); o.value = "none"; sl.insertBefore(o, sl.firstChild); if (a.type === "none") sl.value = "none"; }
+      if (a.type === "none") return;
+      var sc = SD.actionMap[a.type];
+      if (sc && sc.help) el("div", "ahelp", esc(sc.help), s);
+      var sub = el("div", "gest", null, s);
+      renderFields(sub, a, [["@", gk]], gk);
+    });
+  }
+  function renderLit(box, b) {
+    var lit = b.lit || "", m = /^(obs:(?:scene|mute))=(.*)$/.exec(lit);
+    var mode = m ? m[1] : lit, arg = m ? m[2] : "";
+    var f = field(box, "Acender quando", "O bloco aparece aceso enquanto isso for verdade no OBS (independe do liga-desliga).");
+    var s = el("select", "in", null, f);
+    s.id = "lit";
+    LIT.forEach(function (x) { opt(s, x[0], x[1], mode); });
+    if (mode && !LIT.some(function (x) { return x[0] === mode; })) opt(s, mode, mode, mode);
+    s.onchange = function () {
+      var v = s.value;
+      edit(function (x) {
+        if (!v) delete x.lit;
+        else if (v === "obs:scene" || v === "obs:mute") x.lit = v + "=" + (v === mode ? arg : "");
+        else x.lit = v;
+      });
+    };
+    if (mode === "obs:scene" || mode === "obs:mute") {
+      obsPicker(f, mode === "obs:scene" ? "scenes" : "inputs", arg, "litArg", function (val, light) {
+        edit(function (x) { x.lit = mode + "=" + val; }, "lit", light);
+      });
+    }
+  }
+  /* cenas/fontes do OBS: lista (select) + texto livre. Devolve o input de texto. */
+  function loadObsList(cb) {
+    SD.req("GET", "/api/local/obs/scenes", null, function (ok, data) {
+      obsList = ok && data && data.ok ? { ok: true, scenes: data.scenes || [], inputs: data.inputs || [] } : { ok: false, scenes: [], inputs: [] };
+      if (cb) cb();
+    });
+  }
+  function obsPicker(parent, which, cur, id, set) {
+    var wrap = el("div", "obsrow", null, parent);
+    var s = el("select", "in", null, wrap);
+    s.id = id + "-list";
+    var inp = el("input", "in", null, wrap);
+    inp.id = id;
+    inp.value = cur;
+    inp.placeholder = which === "scenes" ? "Nome da cena" : "Nome da fonte de áudio";
+    inp.oninput = function () { s.value = ""; set(inp.value, true); };
+    var note = el("div", "help obsnote", "", parent);
+    function fill() {
+      s.innerHTML = "";
+      var l = obsList ? obsList[which] : [];
+      opt(s, "", obsList ? (l.length ? (which === "scenes" ? "Escolher cena…" : "Escolher fonte…") : "(lista vazia)") : "Carregando…", "");
+      l.forEach(function (n) { opt(s, n, n, cur); });
+      if (obsList) opt(s, "__r", "↻ Atualizar lista", "");
+      note.textContent = obsList && !obsList.ok ? "OBS não conectado — configure em Conectar > OBS" : "";
+      note.style.display = note.textContent ? "" : "none";
+    }
+    s.onchange = function () {
+      if (s.value === "__r") { obsList = null; fill(); loadObsList(function () { if (s.parentNode) fill(); }); return; }
+      if (!s.value) return;
+      inp.value = s.value;
+      set(s.value);
+    };
+    fill();
+    if (!obsList) loadObsList(function () { if (s.parentNode) fill(); });
+    return inp;
   }
 
   /* aparencia quando ligado (botao liga-desliga) */
@@ -1300,8 +1428,10 @@
 
   /* acao dentro do botao selecionado, seguindo o caminho (passos) */
   function actionAt(x, path) {
-    var a = x.action;
-    for (var i = 0; i < path.length; i++) a = a[path[i][0]][path[i][1]];
+    var a = x.action, i = 0;
+    /* ["@", "hold"] no inicio = acao de um gesto (x.hold / x.double) */
+    if (path.length && path[0][0] === "@") { a = x[path[0][1]]; i = 1; }
+    for (; i < path.length; i++) a = a[path[i][0]][path[i][1]];
     return a;
   }
   function renderFields(box, a, path, idp) {
@@ -1411,6 +1541,12 @@
       for (var p = 0; p < cfg.pages.length; p++) opt(inp, p, (p + 1) + ". " + pageName(p), v);
       if (v == null) inp.selectedIndex = -1;
       inp.onchange = function () { setVal(path, f.key, parseInt(inp.value, 10)); };
+    } else if (f.kind === "obs_scene" || f.kind === "obs_input") {
+      inp = obsPicker(body, f.kind === "obs_scene" ? "scenes" : "inputs", v == null ? "" : String(v), idp + "-" + f.key, function (val, light) {
+        setVal(path, f.key, val === "" ? undefined : val, light);
+      });
+      if (f.placeholder) inp.placeholder = f.placeholder;
+      return;
     } else if (f.kind === "steps") {
       renderSteps(body, v || [], path.concat([[f.key]]), idp + "-" + f.key);
       return;

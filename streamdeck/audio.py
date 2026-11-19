@@ -39,16 +39,56 @@ def list_sounds():
     return sorted(out, key=str.lower)
 
 
+FADE_STEPS = 20           # degraus de volume nas transicoes suaves pelo MCI
+SIM_DEFAULT_DUR = 3.0     # duracao simulada (fora do Windows) quando nao da para saber
+
+
+def quick_duration(path):
+    """Duracao (s) sem decodificar: WAV pelo modulo wave; senao None."""
+    if not path.lower().endswith(".wav"):
+        return None
+    try:
+        import wave
+        with wave.open(path, "rb") as w:
+            rate = w.getframerate()
+            return w.getnframes() / float(rate) if rate else None
+    except Exception:
+        return None
+
+
+def _sim_duration(path):
+    d = quick_duration(path)
+    if d:
+        return d
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        size = 0
+    # ~128 kbps (MP3 comum) = 16000 bytes/s; minimo de 3 s para dar tempo de ver
+    return min(600.0, max(SIM_DEFAULT_DUR, size / 16000.0))
+
+
+def _ms(v):
+    try:
+        return max(0, min(5000, int(v or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
 class SoundPlayer:
     """Toca varios sons ao mesmo tempo. Comandos do MCI rodam numa unica
     thread (como o MCI prefere); cada som amplificado (>100%) toca na sua
-    propria thread pelo waveOut, que o Windows mistura com os outros."""
+    propria thread pelo waveOut, que o Windows mistura com os outros.
+    Cada som tocado vira uma "faixa" (botao de origem, arquivo, inicio,
+    duracao) para o /api/state mostrar o progresso."""
 
     def __init__(self):
         self.q = queue.Queue()
-        self.playing = []          # [(alias, volume do botao)] pelo MCI
+        self.playing = []          # [[alias, volume do botao, faixa]] pelo MCI
         self.pcm = []              # [PcmSound] pelo waveOut
         self.pcm_lock = threading.Lock()
+        self.tracks = []           # faixas tocando (dicts)
+        self.tracks_lock = threading.Lock()
         self.n = 0
         self.level = 100           # fader EFEITOS (0..200)
         self.muted = False
@@ -71,17 +111,66 @@ class SoundPlayer:
             self.muted = bool(muted)
         self.q.put(("vol",))
 
-    def play(self, path, volume=100, exclusive=False):
-        self.q.put(("play", path, volume, exclusive))
+    # ------------------------------------------------------- faixas ---
+    def play(self, path, volume=100, exclusive=False, key=None, fade_in=0):
+        now = time.time()
+        track = {"key": key, "file": os.path.basename(path), "start": now, "dur": None,
+                 "end": None, "done": False}
+        if not IS_WINDOWS:
+            track["dur"] = _sim_duration(path)
+        else:
+            track["dur"] = quick_duration(path)
+        with self.tracks_lock:
+            if exclusive:
+                for t in self.tracks:
+                    t["done"] = True
+            self.tracks.append(track)
+        self.q.put(("play", path, volume, exclusive, track, _ms(fade_in)))
 
-    def stop_all(self):
-        self.q.put(("stop",))
+    def stop_all(self, fade=0):
+        fade = _ms(fade)
+        if not IS_WINDOWS:
+            fade = 0               # simulado: so a contabilidade, sem esperar
+        end = time.time() + fade / 1000.0
+        with self.tracks_lock:
+            for t in self.tracks:
+                if fade:
+                    t["end"] = min(t["end"] or end, end)
+                else:
+                    t["done"] = True
+        self.q.put(("stop", fade))
 
-    def _stop_pcm(self):
+    def sounds(self):
+        """[{key, file, pos, dur}] dos sons tocando agora (segundos)."""
+        now = time.time()
+        out = []
+        with self.tracks_lock:
+            keep = []
+            for t in self.tracks:
+                pos = now - t["start"]
+                dur = t["dur"]
+                if t["done"] or (t["end"] and now >= t["end"]) or (dur is not None and pos > dur + 0.3):
+                    continue
+                keep.append(t)
+                out.append({"key": t["key"], "file": t["file"], "pos": round(min(pos, dur or pos), 2),
+                            "dur": None if dur is None else round(dur, 2)})
+            self.tracks = keep
+        return out
+
+    def _finish(self, track):
+        if track is not None:
+            track["done"] = True
+
+    # ---------------------------------------------------------- MCI ---
+    def _stop_pcm(self, fade=0):
         with self.pcm_lock:
             for snd in self.pcm:
-                snd.stop()
-            self.pcm = []
+                if fade:
+                    snd.fade_out(fade)
+                else:
+                    snd.stop()
+            if not fade:
+                self.pcm = []
 
     def _mci(self, cmd):
         import ctypes
@@ -99,20 +188,43 @@ class SoundPlayer:
         except Exception:
             pass
 
-    def _mci_play(self, path, volume):
+    def _mci_vol(self, alias, volume, factor=1.0):
+        try:
+            self._mci("setaudio %s volume to %d" % (alias, int(min(100, self.effective(volume)) * 10 * factor)))
+        except Exception:
+            pass
+
+    def _ramp(self, steps_ms, make):
+        """Thread que enfileira FADE_STEPS comandos make(i) espacados."""
+        def run():
+            for i in range(1, FADE_STEPS + 1):
+                time.sleep(steps_ms / 1000.0 / FADE_STEPS)
+                self.q.put(make(i))
+        threading.Thread(target=run, daemon=True).start()
+
+    def _mci_play(self, path, volume, track=None, fade_in=0):
         self.n += 1
         alias = "sd%d" % self.n
         try:
             self._mci('open "%s" type mpegvideo alias %s' % (path, alias))
             try:
-                self._mci("setaudio %s volume to %d" % (alias, min(100, self.effective(volume)) * 10))
+                self._mci("set %s time format milliseconds" % alias)
+                ms = int(self._mci("status %s length" % alias) or 0)
+                if ms > 0 and track is not None:
+                    track["dur"] = ms / 1000.0
             except Exception:
                 pass
+            self._mci_vol(alias, volume, 0.0 if fade_in else 1.0)
             self._mci("play " + alias)
-            self.playing.append((alias, volume))
+            if track is not None:
+                track["start"] = time.time()
+            self.playing.append([alias, volume, track])
+            if fade_in:
+                self._ramp(fade_in, lambda i: ("setvol", alias, volume, i / float(FADE_STEPS)))
         except Exception as e:
             print("  erro ao tocar %s: %s" % (path, e))
             self._close(alias)
+            self._finish(track)
 
     def _loop(self):
         while True:
@@ -126,44 +238,69 @@ class SoundPlayer:
                         if self._mci("status %s mode" % entry[0]) != "playing":
                             self._close(entry[0])
                             self.playing.remove(entry)
+                            self._finish(entry[2])
                     except Exception:
                         self.playing.remove(entry)
+                        self._finish(entry[2])
             with self.pcm_lock:
+                for x in self.pcm:
+                    if not x.alive():
+                        self._finish(x.track)
                 self.pcm = [x for x in self.pcm if x.alive()]
             if item is None:
                 continue
-            if item[0] == "vol":           # fader mexeu: ajusta o que ja esta tocando
-                for alias, vol in self.playing:
-                    if IS_WINDOWS:
-                        try:
-                            self._mci("setaudio %s volume to %d" % (alias, min(100, self.effective(vol)) * 10))
-                        except Exception:
-                            pass
-                continue                   # os sons PCM leem o ganho a cada bloco
-            if item[0] == "mci":           # PCM falhou: toca pelo MCI a ate 100%
-                self._mci_play(item[1], item[2])
-                continue
-            if item[0] == "stop" or (item[0] == "play" and item[3]):
-                for alias, _vol in self.playing:
-                    if IS_WINDOWS:
-                        self._close(alias)
-                self.playing = []
-                self._stop_pcm()
-                if item[0] == "stop":
-                    print("  sons parados")
-                    continue
-            _, path, volume, _ = item
-            eff = self.effective(volume)
-            if not IS_WINDOWS:
-                print("  [simulado] tocar:", path, "vol", eff, "(amplificado)" if eff > 100 else "")
-                continue
-            if eff > 100:
-                snd = PcmSound(self, path, volume)
-                with self.pcm_lock:
-                    self.pcm.append(snd)
-                snd.start()
-            else:
-                self._mci_play(path, volume)
+            try:
+                self._handle(item)
+            except Exception as e:
+                print("  erro no som:", e)
+
+    def _handle(self, item):
+        if item[0] == "vol":           # fader mexeu: ajusta o que ja esta tocando
+            if IS_WINDOWS:
+                for alias, vol, _t in self.playing:
+                    self._mci_vol(alias, vol)
+            return                     # os sons PCM leem o ganho a cada bloco
+        if item[0] == "setvol":        # degrau de entrada suave
+            if IS_WINDOWS and any(e[0] == item[1] for e in self.playing):
+                self._mci_vol(item[1], item[2], item[3])
+            return
+        if item[0] == "scale":         # degrau de saida suave (todos)
+            if IS_WINDOWS:
+                for alias, vol, _t in self.playing:
+                    self._mci_vol(alias, vol, item[1])
+            return
+        if item[0] == "mci":           # PCM falhou: toca pelo MCI a ate 100%
+            self._mci_play(item[1], item[2], item[3], item[4])
+            return
+        if item[0] == "stop" and item[1] and IS_WINDOWS:
+            # saida suave: PCM abaixa sozinho; MCI em degraus e depois para
+            self._stop_pcm(item[1])
+            if self.playing:
+                self._ramp(item[1], lambda i: ("scale", 1.0 - i / float(FADE_STEPS))
+                           if i < FADE_STEPS else ("stop", 0))
+            return
+        if item[0] == "stop" or (item[0] == "play" and item[3]):
+            for alias, _vol, t in self.playing:
+                if IS_WINDOWS:
+                    self._close(alias)
+                self._finish(t)
+            self.playing = []
+            self._stop_pcm()
+            if item[0] == "stop":
+                print("  sons parados")
+                return
+        _, path, volume, _excl, track, fade_in = item
+        eff = self.effective(volume)
+        if not IS_WINDOWS:
+            print("  [simulado] tocar:", path, "vol", eff, "(amplificado)" if eff > 100 else "")
+            return
+        if eff > 100 or fade_in:
+            snd = PcmSound(self, path, volume, track, fade_in)
+            with self.pcm_lock:
+                self.pcm.append(snd)
+            snd.start()
+        else:
+            self._mci_play(path, volume, track)
 
 
 # --------------------------------------------- PCM: decodificar e tocar ---
@@ -325,8 +462,10 @@ class PcmSound(object):
     """Um som tocando pelo waveOut, em blocos de ~100 ms com o ganho atual."""
     BLOCKS = 4
 
-    def __init__(self, player, path, volume):
+    def __init__(self, player, path, volume, track=None, fade_in=0):
         self.player, self.path, self.volume = player, path, volume
+        self.track, self.fade_in = track, fade_in
+        self.fade_at, self.fade_ms = None, 0      # saida suave em andamento
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -335,6 +474,23 @@ class PcmSound(object):
 
     def stop(self):
         self._stop.set()
+
+    def fade_out(self, ms):
+        if self.fade_at is None:
+            self.fade_at, self.fade_ms = time.time(), max(1, ms)
+
+    def gain(self, pos_s):
+        """Ganho atual (0..2) com entrada e saida suaves."""
+        g = self.player.effective(self.volume) / 100.0
+        if self.fade_in:
+            g *= min(1.0, pos_s * 1000.0 / self.fade_in)
+        if self.fade_at is not None:
+            left = 1.0 - (time.time() - self.fade_at) * 1000.0 / self.fade_ms
+            if left <= 0:
+                self._stop.set()
+                return 0.0
+            g *= left
+        return g
 
     def alive(self):
         return self._thread.is_alive() or not self._thread.ident
@@ -345,8 +501,11 @@ class PcmSound(object):
         except Exception as e:
             print("  aviso: sem amplificar %s (%s); tocando a 100%%" % (os.path.basename(self.path), e))
             if not self._stop.is_set():
-                self.player.q.put(("mci", self.path, min(100, self.volume)))
+                self.player.q.put(("mci", self.path, min(100, self.volume), self.track, self.fade_in))
             return
+        if self.track is not None:
+            self.track["dur"] = len(data) / float(max(1, ch * 2 * rate))
+            self.track["start"] = time.time()
         try:
             self._play(ch, rate, data)
         except Exception as e:
@@ -396,7 +555,7 @@ class PcmSound(object):
                         winmm.waveOutUnprepareHeader(h, byref(hdrs[i]), size)
                         busy[i] = False
                     if not busy[i] and pos < len(data):
-                        gain = self.player.effective(self.volume) / 100.0
+                        gain = self.gain(pos / float(align * rate))
                         chunk = apply_gain(data[pos:pos + block], gain)
                         pos += block
                         bufs[i] = ctypes.create_string_buffer(chunk, len(chunk))

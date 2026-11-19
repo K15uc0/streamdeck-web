@@ -77,6 +77,14 @@
   .err { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px; color: #ff6961; word-break: break-word; }
   .err .muted { font-family: inherit; margin-right: 8px; }
   #diagCopy { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; }
+  .obsf { display: grid; grid-template-columns: 1fr 110px; gap: 10px; padding: 14px 16px; }
+  .obsf label { display: block; font-size: 13px; color: rgba(235,235,245,0.6); }
+  .obsf input { display: block; width: 100%; margin-top: 4px; background: #2c2c2e; border: 0; border-radius: 9px; color: #fff;
+    font: inherit; font-size: 15px; padding: 9px 11px; outline: none; }
+  .obsf input:focus { box-shadow: 0 0 0 2px #0a84ff; }
+  .obsf .full { grid-column: 1 / -1; }
+  #obsDot { background: rgba(235,235,245,0.3); }
+  #obsDot.on { background: #30d158; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 28px 16px 40px; } h1 { font-size: 28px; } }
 </style>
 </head>
@@ -119,6 +127,20 @@
       <span class="s" id="quitMsg">Desliga o programa neste PC. Os aparelhos param de funcionar até abrir de novo.</span></span></div>
   </div>
   <p class="foot">Seus botões, abas e sons ficam em <span id="datapath">…</span>. Eles são mantidos nas atualizações.</p>
+
+  <div class="hdr">OBS (WebSocket)</div>
+  <div class="list" id="obsCard">
+    <div class="item"><span class="t"><span class="dot" id="obsDot"></span><span id="obsStatus">Verificando…</span>
+      <span class="s err" id="obsErr" style="display:none"></span></span></div>
+    <div class="obsf">
+      <label>Endereço (host)<input id="obsHost" placeholder="127.0.0.1" autocomplete="off" spellcheck="false"></label>
+      <label>Porta<input id="obsPort" type="number" min="1" max="65535" placeholder="4455"></label>
+      <label class="full">Senha<input id="obsPass" type="password" autocomplete="new-password"></label>
+    </div>
+    <div class="item btn"><button id="obsSave" class="primary">Salvar e conectar</button></div>
+  </div>
+  <p class="foot">No OBS: <b>Ferramentas &gt; Configurações do WebSocket &gt; Ativar</b>; copie a senha em
+    <b>Mostrar informações de conexão</b>. Com o OBS conectado, os botões podem trocar de cena, transmitir, gravar e acender conforme o OBS.</p>
 
   <div class="hdr">Segurança</div>
   <div class="list">
@@ -336,6 +358,67 @@ $("copydiag").onclick = function () {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
   else fallback();
 };
+
+/* ---------------------------------------------------------------- OBS --- */
+var obsTimer = null, obsFilled = false;
+function obsReq(method, body, cb) {
+  var x = new XMLHttpRequest();
+  x.open(method, "/api/local/obs" + (method === "GET" ? "?t=" + Date.now() : ""), true);
+  x.setRequestHeader("X-StreamDeck", "1");
+  if (body) x.setRequestHeader("Content-Type", "application/json");
+  x.onload = function () {
+    var d = null;
+    try { d = JSON.parse(x.responseText); } catch (e) { d = null; }
+    cb(x.status === 200 && d && d.ok !== false, d, x.status);
+  };
+  x.onerror = function () { cb(false, null, 0); };
+  x.send(body ? JSON.stringify(body) : null);
+}
+function showObs(ok, d, status) {
+  var st = $("obsStatus"), er = $("obsErr");
+  if (!d || status === 404) {
+    st.textContent = "OBS indisponível nesta versão do Stream Deck";
+    $("obsDot").className = "dot";
+    er.style.display = "none";
+    return;
+  }
+  /* preenche os campos so uma vez (nao atrapalha quem esta digitando) */
+  if (!obsFilled) {
+    obsFilled = true;
+    $("obsHost").value = d.host || "127.0.0.1";
+    $("obsPort").value = d.port || 4455;
+  }
+  $("obsPass").placeholder = d.has_password ? "(salva)" : "senha do WebSocket (se houver)";
+  st.textContent = d.connected ? "Conectado" : "Desconectado";
+  $("obsDot").className = "dot" + (d.connected ? " on" : "");
+  er.textContent = d.error || "";
+  er.style.display = d.error && !d.connected ? "" : "none";
+}
+function loadObs() { obsReq("GET", null, showObs); }
+function obsLoop() {
+  clearInterval(obsTimer);
+  if (document.hidden) return;
+  loadObs();
+  obsTimer = setInterval(function () { if (!document.hidden) loadObs(); }, 5000);
+}
+$("obsSave").onclick = function () {
+  var port = parseInt($("obsPort").value, 10) || 4455;
+  if (port < 1 || port > 65535) { alert("Porta inválida"); return; }
+  var body = { host: ($("obsHost").value || "").replace(/^\s+|\s+$/g, "") || "127.0.0.1", port: port };
+  /* senha em branco = mantem a salva */
+  if ($("obsPass").value) body.password = $("obsPass").value;
+  var b = $("obsSave");
+  b.disabled = true; b.textContent = "Salvando…";
+  obsReq("POST", body, function (ok, d, status) {
+    b.disabled = false; b.textContent = "Salvar e conectar";
+    if (!ok) { alert("Não salvou: " + (d && d.error || "HTTP " + status)); return; }
+    $("obsPass").value = "";
+    $("obsStatus").textContent = "Conectando…";
+    setTimeout(loadObs, 1500);
+  });
+};
+document.addEventListener("visibilitychange", obsLoop);
+obsLoop();
 </script>
 </body>
 </html>

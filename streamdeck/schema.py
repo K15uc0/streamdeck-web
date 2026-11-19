@@ -18,7 +18,11 @@ KINDS = ("button", "fader", "folder")
 FOLDER_KINDS = ("button", "fader")   # pasta dentro de pasta nao
 MAX_FOLDER = 60            # botoes dentro de uma pasta
 MAX_APPS = 20              # apps por pagina (troca automatica)
-LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer")
+LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer",
+        "obs:stream", "obs:record", "obs:scene", "sound")
+MAX_LIT = 120
+# botao aceso pelo estado do OBS
+LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,100})$")
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()\-]{0,99}$")
 # nome de executavel: letras/digitos (inclusive acentos), espaco e pontuacao
@@ -81,6 +85,12 @@ def validate_button(b, n_pages, where, kinds=KINDS):
                 raise ValueError("%s: %s deve ficar entre 1 e 4" % (where, key))
     if "toggle" in b and not isinstance(b["toggle"], bool):
         raise ValueError("%s: toggle deve ser true ou false" % where)
+    if "confirm" in b and not isinstance(b["confirm"], bool):
+        raise ValueError("%s: confirm deve ser true ou false" % where)
+    lit = b.get("lit")
+    if lit not in (None, ""):
+        if not isinstance(lit, str) or len(lit) > MAX_LIT or not LIT_RE.match(lit):
+            raise ValueError("%s: aceso pelo OBS invalido" % where)
     on = b.get("on")
     if on is not None:
         if not isinstance(on, dict):
@@ -105,6 +115,9 @@ def validate_button(b, n_pages, where, kinds=KINDS):
             raise ValueError("%s: o fader deve controlar %s" % (where, ", ".join(FADER_TARGETS)))
     else:
         actions.validate(b.get("action", {"type": "none"}), n_pages, where)
+        for key, name in (("hold", "ao segurar"), ("double", "no toque duplo")):
+            if b.get(key) is not None:
+                actions.validate(b[key], n_pages, "%s (%s)" % (where, name))
 
 
 def validate_config(cfg):
