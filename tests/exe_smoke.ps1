@@ -20,7 +20,7 @@ $env:STREAMDECK_UPDATE_URL = "http://127.0.0.1:9/sem-rede"
 
 $base = "http://127.0.0.1:8765"
 $h = @{ "X-StreamDeck" = "1" }
-$p = Start-Process -FilePath $exePath -WorkingDirectory (Split-Path $exePath) -PassThru
+$p = Start-Process -FilePath $exePath -WorkingDirectory (Split-Path $exePath) -ArgumentList "--sem-bandeja" -PassThru
 $null = $p.Handle   # sem isto o ExitCode pode vir vazio no pwsh
 
 function Show-Log {

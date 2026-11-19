@@ -158,11 +158,20 @@ def apply_installer_update():
         subprocess.Popen(installer_command(dest, os.path.dirname(paths.EXE_PATH)), cwd=folder,
                          creationflags=0x00000008 | 0x00000200, close_fds=True)
         time.sleep(1.5)
+        _stop_tray()
         os._exit(0)
     except Exception as e:
         UPDATE["state"] = "error"
         UPDATE["error"] = "falha ao atualizar: %s" % e
         print("! " + UPDATE["error"])
+
+
+def _stop_tray():
+    try:
+        from . import tray
+        tray.stop()
+    except Exception:
+        pass
 
 
 def cleanup_installer():
@@ -200,6 +209,7 @@ def apply_portable_update():
         print("* atualizado para %s, reiniciando..." % UPDATE["latest"])
         subprocess.Popen([exe], cwd=os.path.dirname(exe), creationflags=0x00000010)
         time.sleep(1.5)
+        _stop_tray()
         os._exit(0)
     except Exception as e:
         try:

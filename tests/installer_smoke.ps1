@@ -79,7 +79,7 @@ if (Get-ItemProperty -Path $runKey -Name StreamDeck -ErrorAction SilentlyContinu
 Write-Host "ok atalho e sem iniciar com o Windows"
 
 # 3) abre o instalado
-$p = Start-Process -FilePath $exe -WorkingDirectory $app -PassThru
+$p = Start-Process -FilePath $exe -WorkingDirectory $app -ArgumentList "--sem-bandeja" -PassThru
 $hello = Wait-Hello
 if (-not $hello) { Fail "sem resposta em /api/local/hello do programa instalado" }
 Write-Host "ok hello do instalado (PID $($hello.pid))"
