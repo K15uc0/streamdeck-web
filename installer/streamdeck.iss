@@ -100,6 +100,8 @@ end;
 function Pedir(const Metodo, Url: String): Boolean;
 var
   Http: Variant;
+  Status: Integer;
+  Texto: String;
 begin
   Result := False;
   try
@@ -112,7 +114,10 @@ begin
       Http.Send('{}')
     else
       Http.Send('');
-    Result := (Http.Status = 200) and ((Metodo = 'POST') or (Pos('streamdeck', Http.ResponseText) > 0));
+    { Variant -> tipos simples antes de comparar (Pascal Script exige) }
+    Status := Http.Status;
+    Texto := Http.ResponseText;
+    Result := (Status = 200) and ((Metodo = 'POST') or (Pos('streamdeck', Texto) > 0));
   except
     Result := False;
   end;
