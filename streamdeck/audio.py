@@ -1,14 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Efeitos sonoros (SoundPlayer pelo MCI), volume do Windows (Core Audio) e
-niveis dos faders: master (saida), effects (sons do Stream Deck) e mic."""
+"""Efeitos sonoros (SoundPlayer), volume do Windows (Core Audio) e niveis dos
+faders: master (saida), effects (sons do Stream Deck, ate 200%) e mic.
+
+Efeitos ate 100% tocam pelo MCI (como sempre). Acima de 100% o som e
+decodificado para PCM (WAV pelo modulo wave; MP3/WMA/M4A pelo Media
+Foundation do Windows) e tocado pelo waveOut com ganho e corte (clipping)
+feitos em Python. Se a decodificacao falhar, toca pelo MCI a 100%."""
 import os
 import queue
 import threading
+import time
+from array import array
 
 from . import paths
 
 IS_WINDOWS = paths.IS_WINDOWS
 TARGETS = ("master", "effects", "mic")
+MAX_LEVEL = {"master": 100, "effects": 200, "mic": 100}
+MAX_EFFECT = 200          # volume maximo de um efeito (botao x fader)
 
 
 # ------------------------------------------------------------ efeitos sonoros ---
@@ -31,25 +40,33 @@ def list_sounds():
 
 
 class SoundPlayer:
-    """Toca varios sons ao mesmo tempo pelo MCI do Windows (sem dependencias).
-    Todos os comandos rodam numa unica thread, como o MCI prefere."""
+    """Toca varios sons ao mesmo tempo. Comandos do MCI rodam numa unica
+    thread (como o MCI prefere); cada som amplificado (>100%) toca na sua
+    propria thread pelo waveOut, que o Windows mistura com os outros."""
 
     def __init__(self):
         self.q = queue.Queue()
-        self.playing = []          # [(alias, volume do botao)]
+        self.playing = []          # [(alias, volume do botao)] pelo MCI
+        self.pcm = []              # [PcmSound] pelo waveOut
+        self.pcm_lock = threading.Lock()
         self.n = 0
-        self.level = 100           # fader EFEITOS
+        self.level = 100           # fader EFEITOS (0..200)
         self.muted = False
         threading.Thread(target=self._loop, daemon=True).start()
 
     def effective(self, volume):
+        """Volume final 0..200 (volume do botao x fader EFEITOS)."""
         if self.muted:
             return 0
-        return int(max(0, min(100, int(volume))) * self.level / 100)
+        try:
+            v = max(0, min(MAX_EFFECT, int(volume)))
+        except (TypeError, ValueError):
+            v = 100
+        return int(min(MAX_EFFECT, v * self.level / 100))
 
     def set_level(self, level=None, muted=None):
         if level is not None:
-            self.level = max(0, min(100, int(level)))
+            self.level = max(0, min(MAX_EFFECT, int(level)))
         if muted is not None:
             self.muted = bool(muted)
         self.q.put(("vol",))
@@ -59,6 +76,12 @@ class SoundPlayer:
 
     def stop_all(self):
         self.q.put(("stop",))
+
+    def _stop_pcm(self):
+        with self.pcm_lock:
+            for snd in self.pcm:
+                snd.stop()
+            self.pcm = []
 
     def _mci(self, cmd):
         import ctypes
@@ -76,6 +99,21 @@ class SoundPlayer:
         except Exception:
             pass
 
+    def _mci_play(self, path, volume):
+        self.n += 1
+        alias = "sd%d" % self.n
+        try:
+            self._mci('open "%s" type mpegvideo alias %s' % (path, alias))
+            try:
+                self._mci("setaudio %s volume to %d" % (alias, min(100, self.effective(volume)) * 10))
+            except Exception:
+                pass
+            self._mci("play " + alias)
+            self.playing.append((alias, volume))
+        except Exception as e:
+            print("  erro ao tocar %s: %s" % (path, e))
+            self._close(alias)
+
     def _loop(self):
         while True:
             try:
@@ -90,41 +128,297 @@ class SoundPlayer:
                             self.playing.remove(entry)
                     except Exception:
                         self.playing.remove(entry)
+            with self.pcm_lock:
+                self.pcm = [x for x in self.pcm if x.alive()]
             if item is None:
                 continue
             if item[0] == "vol":           # fader mexeu: ajusta o que ja esta tocando
                 for alias, vol in self.playing:
                     if IS_WINDOWS:
                         try:
-                            self._mci("setaudio %s volume to %d" % (alias, self.effective(vol) * 10))
+                            self._mci("setaudio %s volume to %d" % (alias, min(100, self.effective(vol)) * 10))
                         except Exception:
                             pass
+                continue                   # os sons PCM leem o ganho a cada bloco
+            if item[0] == "mci":           # PCM falhou: toca pelo MCI a ate 100%
+                self._mci_play(item[1], item[2])
                 continue
             if item[0] == "stop" or (item[0] == "play" and item[3]):
                 for alias, _vol in self.playing:
                     if IS_WINDOWS:
                         self._close(alias)
                 self.playing = []
+                self._stop_pcm()
                 if item[0] == "stop":
                     print("  sons parados")
                     continue
             _, path, volume, _ = item
+            eff = self.effective(volume)
             if not IS_WINDOWS:
-                print("  [simulado] tocar:", path, "vol", self.effective(volume))
+                print("  [simulado] tocar:", path, "vol", eff, "(amplificado)" if eff > 100 else "")
                 continue
-            self.n += 1
-            alias = "sd%d" % self.n
-            try:
-                self._mci('open "%s" type mpegvideo alias %s' % (path, alias))
+            if eff > 100:
+                snd = PcmSound(self, path, volume)
+                with self.pcm_lock:
+                    self.pcm.append(snd)
+                snd.start()
+            else:
+                self._mci_play(path, volume)
+
+
+# --------------------------------------------- PCM: decodificar e tocar ---
+MAX_PCM_BYTES = 60 * 1024 * 1024     # ~6 min de estereo 44,1 kHz; mais que isso vai pelo MCI
+_PCM_CACHE = {}                       # caminho -> (mtime, tamanho, (canais, taxa, bytes))
+_PCM_CACHE_LOCK = threading.Lock()
+_PCM_CACHE_MAX = 80 * 1024 * 1024
+
+
+def apply_gain(data, gain):
+    """Ganho em PCM 16 bits little-endian, com corte em +-32767 (sem audioop)."""
+    a = array("h")
+    a.frombytes(data[:len(data) - (len(data) % 2)])
+    if abs(gain - 1.0) > 0.001:
+        g = int(gain * 4096)
+        a = array("h", [-32768 if v < -32768 else (32767 if v > 32767 else v)
+                        for v in [(x * g) >> 12 for x in a]])
+    return a.tobytes()
+
+
+def _decode_wav(path):
+    import wave
+    with wave.open(path, "rb") as w:
+        ch, rate, width, n = w.getnchannels(), w.getframerate(), w.getsampwidth(), w.getnframes()
+        if width not in (1, 2):
+            raise ValueError("WAV de %d bits" % (width * 8))
+        if n * ch * 2 > MAX_PCM_BYTES:
+            raise ValueError("som longo demais para amplificar")
+        data = w.readframes(n)
+    if width == 1:   # 8 bits sem sinal -> 16 bits
+        data = array("h", [(b - 128) << 8 for b in bytearray(data)]).tobytes()
+    return ch, rate, data
+
+
+def _decode_mf(path):
+    """MP3/WMA/M4A (e WAV) -> PCM 16 bits pelo Media Foundation (COM via ctypes)."""
+    import ctypes
+    import uuid
+    from ctypes import POINTER, byref, c_void_p, c_ulong, c_ulonglong, c_longlong, HRESULT, WINFUNCTYPE
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("b", ctypes.c_ubyte * 16)]
+
+    def guid(text):
+        g = GUID()
+        ctypes.memmove(byref(g), uuid.UUID(text).bytes_le, 16)
+        return g
+
+    def call(obj, index, argtypes, *args):
+        vtbl = ctypes.cast(obj, POINTER(POINTER(c_void_p)))[0]
+        fn = WINFUNCTYPE(HRESULT, c_void_p, *argtypes)(vtbl[index])
+        return fn(obj, *args)
+
+    def release(obj):
+        if obj and obj.value:
+            call(obj, 2, ())
+
+    MT_MAJOR = guid("48eba18e-f8c9-4687-bf11-0a74c9f96a8f")
+    MT_SUBTYPE = guid("f7e34c9a-42e8-4714-b74b-cb29d72c35e5")
+    AUDIO = guid("73647561-0000-0010-8000-00aa00389b71")
+    PCM = guid("00000001-0000-0010-8000-00aa00389b71")
+    BITS = guid("f2deb57f-40fa-4764-aa33-ed4f2d1ff669")
+    CHANNELS = guid("37e48bf5-645e-4c5b-89de-ada9e29b696a")
+    RATE = guid("5faeeae7-0290-4c31-9e8a-c534f68d9dba")
+    FIRST_AUDIO, ALL_STREAMS = 0xFFFFFFFD, 0xFFFFFFFE
+    PG = POINTER(GUID)
+
+    ctypes.windll.ole32.CoInitializeEx(None, 0)
+    mf = ctypes.windll.mfplat
+    mfr = ctypes.windll.mfreadwrite
+    mf.MFStartup.argtypes = [c_ulong, c_ulong]
+    hr = mf.MFStartup(0x00020070, 0)
+    if hr != 0:
+        raise OSError("MFStartup falhou (%x)" % (hr & 0xFFFFFFFF))
+    reader, mt, cur = c_void_p(), c_void_p(), c_void_p()
+    try:
+        mfr.MFCreateSourceReaderFromURL.argtypes = [ctypes.c_wchar_p, c_void_p, POINTER(c_void_p)]
+        hr = mfr.MFCreateSourceReaderFromURL(path, None, byref(reader))
+        if hr != 0 or not reader.value:
+            raise OSError("nao abriu o arquivo (%x)" % (hr & 0xFFFFFFFF))
+        mf.MFCreateMediaType.argtypes = [POINTER(c_void_p)]
+        if mf.MFCreateMediaType(byref(mt)) != 0:
+            raise OSError("MFCreateMediaType falhou")
+        call(mt, 24, (PG, PG), byref(MT_MAJOR), byref(AUDIO))          # SetGUID
+        call(mt, 24, (PG, PG), byref(MT_SUBTYPE), byref(PCM))
+        call(mt, 21, (PG, ctypes.c_uint32), byref(BITS), 16)            # SetUINT32
+        call(reader, 4, (c_ulong, ctypes.c_int), ALL_STREAMS, 0)        # SetStreamSelection
+        call(reader, 4, (c_ulong, ctypes.c_int), FIRST_AUDIO, 1)
+        hr = call(reader, 7, (c_ulong, c_void_p, c_void_p), FIRST_AUDIO, None, mt)  # SetCurrentMediaType
+        if hr != 0:
+            raise OSError("formato PCM recusado (%x)" % (hr & 0xFFFFFFFF))
+        call(reader, 6, (c_ulong, POINTER(c_void_p)), FIRST_AUDIO, byref(cur))     # GetCurrentMediaType
+        ch, rate = ctypes.c_uint32(), ctypes.c_uint32()
+        call(cur, 7, (PG, POINTER(ctypes.c_uint32)), byref(CHANNELS), byref(ch))     # GetUINT32
+        call(cur, 7, (PG, POINTER(ctypes.c_uint32)), byref(RATE), byref(rate))
+        if not ch.value or not rate.value:
+            raise OSError("formato de audio desconhecido")
+        chunks, total = [], 0
+        while True:
+            idx, flags, ts, sample = c_ulong(), c_ulong(), c_longlong(), c_void_p()
+            hr = call(reader, 9, (c_ulong, c_ulong, POINTER(c_ulong), POINTER(c_ulong),
+                                  POINTER(c_longlong), POINTER(c_void_p)),
+                      FIRST_AUDIO, 0, byref(idx), byref(flags), byref(ts), byref(sample))
+            if hr != 0:
+                raise OSError("ReadSample falhou (%x)" % (hr & 0xFFFFFFFF))
+            if sample.value:
+                buf = c_void_p()
                 try:
-                    self._mci("setaudio %s volume to %d" % (alias, self.effective(volume) * 10))
-                except Exception:
-                    pass
-                self._mci("play " + alias)
-                self.playing.append((alias, volume))
-            except Exception as e:
-                print("  erro ao tocar %s: %s" % (path, e))
-                self._close(alias)
+                    call(sample, 41, (POINTER(c_void_p),), byref(buf))      # ConvertToContiguousBuffer
+                    ptr, maxlen, curlen = c_void_p(), c_ulong(), c_ulong()
+                    if call(buf, 3, (POINTER(c_void_p), POINTER(c_ulong), POINTER(c_ulong)),
+                            byref(ptr), byref(maxlen), byref(curlen)) == 0:         # Lock
+                        try:
+                            chunks.append(ctypes.string_at(ptr.value, curlen.value))
+                            total += curlen.value
+                        finally:
+                            call(buf, 4, ())                                     # Unlock
+                finally:
+                    release(buf)
+                    release(sample)
+                if total > MAX_PCM_BYTES:
+                    raise ValueError("som longo demais para amplificar")
+            if flags.value & 0x2:      # MF_SOURCE_READERF_ENDOFSTREAM
+                break
+        return ch.value, rate.value, b"".join(chunks)
+    finally:
+        release(cur)
+        release(mt)
+        release(reader)
+        mf.MFShutdown()
+
+
+def decode_pcm(path):
+    """(canais, taxa, bytes PCM 16 bits). Guarda os ultimos em memoria."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        raise ValueError("arquivo nao encontrado")
+    with _PCM_CACHE_LOCK:
+        hit = _PCM_CACHE.get(path)
+        if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+            return hit[2]
+    out = None
+    if path.lower().endswith(".wav"):
+        try:
+            out = _decode_wav(path)
+        except Exception:
+            out = None
+    if out is None:
+        out = _decode_mf(path)
+    with _PCM_CACHE_LOCK:
+        _PCM_CACHE[path] = (st.st_mtime_ns, st.st_size, out)
+        while sum(len(v[2][2]) for v in _PCM_CACHE.values()) > _PCM_CACHE_MAX and len(_PCM_CACHE) > 1:
+            _PCM_CACHE.pop(next(iter(_PCM_CACHE)))
+    return out
+
+
+class PcmSound(object):
+    """Um som tocando pelo waveOut, em blocos de ~100 ms com o ganho atual."""
+    BLOCKS = 4
+
+    def __init__(self, player, path, volume):
+        self.player, self.path, self.volume = player, path, volume
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+
+    def alive(self):
+        return self._thread.is_alive() or not self._thread.ident
+
+    def _run(self):
+        try:
+            ch, rate, data = decode_pcm(self.path)
+        except Exception as e:
+            print("  aviso: sem amplificar %s (%s); tocando a 100%%" % (os.path.basename(self.path), e))
+            if not self._stop.is_set():
+                self.player.q.put(("mci", self.path, min(100, self.volume)))
+            return
+        try:
+            self._play(ch, rate, data)
+        except Exception as e:
+            print("  erro ao tocar %s: %s" % (self.path, e))
+
+    def _play(self, ch, rate, data):
+        import ctypes
+        from ctypes import wintypes, POINTER, byref
+
+        class WAVEFORMATEX(ctypes.Structure):
+            _fields_ = [("wFormatTag", wintypes.WORD), ("nChannels", wintypes.WORD),
+                        ("nSamplesPerSec", wintypes.DWORD), ("nAvgBytesPerSec", wintypes.DWORD),
+                        ("nBlockAlign", wintypes.WORD), ("wBitsPerSample", wintypes.WORD),
+                        ("cbSize", wintypes.WORD)]
+
+        class WAVEHDR(ctypes.Structure):
+            pass
+        WAVEHDR._fields_ = [("lpData", ctypes.c_void_p), ("dwBufferLength", wintypes.DWORD),
+                            ("dwBytesRecorded", wintypes.DWORD), ("dwUser", ctypes.c_size_t),
+                            ("dwFlags", wintypes.DWORD), ("dwLoops", wintypes.DWORD),
+                            ("lpNext", ctypes.c_void_p), ("reserved", ctypes.c_size_t)]
+
+        winmm = ctypes.WinDLL("winmm")
+        winmm.waveOutOpen.argtypes = [POINTER(ctypes.c_void_p), ctypes.c_uint, POINTER(WAVEFORMATEX),
+                                      ctypes.c_size_t, ctypes.c_size_t, wintypes.DWORD]
+        for name in ("waveOutPrepareHeader", "waveOutUnprepareHeader", "waveOutWrite"):
+            getattr(winmm, name).argtypes = [ctypes.c_void_p, POINTER(WAVEHDR), ctypes.c_uint]
+        winmm.waveOutReset.argtypes = [ctypes.c_void_p]
+        winmm.waveOutClose.argtypes = [ctypes.c_void_p]
+
+        align = ch * 2
+        fmt = WAVEFORMATEX(1, ch, rate, rate * align, align, 16, 0)
+        h = ctypes.c_void_p()
+        err = winmm.waveOutOpen(byref(h), 0xFFFFFFFF, byref(fmt), 0, 0, 0)   # WAVE_MAPPER, CALLBACK_NULL
+        if err:
+            raise OSError("waveOutOpen falhou (%d)" % err)
+        WHDR_DONE, size = 0x1, ctypes.sizeof(WAVEHDR)
+        block = max(align, (rate // 10) * align)
+        hdrs = [WAVEHDR() for _ in range(self.BLOCKS)]
+        bufs = [None] * self.BLOCKS
+        busy = [False] * self.BLOCKS
+        pos = 0
+        try:
+            while not self._stop.is_set():
+                for i in range(self.BLOCKS):
+                    if busy[i] and hdrs[i].dwFlags & WHDR_DONE:
+                        winmm.waveOutUnprepareHeader(h, byref(hdrs[i]), size)
+                        busy[i] = False
+                    if not busy[i] and pos < len(data):
+                        gain = self.player.effective(self.volume) / 100.0
+                        chunk = apply_gain(data[pos:pos + block], gain)
+                        pos += block
+                        bufs[i] = ctypes.create_string_buffer(chunk, len(chunk))
+                        hdrs[i] = WAVEHDR()
+                        hdrs[i].lpData = ctypes.cast(bufs[i], ctypes.c_void_p)
+                        hdrs[i].dwBufferLength = len(chunk)
+                        if winmm.waveOutPrepareHeader(h, byref(hdrs[i]), size) == 0:
+                            winmm.waveOutWrite(h, byref(hdrs[i]), size)
+                            busy[i] = True
+                if pos >= len(data) and not any(busy):
+                    break
+                time.sleep(0.01)
+        finally:
+            winmm.waveOutReset(h)   # marca tudo como pronto (para na hora no stop)
+            for i in range(self.BLOCKS):
+                if busy[i]:
+                    for _ in range(50):
+                        if hdrs[i].dwFlags & WHDR_DONE:
+                            break
+                        time.sleep(0.01)
+                    winmm.waveOutUnprepareHeader(h, byref(hdrs[i]), size)
+            winmm.waveOutClose(h)
 
 
 PLAYER = SoundPlayer()
@@ -206,17 +500,19 @@ VOL_TARGETS = {"master": 0, "mic": 1}   # fluxo do Core Audio
 
 def levels():
     """{master: {v, muted}, effects: {...}, mic: {...}}; v = None se indisponivel."""
-    out = {"effects": {"v": PLAYER.level, "muted": PLAYER.muted}}
+    out = {"effects": {"v": PLAYER.level, "muted": PLAYER.muted, "max": MAX_LEVEL["effects"]}}
     for name, flow in VOL_TARGETS.items():
         try:
             v, m = win_volume(flow)
         except Exception:
             v, m = None, False
-        out[name] = {"v": v, "muted": m}
+        out[name] = {"v": v, "muted": m, "max": MAX_LEVEL[name]}
     return out
 
 
 def set_level(target, value=None, toggle_mute=False):
+    if value is not None and target in MAX_LEVEL:
+        value = max(0, min(MAX_LEVEL[target], int(value)))
     if target == "effects":
         PLAYER.set_level(value, (not PLAYER.muted) if toggle_mute else None)
     elif target in VOL_TARGETS:

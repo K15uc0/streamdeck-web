@@ -29,9 +29,8 @@ SEGURANCA
 - So aparelhos da sua rede local conseguem acessar; nada vindo da internet.
 - E preciso o codigo de acesso (vem no QR code). 10 tentativas erradas
   bloqueiam o aparelho por 10 minutos.
-- Botoes que rodam comandos, abrem programas/arquivos ou chamam APIs so podem
-  ser criados no proprio PC (abra o Stream Deck no navegador do PC). Para
-  liberar pelos aparelhos: Conectar > Seguranca.
+- Os botoes so podem ser criados e editados no proprio PC (Conectar > Editar
+  botoes). Os aparelhos so usam.
 - Achou que alguem pegou o codigo? Conectar > "Gerar novo codigo de acesso".
 - A conexao e por http comum (o tablet antigo nao suporta https). Use em redes
   confiaveis (sua casa, seu trabalho), nao em Wi-Fi publico.
@@ -57,6 +56,19 @@ EDITAR OS BOTOES (SO PELO PC)
 - Salva sozinho. Ctrl+Z desfaz, Ctrl+C/Ctrl+V copia, Delete limpa.
 - O celular e so para usar: nao edita botoes.
 - A versao anterior fica salva em config.bak.json.
+
+NOVIDADES DA 2.2
+- Botoes maiores (ate 4x4), cor do texto, imagem propria no lugar do icone
+  (ficam em Documentos\StreamDeck\imagens: PNG, JPG, GIF ou WEBP, ate 2 MB)
+  e aparencia diferente quando um botao liga/desliga esta ligado.
+- Pastas: um botao que abre outros botoes por cima da pagina.
+- Apps e sites: trazer/abrir programa, atalho dentro de um programa (e voltar
+  para a janela anterior), abrir site num navegador/perfil/modo app e ir para
+  uma aba pelo titulo. A pagina pode trocar sozinha conforme o app em foco no PC.
+- Biblioteca de comandos prontos (Windows, midia, edicao, navegador, OBS,
+  Discord, Spotify, Teams, Zoom, radio).
+- Efeitos sonoros ate 200% (acima de 100% o som e amplificado e pode distorcer).
+- Copia de seguranca: exportar/importar um .zip com botoes, imagens e sons.
 
 NO CELULAR
 - Engrenagem (Ajustes): tela cheia, abrir sempre em tela cheia, orientacao

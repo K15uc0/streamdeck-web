@@ -1,5 +1,19 @@
 # Novidades
 
+## 2.2.0
+
+- Botões maiores: cada botão pode ocupar até 4x4 espaços (estique pela alça no editor).
+- Cores: roda de cores, cores recentes, cor do texto/ícone e aplicar em vários botões de uma vez.
+- Imagem própria no botão (PNG/JPG) e aparência diferente quando o botão liga/desliga está ligado.
+- Texto ao vivo no botão: relógio, data, volume e cronômetro (ex.: tempo no ar).
+- Pastas: um botão abre um grupo de botões por cima da página.
+- Novas ações: ir para um app (traz a janela se já estiver aberta, senão abre), atalho em um app específico, abrir site num navegador/perfil e ir para uma aba pelo título.
+- Troca de página sozinha conforme o app em uso no PC (ex.: abriu o OBS, vai para a página OBS).
+- Biblioteca de comandos prontos com busca e "Gravar atalho" pelo teclado do PC.
+- Efeitos sonoros até 200%.
+- Enviar sons e imagens pelo editor; exportar e importar tudo (backup).
+- Celular vibra ao tocar (Android).
+
 ## 2.1.0
 
 Edição pelo PC e celular só para uso:

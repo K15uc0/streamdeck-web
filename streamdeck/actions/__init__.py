@@ -5,15 +5,19 @@ Cada acao e uma funcao decorada com @action(...), que descreve os campos do
 formulario (o editor do aparelho monta a tela a partir de /api/actions).
 Para criar uma nova: um arquivo em streamdeck/actions/ e um import em _load().
 Veja docs/ARQUITETURA.md."""
+import re
+
 from ..winapi import vk_of
 
-FIELD_KINDS = ("text", "textarea", "keys", "number", "bool", "select", "sound", "page", "steps")
+FIELD_KINDS = ("text", "textarea", "keys", "number", "bool", "select", "sound", "page", "steps",
+               "app", "color")
 NO_STEP = ("page", "multi")   # tipos que nao podem ser passos de uma sequencia
 
 REGISTRY = {}   # tipo -> Action (na ordem de registro)
 # ordem no editor das acoes que vem com o programa; as novas vao no fim
 ORDER = ("none", "hotkey", "open", "command", "page", "multi",
-         "sound", "stopsound", "text", "http", "mute")
+         "sound", "stopsound", "text", "http", "mute",
+         "app", "apphotkey", "site", "tab")
 
 
 class Field(object):
@@ -104,6 +108,12 @@ def _check_field(f, a, n_pages, where):
     if f.kind in ("text", "textarea", "sound"):
         if not isinstance(v, (str, int, float)):
             raise ValueError("%s: %s invalido" % (where, name))
+    elif f.kind == "app":
+        if not isinstance(v, str) or len(v) > 260 or "\n" in v:
+            raise ValueError("%s: %s invalido" % (where, name))
+    elif f.kind == "color":
+        if not isinstance(v, str) or not re.match(r"^#[0-9A-Fa-f]{6}$", v):
+            raise ValueError("%s: %s deve ser uma cor #rrggbb" % (where, name))
     elif f.kind == "keys":
         if not isinstance(v, list):
             raise ValueError("%s: informe as teclas" % where)
@@ -149,7 +159,7 @@ def validate(a, n_pages, where):
 
 def _load():
     # imports explicitos: o PyInstaller enxerga e inclui os modulos
-    from . import flow, keyboard, system, audio, web  # noqa: F401  (ordem = ordem no editor)
+    from . import flow, keyboard, system, audio, web, apps  # noqa: F401  (ordem = ordem no editor)
 
 
 _load()

@@ -165,3 +165,40 @@ atual tiver menos posições que a lista, os excedentes não aparecem (o editor 
 (`sd_prefs`): `orientation` = `auto|portrait|landscape`, `autoFullscreen` bool.
 Tela cheia pela barra; trava via `screen.orientation.lock` quando possível, senão
 gira o conteúdo por CSS. `web/manifest.json` + ícones para "Adicionar à tela inicial".
+
+## 2.2: botões maiores, apps/janelas, biblioteca, efeitos até 200%
+
+**Botão (campos novos, todos opcionais):**
+- `w`, `h`: 1..4 (padrão 1). Encaixe pela regra única `SD.flow(buttons, cols, rows)` em
+  `web/js/core.js` (primeira posição livre, linha a linha; o que não couber fica de fora).
+  O mesmo encaixe vale para as duas orientações.
+- `textColor`: cor do texto e do ícone (`#rrggbb`).
+- `image`: nome de arquivo em `Documentos\StreamDeck\imagens` (substitui o ícone; servido em `/img/<nome>`).
+- `on`: `{label, icon, color, textColor, image}`: aparência quando um botão `toggle` está ligado.
+- `live`: `clock | date | volume:master | volume:effects | volume:mic | timer`: texto ao vivo
+  no lugar do rótulo (`timer` = tempo desde que este botão liga/desliga foi ligado).
+- Pasta: `{kind:"folder", label, icon, color, w, h, buttons:[Botão...]}`; abre por cima da página
+  com os botões de dentro e um "Voltar"; pasta dentro de pasta não é permitida.
+**Página:** `apps: ["obs64.exe", ...]` (troca para esta página quando o app em foco no PC é um deles).
+**Fader `effects`:** 0..200 (os outros 0..100). `levels[t]` passa a ter `max`.
+
+**API nova/alterada:**
+| Método | Rota | |
+|---|---|---|
+| GET | `/api/press?p=&b=&f=` | `f` = índice dentro da pasta `b` (opcional); chave de toggle `"p:b"` ou `"p:b:f"` |
+| GET | `/api/state` | + `app` (exe em foco, minúsculo), `since: {"p:b": epoch_s}` dos toggles ligados |
+| GET | `/api/library` | `{ok, groups:[{name, items:[{label, icon, color, action, help?}]}]}` comandos prontos |
+| GET | `/api/images` | `{ok, images:[nome]}` ; GET `/img/<nome>` (com código, como a API) |
+| GET | `/api/local/windows` | `{ok, windows:[{title, exe, path}]}` janelas abertas (só no PC) |
+| POST | `/api/local/images?name=` | corpo = bytes PNG/JPG/GIF/WEBP (até 2 MB) -> `{ok, name}` |
+| POST | `/api/local/sounds?name=` | corpo = bytes MP3/WAV (até 20 MB) -> `{ok, name}` |
+| GET | `/api/local/export` | zip com config.json, imagens/ e sons/ |
+| POST | `/api/local/import` | corpo = esse zip -> substitui config (com backup), adiciona imagens/sons |
+
+**Ações novas:** `app` (`target` exe ou caminho; traz a janela se aberta, senão abre),
+`apphotkey` (`app`, `keys`, `back` bool: volta para a janela anterior),
+`site` (`url`, `browser`: default|chrome|edge|firefox|brave, `profile` opcional, `appmode` bool),
+`tab` (`browser`, `title`: vai para o navegador e passa as abas com Ctrl+Tab até achar o título).
+Tipos de campo novos: `app` (escolher entre janelas abertas ou digitar), `color`.
+
+**Celular, ajustes por aparelho (`sd_prefs`):** `vibrate` (bool, padrão true), `autoPage` (bool, padrão true).
