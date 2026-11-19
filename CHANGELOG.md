@@ -1,5 +1,13 @@
 # Novidades
 
+## 2.6.0
+
+- OBS direto pelo WebSocket (OBS 28 ou mais novo): trocar de cena pelo nome, iniciar/parar transmissão e gravação, mutar fontes. Configure em Conectar > OBS (no OBS: Ferramentas > Configurações do WebSocket).
+- Botões acendem conforme o OBS (ao vivo, gravando, cena atual, fonte mutada) e podem mostrar "AO VIVO", "Gravando" ou o nome da cena.
+- Toque longo e toque duplo: cada botão pode ter até 3 ações (tocar, segurar, tocar duas vezes).
+- Confirmação: botões perigosos (desligar, reiniciar) pedem "Toque de novo para confirmar".
+- Sons: barra de progresso e tempo restante no botão enquanto toca, entrada suave (fade in) e "parar sons" com fade.
+
 ## 2.5.0
 
 - Instalador: baixe o StreamDeck-Instalador.exe (recomendado). Instala só para o seu usuário, sem pedir administrador, com atalho no Menu Iniciar e desinstalador (seus botões em Documentos\StreamDeck nunca são apagados). Abre mais rápido, porque não precisa se extrair a cada vez.
