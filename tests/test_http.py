@@ -247,6 +247,8 @@ class HttpTest(unittest.TestCase):
         orig = apoio.base_config()
         orig["title"] = "Original"
         orig["pages"][0]["buttons"][1]["image"] = "roundtrip.png"
+        orig["schedules"] = [{"id": "s1", "name": "x", "enabled": True,
+                              "when": {"type": "daily", "time": "08:00"}, "action": {"type": "none"}}]
         self.assertEqual(call("POST", "/api/config", orig)[0], 200)
         st, h, zdata = call("GET", "/api/local/export", raw=True)
         self.assertEqual(st, 200)
@@ -261,6 +263,8 @@ class HttpTest(unittest.TestCase):
         st, _, r = call("POST", "/api/local/import", zdata, headers={"Content-Type": "application/zip"})
         self.assertEqual((st, r["ok"]), (200, True), r)
         self.assertGreaterEqual(r["images"], 1)
+        self.assertEqual(r["schedules_disabled"], 1)
+        orig["schedules"][0]["enabled"] = False   # importado chega desligado
         self.assertEqual(call("GET", "/api/config")[2], orig)
 
         st, _, r = call("POST", "/api/local/import", b"PK nao e zip", headers={"Content-Type": "application/zip"})

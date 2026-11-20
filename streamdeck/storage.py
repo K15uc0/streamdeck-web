@@ -291,8 +291,10 @@ def restore_backup(name):
     """Valida a copia, guarda o atual no historico e restaura."""
     data, _ = schema.migrate(read_backup(name))
     schema.validate_config(data)
+    from . import agenda
+    n_off = agenda.disable_all(data)   # agendamentos restaurados chegam desligados
     save_config(data, force=True)
-    return config_version()
+    return config_version(), n_off
 
 
 # ------------------------------------------------------------------ abas ---

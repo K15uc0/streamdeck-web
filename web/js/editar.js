@@ -13,9 +13,11 @@
   var LIVE = [["", "Nenhum (mostra o rótulo)"], ["clock", "Relógio (hora)"], ["date", "Data"],
     ["volume:master", "Volume do PC"], ["volume:effects", "Volume dos efeitos"], ["volume:mic", "Volume do microfone"],
     ["timer", "Cronômetro (desde que ligou)"], ["obs:stream", "OBS: transmissão"], ["obs:record", "OBS: gravação"],
-    ["obs:scene", "OBS: cena atual"], ["sound", "Progresso do som"]];
+    ["obs:scene", "OBS: cena atual"], ["sound", "Progresso do som"],
+    ["nowplaying", "Música tocando agora"], ["nowplaying:title", "Só o nome da música"], ["nowplaying:artist", "Só o artista"]];
   var LIVE_SAMPLE = { clock: "", date: "", "volume:master": "75%", "volume:effects": "100%", "volume:mic": "80%", timer: "00:00",
-    "obs:stream": "AO VIVO", "obs:record": "REC", "obs:scene": "Cena", sound: "0:12" };
+    "obs:stream": "AO VIVO", "obs:record": "REC", "obs:scene": "Cena", sound: "0:12",
+    nowplaying: "Música \u2014 Artista", "nowplaying:title": "Música", "nowplaying:artist": "Artista" };
   /* "acender quando" (lit): estado do OBS */
   var LIT = [["", "Nunca (normal)"], ["obs:stream", "OBS transmitindo"], ["obs:record", "OBS gravando"],
     ["obs:scene", "Cena do OBS for…"], ["obs:mute", "Fonte do OBS estiver mutada…"]];
@@ -53,7 +55,8 @@
   var hist = [], pos = -1, lastKey = null, lastAt = 0;
 
   /* salvamento */
-  var savedV = null, dirty = false, inflight = false, saveT = null, seq = 0;
+  var schedWarn = "";        /* agendamento com acao incompleta (texto do aviso) */
+  var savedV = null, dirty = false, inflight = false, saveT = null, seq = 0, saveBad = false;
   var retryMs = 0;           /* espera atual antes de tentar de novo (falha de rede/PC) */
   var bad = {};              /* "pagina:posicao[:filho]" -> campo faltando (acao incompleta) */
 
@@ -147,6 +150,8 @@
   function fixView() {
     if (page >= cfg.pages.length) page = cfg.pages.length - 1;
     if (folder >= 0 && !fold()) { folder = -1; selectOne(-1); }
+    var ns = cfg.schedules ? cfg.schedules.length : 0;
+    if (schedSel >= ns) schedSel = ns - 1;
   }
   function restore() {
     closePop();
@@ -232,6 +237,7 @@
       cleanList(c.pages[p].buttons, p + ":", false);
       if (c.pages[p].apps && !c.pages[p].apps.length) delete c.pages[p].apps;
     }
+    schedWarn = cleanSchedules(c);
     return c;
   }
   function badText() {
@@ -259,16 +265,19 @@
     SD.req("POST", "/api/config", body, function (ok, data, status) {
       inflight = false;
       if (ok) {
-        retryMs = 0;
+        retryMs = 0; saveBad = false;
         if (data && data.v != null) savedV = String(data.v);
         if (mySeq === seq) {
           dirty = false;
-          var w = badText();
+          var w = badText() || schedWarn;
           if (w) setStatus(w, "err"); else setStatus("Salvo ✓", "ok");
+          /* o PC desligou um "uma vez" que ja rodou: recarrega para mostrar */
+          if (data && data.once_disabled > 0 && !dirty) loadConfig(false);   /* nao descarta edicoes feitas durante o salvamento */
         }
+        if (schedOpen) loadSchedInfo();
       } else if (status === 400) {
         /* erro de validacao: tentar de novo nao adianta; espera a proxima mudanca */
-        retryMs = 0;
+        retryMs = 0; saveBad = true;
         setStatus("Não salvou: " + SD.errText(data, status, "dados inválidos"), "err");
       } else {
         /* rede ou PC com problema: tenta de novo com espera crescente (2s, 4s, 8s... ate 30s) */
@@ -287,6 +296,8 @@
         if (first) setTimeout(function () { loadConfig(true); }, 2000);
         return;
       }
+      /* recarga automatica nao atropela edicoes feitas enquanto ela vinha */
+      if (!first && !msg && dirty) return;
       cfg = data;
       savedV = x.getResponseHeader("X-Config-Version");
       if (page >= cfg.pages.length) page = 0;
@@ -308,6 +319,9 @@
   function renderAll(light) {
     if (!cfg) return;
     renderPages();
+    renderSchedRow();
+    if (schedOpen) { renderSched(light); updUndo(); return; }
+    hideSched();
     renderBar();
     renderGrid();
     if (light) renderPreview(); else renderInspector();
@@ -321,7 +335,7 @@
     box.innerHTML = "";
     for (var i = 0; i < cfg.pages.length; i++) (function (i) {
       var pg = cfg.pages[i];
-      var row = el("div", "pg" + (i === page ? " on" : ""), null, box);
+      var row = el("div", "pg" + (i === page && !schedOpen ? " on" : ""), null, box);
       row.draggable = true;
       el("span", "n", String(i + 1), row);
       var t = el("span", "t", esc(pageName(i)), row);
@@ -334,7 +348,7 @@
       var del = el("button", "del", "×", row);
       del.title = "Apagar página";
       row.onclick = function () {
-        if (page !== i || folder >= 0) { page = i; folder = -1; selectOne(-1); renderAll(); }
+        if (page !== i || folder >= 0 || schedOpen) { if (schedOpen) closeSched(); page = i; folder = -1; selectOne(-1); renderAll(); }
       };
       t.ondblclick = function (e) { e.stopPropagation(); renamePage(i, row, t); };
       del.onclick = function (e) { e.stopPropagation(); deletePage(i); };
@@ -855,7 +869,9 @@
     if (!h.buttons[i]) h.buttons[i] = SD.emptyButton();
     return h.buttons[i];
   }
-  function edit(fn, key, light) { change(function () { fn(ensureAt(sel)); }, key ? bkey(sel) + ":" + key : null, light); }
+  function edit(fn, key, light) {
+    if (schedOpen) { editSched(fn, key, light); return; }   /* campos da acao do agendamento */
+    change(function () { fn(ensureAt(sel)); }, key ? bkey(sel) + ":" + key : null, light); }
   /* aplica em todos os selecionados */
   function editAll(fn, key, light) {
     change(function () { for (var k = 0; k < msel.length; k++) fn(ensureAt(msel[k])); }, key ? "multi:" + key : null, light);
@@ -1167,6 +1183,7 @@
   }
 
   function renderInspector() {
+    if (schedOpen) { renderSched(); return; }
     var box = $("inspector");
     box.innerHTML = "";
     if (!cfg) return;
@@ -1523,11 +1540,12 @@
   }
 
   /* ------------------------------------------------ acao e seus campos --- */
-  function actionSelect(parent, cur, isStep, onChange) {
+  function actionSelect(parent, cur, isStep, onChange, skip) {
     var s = el("select", "in", null, parent);
     var groups = {}, order = [];
     (SD.actions || []).forEach(function (a) {
       if (isStep && (NO_STEP[a.type] || a.type === "none")) return;
+      if (skip && skip[a.type]) return;
       var g = a.group || "Geral";
       if (!groups[g]) { groups[g] = el("optgroup"); groups[g].label = g; order.push(g); }
       opt(groups[g], a.type, a.label, cur);
@@ -1822,6 +1840,476 @@
       if (ok) SD.toast("Ação executada");
       else SD.toast("Não funcionou: " + SD.errText(data, status), true);
     });
+  }
+
+  /* ======================================================= agendamentos === */
+  /* painel no lugar da grade/inspetor: lista a esquerda, formulario a direita.
+     Edicao passa por edit() (mesmo desfazer/autosave); a acao usa renderFields. */
+  var MAX_SCHED = 50;
+  var DAY_ABBR = ["D", "S", "T", "Q", "Q", "S", "S"];
+  var DAY_NAME = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  var DAY_FULL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  var DAY_PRESETS = [["Todos", []], ["Dias úteis", [1, 2, 3, 4, 5]], ["Fim de semana", [0, 6]]];
+  var EVERY_OPTS = [5, 10, 15, 30, 60, 120];
+  var SKIP_SCHED = { page: 1 };
+  var schedOpen = false;     /* painel aberto */
+  var schedSel = -1;         /* indice em edicao (-1 = nenhum) */
+  var schedInfo = {};        /* id -> {next, last, last_error} de /api/local/schedules */
+  var schedNow = null;       /* "agora" do PC (ISO) */
+  var schedErr = "";         /* erro ao consultar o PC */
+  var schedT = null;
+  var schedCustom = {};      /* id -> mostrar campo de minutos personalizado */
+
+  function scheds() { if (!cfg.schedules) cfg.schedules = []; return cfg.schedules; }
+  function curSched() { return schedOpen && schedSel >= 0 && cfg && cfg.schedules ? cfg.schedules[schedSel] || null : null; }
+  function newId() {
+    var cs = "abcdefghijklmnopqrstuvwxyz0123456789", taken = {}, l = cfg.schedules || [], id, k;
+    for (k = 0; k < l.length; k++) taken[l[k].id] = 1;
+    do {
+      id = "";
+      for (k = 0; k < 6; k++) id += cs.charAt(Math.floor(Math.random() * cs.length));
+    } while (taken[id]);
+    return id;
+  }
+  function sortedDays(d) {
+    var out = [];
+    for (var i = 0; i < 7; i++) if (d && d.indexOf(i) >= 0) out.push(i);
+    return out;
+  }
+  function sameDays(a, b) { return sortedDays(a).join() === sortedDays(b).join(); }
+  function joinE(l) { return l.length > 1 ? l.slice(0, -1).join(", ") + " e " + l[l.length - 1] : l.join(""); }
+  /* texto dos dias: null = todos */
+  function daysText(d) {
+    d = sortedDays(d);
+    if (!d.length || d.length === 7) return null;
+    if (sameDays(d, [1, 2, 3, 4, 5])) return "dia útil";
+    if (sameDays(d, [0, 6])) return "fim de semana";
+    if (d.length === 1) return DAY_FULL[d[0]];
+    return joinE(d.map(function (x) { return DAY_NAME[x]; }));
+  }
+  function minText(m) {
+    m = parseInt(m, 10) || 0;
+    if (m >= 60 && m % 60 === 0) return m === 60 ? "1 hora" : (m / 60) + " horas";
+    return m + " min";
+  }
+  /* "2026-12-25T20:00[:ss]" -> Date local (ou null) */
+  function parseIso(s) {
+    var m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(String(s || ""));
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+  }
+  function isoDate(d) { return d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate()); }
+  function hm(d) { return two(d.getHours()) + ":" + two(d.getMinutes()); }
+  /* descricao humana do "quando" */
+  function whenText(w) {
+    w = w || {};
+    var dt;
+    if (w.type === "daily") {
+      dt = daysText(w.days);
+      return (dt === null ? "Todo dia" : dt === "dia útil" ? "Todo dia útil" : dt === "fim de semana" ? "Todo fim de semana" :
+        "Toda semana: " + dt) + " às " + (w.time || "--:--");
+    }
+    if (w.type === "every") {
+      var s = "A cada " + minText(w.minutes);
+      if (w.from || w.to) s += ", das " + (w.from || "00:00") + " às " + (w.to || "23:59");
+      dt = daysText(w.days);
+      if (dt !== null) s += dt === "dia útil" ? ", em dias úteis" : dt === "fim de semana" ? ", no fim de semana" : " (" + dt + ")";
+      return s;
+    }
+    if (w.type === "once") {
+      dt = parseIso(w.at);
+      if (!dt) return "Uma vez (escolha a data)";
+      var y = dt.getFullYear() !== new Date().getFullYear() ? "/" + dt.getFullYear() : "";
+      return "Uma vez em " + two(dt.getDate()) + "/" + two(dt.getMonth() + 1) + y + " às " + hm(dt);
+    }
+    return "Quando: inválido";
+  }
+  /* "hoje às 08:00", "amanhã às 08:00", "sex 25/12 às 20:00" (relativo ao relogio do PC) */
+  function relText(iso) {
+    var d = parseIso(iso);
+    if (!d) return "";
+    var base = parseIso(schedNow) || new Date();
+    var d0 = new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
+    var d1 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    var days = Math.round((d1 - d0) / 86400000);
+    var day = days === 0 ? "hoje" : days === 1 ? "amanhã" : days === -1 ? "ontem" :
+      DAY_NAME[d.getDay()] + " " + two(d.getDate()) + "/" + two(d.getMonth() + 1) + (d.getFullYear() !== base.getFullYear() ? "/" + d.getFullYear() : "");
+    return day + " às " + hm(d);
+  }
+
+  function blankSched() {
+    return { id: newId(), name: "", enabled: true, when: { type: "daily", time: "08:00", days: [] }, action: { type: "none" } };
+  }
+  /* troca o tipo do "quando" mantendo o que da (horario, dias) */
+  function whenOf(type, old) {
+    old = old || {};
+    var days = old.days ? sortedDays(old.days) : [];
+    var time = old.time || old.from || (old.at ? String(old.at).substring(11, 16) : "") || "08:00";
+    if (type === "daily") return { type: "daily", time: time, days: days };
+    if (type === "every") return { type: "every", minutes: 15, days: days };
+    var t = new Date(new Date().getTime() + 86400000);
+    return { type: "once", at: isoDate(t) + "T" + time };
+  }
+
+  function loadSchedInfo() {
+    if (!schedOpen) return;
+    SD.req("GET", "/api/local/schedules", null, function (ok, data, status) {
+      if (ok && data && data.items) {
+        schedInfo = {};
+        for (var i = 0; i < data.items.length; i++) if (data.items[i]) schedInfo[data.items[i].id] = data.items[i];
+        schedNow = data.now || null;
+        schedErr = "";
+      } else schedErr = SD.errText(data, status, "PC sem resposta");
+      if (schedOpen) renderSchedList();
+    });
+  }
+  function openSched() {
+    if (!cfg) return;
+    closePop();
+    if (folder >= 0) { folder = -1; selectOne(-1); }
+    schedOpen = true;
+    if (schedSel < 0 && cfg.schedules && cfg.schedules.length) schedSel = 0;
+    clearInterval(schedT);
+    schedT = setInterval(loadSchedInfo, 30000);
+    loadSchedInfo();
+    renderAll();
+  }
+  function closeSched() {
+    schedOpen = false;
+    clearInterval(schedT); schedT = null;
+  }
+  function addSched() {
+    if (scheds().length >= MAX_SCHED) { SD.toast("No máximo " + MAX_SCHED + " agendamentos", true); return; }
+    change(function () { scheds().push(blankSched()); schedSel = cfg.schedules.length - 1; });
+    var n = $("schName");
+    if (n) n.focus();
+  }
+  function dupSched(i) {
+    if (scheds().length >= MAX_SCHED) { SD.toast("No máximo " + MAX_SCHED + " agendamentos", true); return; }
+    change(function () {
+      var c = clone(cfg.schedules[i]);
+      c.id = newId();
+      c.name = cutName((c.name || "Agendamento") + " (cópia)", MAX_NAME);
+      cfg.schedules.splice(i + 1, 0, c);
+      schedSel = i + 1;
+    });
+  }
+  function delSched(i) {
+    var s = cfg.schedules[i];
+    if (!window.confirm("Apagar o agendamento “" + (s.name || "sem nome") + "”?")) return;
+    change(function () {
+      cfg.schedules.splice(i, 1);
+      /* o selecionado acompanha a lista quando um anterior e apagado */
+      if (i < schedSel) schedSel--;
+      else if (i === schedSel) schedSel = Math.min(i, cfg.schedules.length - 1);
+      if (schedSel >= cfg.schedules.length) schedSel = cfg.schedules.length - 1;
+    });
+    SD.toast("Agendamento apagado (Ctrl+Z desfaz)");
+  }
+  function toggleSched(i, on) {
+    var id = cfg.schedules[i].id;
+    change(function () { cfg.schedules[i].enabled = on; }, "s:" + id + ":enabled");
+  }
+  /* testa agora: espera o salvamento pendente (o PC roda o que esta salvo) */
+  function runSched(i) {
+    var s = cfg.schedules[i];
+    if (!s) return;
+    if (missing(s.action || {}, false) || !s.action || s.action.type === "none") { SD.toast("Escolha e preencha a ação primeiro", true); return; }
+    if (saveBad) { SD.toast("Corrija o erro antes de testar", true); return; }
+    var id = s.id, tries = 0;
+    function go() {
+      if (saveBad) { SD.toast("Corrija o erro antes de testar", true); return; }
+      if ((dirty || inflight) && tries++ < 40) { setTimeout(go, 250); return; }
+      SD.req("POST", "/api/local/schedules/run", JSON.stringify({ id: id }), function (ok, data, status) {
+        if (ok) SD.toast("Agendamento executado");
+        else SD.toast("Não funcionou: " + SD.errText(data, status), true);
+        loadSchedInfo();
+      });
+    }
+    go();
+  }
+
+  function schedSwitch(parent, on, onChange, title) {
+    var lab = el("label", "switch", null, parent);
+    var inp = el("input", null, null, lab);
+    inp.type = "checkbox"; inp.checked = !!on;
+    el("i", null, null, lab);
+    if (title) lab.title = title;
+    lab.onclick = function (e) { e.stopPropagation(); };
+    inp.onchange = function () { onChange(inp.checked); };
+    return inp;
+  }
+  function renderSchedRow() {
+    var r = $("schedRow");
+    if (!r || !cfg) return;
+    r.className = "pg schedrow" + (schedOpen ? " on" : "");
+    r.innerHTML = "";
+    el("span", "n ic", SD.svg("clock", 16, schedOpen ? "#fff" : isLight() ? "#007aff" : "#0a84ff"), r);
+    el("span", "t", "Agendamentos", r);
+    var l = cfg.schedules || [], on = 0;
+    for (var i = 0; i < l.length; i++) if (l[i].enabled !== false) on++;
+    var c = el("span", "c", String(l.length), r);
+    c.title = on + " ligado(s) de " + l.length;
+  }
+
+  function renderSched(light) {
+    var p = $("sched");
+    p.style.display = "";
+    $("center").style.display = "none";
+    $("right").style.display = "none";
+    if (!p.firstChild) {
+      var lw = el("div", "schlist", null, p);
+      lw.id = "schListWrap";
+      var fw = el("div", "schform", null, p);
+      fw.id = "schForm";
+    }
+    renderSchedList();
+    if (!light) renderSchedForm();
+  }
+  function hideSched() {
+    var p = $("sched");
+    if (p) p.style.display = "none";
+    $("center").style.display = "";
+    $("right").style.display = "";
+  }
+
+  function renderSchedList() {
+    var w = $("schListWrap");
+    if (!w || !cfg) return;
+    var st = w.scrollTop;
+    w.innerHTML = "";
+    var head = el("div", "schhead", null, w);
+    var ht = el("div", "schtitle", null, head);
+    el("h2", null, "Agendamentos", ht);
+    el("p", null, "Rodam sozinhos no horário do PC, mesmo sem nenhum celular conectado.", ht);
+    var add = el("button", "primary", "+ Novo agendamento", head);
+    add.id = "schAdd";
+    add.disabled = scheds().length >= MAX_SCHED;
+    add.onclick = addSched;
+    if (schedErr) el("div", "warnbox", "Não deu para ver as próximas execuções: " + esc(schedErr), w);
+    var l = cfg.schedules || [];
+    if (!l.length) {
+      var em = el("div", "schempty", null, w);
+      em.innerHTML = SD.svg("clock", 44, "rgba(142,142,147,0.7)") + "<b>Nenhum agendamento</b><span>Toque uma vinheta na hora certa, troque de cena no OBS ou rode um atalho todo dia no mesmo horário.</span>";
+      return;
+    }
+    var box = el("div", "list schitems", null, w);
+    box.id = "schItems";
+    for (var i = 0; i < l.length; i++) (function (i) {
+      var s = l[i], inf = schedInfo[s.id] || {}, on = s.enabled !== false;
+      var row = el("div", "schitem" + (i === schedSel ? " sel" : "") + (on ? "" : " off"), null, box);
+      row.setAttribute("data-id", s.id);
+      schedSwitch(row, on, function (v) { toggleSched(i, v); }, on ? "Ligado" : "Desligado");
+      var tx = el("div", "tx", null, row);
+      var sc = SD.actionMap[s.action && s.action.type];
+      el("div", "nm", esc(s.name || "Sem nome"), tx);
+      el("div", "wh", esc(whenText(s.when)) + (sc && s.action.type !== "none" ? " · " + esc(sc.label) : " · <span class=\"warn\">sem ação</span>"), tx);
+      var meta = el("div", "mt", null, tx);
+      if (!on) el("span", null, s.when && s.when.type === "once" && inf.last ? "Já rodou · desligado" : "Desligado", meta);
+      else if (inf.next) el("span", "nx", "Próxima: " + esc(relText(inf.next)), meta);
+      else if (schedInfo.hasOwnProperty(s.id)) el("span", null, "Sem próxima execução", meta);
+      else if (!schedErr) el("span", null, dirty || inflight ? "Salvando…" : "Próxima: …", meta);
+      if (inf.last) el("span", inf.last_error ? "er" : "ls", (inf.last_error ? "Erro " : "Última: ") + esc(relText(inf.last)) +
+        (inf.last_error ? ": " + esc(inf.last_error) : ""), meta);
+      var acts = el("div", "ac", null, row);
+      var tb = el("button", "mini", "Testar agora", acts);
+      tb.title = "Executa a ação deste agendamento agora";
+      tb.onclick = function (e) { e.stopPropagation(); runSched(i); };
+      var mb = el("button", "more", "…", acts);
+      mb.title = "Mais opções";
+      mb.onclick = function (e) {
+        e.stopPropagation();
+        popAt(mb, [{ label: "Editar", fn: function () { schedSel = i; renderSched(); } },
+          { label: "Duplicar", fn: function () { dupSched(i); } },
+          { label: "Testar agora", fn: function () { runSched(i); } },
+          { sep: true }, { label: "Apagar", red: true, fn: function () { delSched(i); } }]);
+      };
+      row.onclick = function () { if (schedSel !== i) { schedSel = i; renderSched(); } };
+      row.oncontextmenu = function (e) { e.preventDefault(); mb.onclick(e); };
+    })(i);
+    w.scrollTop = st;
+  }
+
+  function editSched(fn, key, light) {
+    var s = curSched();
+    if (!s) return;
+    var id = s.id;
+    change(function () { fn(cfg.schedules[schedSel]); }, key ? "s:" + id + ":" + key : null, light);
+  }
+  function dayChips(parent, days, set) {
+    var row = el("div", "days", null, parent);
+    row.id = "schDays";
+    var d = sortedDays(days), all = !d.length;
+    for (var i = 0; i < 7; i++) (function (i) {
+      var on = all || d.indexOf(i) >= 0;
+      var b = el("button", "day" + (on ? " on" : ""), DAY_ABBR[i], row);
+      b.title = DAY_FULL[i];
+      b.setAttribute("data-day", i);
+      b.onclick = function () {
+        var cur = all ? [0, 1, 2, 3, 4, 5, 6] : d.slice(), k = cur.indexOf(i);
+        if (k >= 0) cur.splice(k, 1); else cur.push(i);
+        if (!cur.length) { SD.toast("Escolha pelo menos um dia", true); return; }
+        cur = sortedDays(cur);
+        set(cur.length === 7 ? [] : cur);
+      };
+    })(i);
+    var pr = el("div", "presets", null, parent);
+    DAY_PRESETS.forEach(function (x) {
+      var b = el("button", "chip" + (sameDays(x[1], d) || (!x[1].length && all) ? " on" : ""), x[0], pr);
+      b.onclick = function () { set(x[1].slice()); };
+    });
+  }
+  function timeInput(parent, val, id, set) {
+    var t = el("input", "in time", null, parent);
+    t.type = "time"; t.id = id; t.value = val || ""; t.required = true;
+    /* edicao leve: nao redesenha o formulario enquanto digita, so o resumo */
+    t.onchange = function () { if (/^\d\d:\d\d/.test(t.value)) { set(t.value.substring(0, 5)); schedSummary(); } };
+    return t;
+  }
+  function schedSummary() {
+    var s = curSched(), sm = $("schSummary");
+    if (s && sm) sm.innerHTML = esc(whenText(s.when));
+  }
+  function renderSchedForm() {
+    var f = $("schForm");
+    if (!f) return;
+    f.innerHTML = "";
+    var s = curSched();
+    if (!s) {
+      el("div", "schnone", (cfg.schedules || []).length ? "Escolha um agendamento na lista para editar." : "Crie um agendamento para começar.", f);
+      return;
+    }
+    var w = s.when || {}, typ = w.type || "daily";
+    var hdr = el("div", "hdr withmore", null, f);
+    el("span", null, "Editar agendamento", hdr);
+
+    var nf = field(f, "Nome");
+    var ni = el("input", "in", null, nf);
+    ni.id = "schName"; ni.maxLength = MAX_NAME; ni.value = s.name || ""; ni.placeholder = "Ex.: Vinheta da hora certa";
+    ni.oninput = function () { editSched(function (x) { x.name = ni.value; }, "name", true); };
+
+    var ef = field(f, null);
+    var el0 = el("label", "chk", null, ef);
+    var ei = el("input", null, null, el0);
+    ei.type = "checkbox"; ei.id = "schEnabled"; ei.checked = s.enabled !== false;
+    el("span", null, "Ligado", el0);
+    ei.onchange = function () { editSched(function (x) { x.enabled = ei.checked; }); };
+
+    var tf = field(f, "Quando");
+    var seg = el("div", "seg full", null, tf);
+    seg.id = "schType";
+    [["daily", "Todo dia"], ["every", "A cada"], ["once", "Uma vez"]].forEach(function (x) {
+      var b = el("button", typ === x[0] ? "on" : "", x[1], seg);
+      b.setAttribute("data-type", x[0]);
+      b.onclick = function () { if (typ !== x[0]) editSched(function (y) { y.when = whenOf(x[0], y.when); }); };
+    });
+
+    if (typ === "daily") {
+      var hf = field(f, "Horário");
+      timeInput(hf, w.time, "schTime", function (v) { editSched(function (x) { x.when.time = v; }, "time", true); });
+      var df = field(f, "Dias");
+      dayChips(df, w.days, function (v) { editSched(function (x) { x.when.days = v; }); });
+    } else if (typ === "every") {
+      var mf = field(f, "Intervalo", "Alinhado ao relógio: a cada 15 min roda às :00, :15, :30 e :45; a cada 60 min, toda hora cheia.");
+      var mr = el("div", "row2", null, mf);
+      var ms = el("select", "in", null, mr);
+      ms.id = "schEvery";
+      var mins = parseInt(w.minutes, 10) || 15, custom = schedCustom[s.id] || EVERY_OPTS.indexOf(mins) < 0;
+      EVERY_OPTS.forEach(function (m) { opt(ms, String(m), "A cada " + minText(m), custom ? "" : String(mins)); });
+      opt(ms, "c", "Personalizado…", custom ? "c" : "");
+      ms.onchange = function () {
+        if (ms.value === "c") { schedCustom[s.id] = true; renderSchedForm(); var ci = $("schMinutes"); if (ci) ci.focus(); return; }
+        schedCustom[s.id] = false;
+        var v = parseInt(ms.value, 10);
+        editSched(function (x) { x.when.minutes = v; });
+      };
+      if (custom) {
+        var ci = el("input", "in num", null, mr);
+        ci.type = "number"; ci.min = 1; ci.max = 1440; ci.step = 1; ci.id = "schMinutes"; ci.value = mins;
+        el("span", "unit", "min", mr);
+        ci.oninput = function () {
+          var v = parseInt(ci.value, 10);
+          if (v >= 1 && v <= 1440) editSched(function (x) { x.when.minutes = v; }, "minutes", true);
+        };
+        ci.onchange = function () { renderSchedForm(); };
+      }
+      var wf = field(f, "Horário do dia");
+      var wl = el("label", "chk", null, wf);
+      var wc = el("input", null, null, wl);
+      wc.type = "checkbox"; wc.id = "schWindow"; wc.checked = !!(w.from || w.to);
+      el("span", null, "Só numa faixa de horário", wl);
+      wc.onchange = function () {
+        editSched(function (x) {
+          if (wc.checked) { x.when.from = "08:00"; x.when.to = "22:00"; } else { delete x.when.from; delete x.when.to; }
+        });
+      };
+      if (w.from || w.to) {
+        var wr = el("div", "row2 win", null, wf);
+        el("span", "unit", "das", wr);
+        timeInput(wr, w.from || "00:00", "schFrom", function (v) { editSched(function (x) { x.when.from = v; }, "from", true); });
+        el("span", "unit", "às", wr);
+        timeInput(wr, w.to || "23:59", "schTo", function (v) { editSched(function (x) { x.when.to = v; }, "to", true); });
+      }
+      var df2 = field(f, "Dias");
+      dayChips(df2, w.days, function (v) { editSched(function (x) { x.when.days = v; }); });
+    } else {
+      var at = String(w.at || ""), of = field(f, "Data e horário", "Depois de rodar, o agendamento se desliga sozinho.");
+      var orow = el("div", "row2", null, of);
+      var di = el("input", "in", null, orow);
+      di.type = "date"; di.id = "schDate"; di.value = at.substring(0, 10);
+      var ti = timeInput(orow, at.substring(11, 16) || "08:00", "schAt", function () { setAt(); });
+      var setAt = function () {
+        if (/^\d{4}-\d\d-\d\d$/.test(di.value) && /^\d\d:\d\d/.test(ti.value)) {
+          var v = di.value + "T" + ti.value.substring(0, 5);
+          editSched(function (x) { x.when.at = v; }, "at", true);
+          schedSummary();
+        }
+      };
+      di.onchange = setAt;
+      var atd = parseIso(at);
+      if (atd && atd.getTime() < new Date().getTime()) el("div", "help warn", "Essa data já passou: ele não vai rodar.", of);
+    }
+    el("div", "sumline", esc(whenText(s.when)), f).id = "schSummary";
+
+    /* acao: o mesmo editor dos botoes (sem trocar de pagina) */
+    var a = s.action || { type: "none" };
+    var af = field(f, "Ação");
+    var as = actionSelect(af, a.type, false, function (t) { editSched(function (x) { x.action = newAction(t); }); }, SKIP_SCHED);
+    as.id = "schAction";
+    var sc = SD.actionMap[a.type];
+    if (sc && sc.help) el("div", "ahelp", esc(sc.help), f);
+    renderFields(f, a, [], "sa");
+
+    var acts = el("div", "acts", null, f);
+    var tb = el("button", "test", "Testar agora", acts);
+    tb.id = "schTest";
+    tb.disabled = !a.type || a.type === "none";
+    tb.onclick = function () { runSched(schedSel); };
+    var db = el("button", "dup", "Duplicar", acts);
+    db.id = "schDup";
+    db.onclick = function () { dupSched(schedSel); };
+    var xb = el("button", "clear", "Apagar", acts);
+    xb.id = "schDel";
+    xb.onclick = function () { delSched(schedSel); };
+  }
+  /* limpeza antes de salvar: devolve o texto do primeiro problema (ou "") */
+  function cleanSchedules(c) {
+    var l = c.schedules, warn = "";
+    if (!l) return "";
+    for (var i = 0; i < l.length; i++) {
+      var s = l[i];
+      s.name = SD.trim(s.name || "");
+      if (s.enabled === undefined) s.enabled = true;
+      var w = s.when || {};
+      if (w.days) w.days = sortedDays(w.days);
+      if (w.type === "every") { if (!w.from) delete w.from; if (!w.to) delete w.to; }
+      if (!s.action || !s.action.type || s.action.type === "page") s.action = { type: "none" };
+      var m = s.action.type === "none" ? null : missing(s.action, false);
+      if (m) {
+        if (!warn) warn = "Agendamento “" + (s.name || i + 1) + "” incompleto: preencha " + m;
+        if (missing(s.action, true)) s.action = { type: "none" };
+      }
+    }
+    return warn;
   }
 
   /* ========================================================= biblioteca === */
@@ -2301,6 +2789,7 @@
     }
     if (ctrl && k === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
     if (ctrl && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
+    if (schedOpen) return;   /* painel de agendamentos: so desfazer/refazer */
     if (sel < 0) {
       if (/^arrow/.test(k)) { selectOne(0); renderGrid(); renderInspector(); e.preventDefault(); }
       else if (k === "escape" && folder >= 0) { closeFolder(); return true; }
@@ -2426,12 +2915,18 @@
       setStatus("Importando…", "busy");
       upload("/api/local/import", f, function (ok, data, status) {
         if (!ok) { setStatus("Não importou: " + SD.errText(data, status), "err"); return; }
-        dirty = false; clearTimeout(saveT);
+        dirty = false; clearTimeout(saveT); saveBad = false;
         page = 0; folder = -1; selectOne(-1);
         loadConfig(false, "Backup importado ✓");
+        schedOffToast(data);
         loadInfo(); loadImages();
       });
     });
+  }
+  /* importar/restaurar: o PC desliga os agendamentos que chegaram */
+  function schedOffToast(data) {
+    var n = data && data.schedules_disabled;
+    if (n > 0) SD.toast(n + " agendamento(s) importado(s) desligado(s) — revise e ligue");
   }
   /* versoes anteriores (copias guardadas pelo PC a cada salvamento) */
   function two(n) { return (n < 10 ? "0" : "") + n; }
@@ -2476,8 +2971,9 @@
       SD.req("POST", "/api/local/backups/restore", JSON.stringify({ name: b.name }), function (ok, data, status) {
         if (!ok || !data || !data.ok) { setStatus("Não restaurou: " + SD.errText(data, status), "err"); SD.toast("Não restaurou: " + SD.errText(data, status), true); return; }
         m.close();
-        dirty = false; clearTimeout(saveT);
+        dirty = false; clearTimeout(saveT); saveBad = false;
         page = 0; folder = -1; selectOne(-1);
+        schedOffToast(data);
         loadConfig(false, "Versão de " + fmtWhen(b.when) + " restaurada ✓");
       });
     }
@@ -2513,6 +3009,7 @@
     $("redo").onclick = redo;
     setupAddMenu();
     setupTheme();
+    $("schedRow").onclick = function () { if (cfg && !schedOpen) openSched(); };
     $("libBtn").onclick = function () { if (cfg) openLibrary(); };
     $("pageBtn").onclick = function () { if (!cfg) return; if (folder >= 0) closeFolder(); selectOne(-1); renderGrid(); renderInspector(); };
     $("openSounds").onclick = function () {

@@ -1,5 +1,10 @@
 # Novidades
 
+## 2.8.0
+
+- Agendamentos (editor do PC > Automação > Agendamentos): disparar qualquer ação todo dia num horário, a cada N minutos (alinhado ao relógio, com faixa de horário opcional) ou uma vez numa data. Escolha os dias da semana, veja a próxima execução e teste na hora.
+- Música tocando agora: botão com texto ao vivo "Música — Artista" (ou só um dos dois), rolando quando não cabe. Funciona com Spotify (app), YouTube/YouTube Music, Deezer e SoundCloud no navegador, VLC, foobar2000, AIMP, Winamp e MusicBee (lido do título da janela do player).
+
 ## 2.7.0
 
 - 176 ícones (antes 56) com busca em português e ícones recentes; agora também dá para usar qualquer emoji como ícone.

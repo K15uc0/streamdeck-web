@@ -21,8 +21,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
-    templates, windows, winapi
+from . import VERSION, actions, agenda, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
+    tocando, templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
 DRAIN_MAX = 256 * 1024 * 1024    # corpo grande demais: descarta ate isso antes de responder
@@ -74,6 +74,8 @@ ROUTES = {
     ("GET", "/api/local/obs"): "local_obs",
     ("POST", "/api/local/obs"): "local_obs_save",
     ("GET", "/api/local/obs/scenes"): "local_obs_scenes",
+    ("GET", "/api/local/schedules"): "local_schedules",
+    ("POST", "/api/local/schedules/run"): "local_schedules_run",
     ("POST", "/api/update/check"): "post_update_check",
     ("POST", "/api/update/apply"): "post_update_apply",
     ("POST", "/api/config"): "post_config",
@@ -490,6 +492,8 @@ class Handler(BaseHTTPRequestHandler):
         ob = obs.state_for_api()
         if ob is not None:
             st["obs"] = ob
+        tocando.touch()
+        st["nowplaying"] = tocando.current()
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         return self._json(200, st)
@@ -616,14 +620,14 @@ class Handler(BaseHTTPRequestHandler):
     def local_backup_restore(self, body):
         name = body.get("name") if isinstance(body, dict) else None
         try:
-            v = storage.restore_backup(name)
+            v, n_off = storage.restore_backup(name)
         except KeyError:
             return self._json(404, {"ok": False, "error": "copia nao encontrada"})
         except (ValueError, OSError) as e:
             print("! erro ao restaurar copia: %s" % e)
             return self._json(400, {"ok": False, "error": str(e)})
         print("* versao anterior restaurada: %s" % name)
-        return self._json(200, {"ok": True, "v": v})
+        return self._json(200, {"ok": True, "v": v, "schedules_disabled": n_off})
 
     def local_openlog(self, body):
         if paths.IS_WINDOWS:
@@ -644,9 +648,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def local_import(self, q, f):
         storage.backup_current()
-        n_img, n_snd = media.import_zip(f)
+        n_img, n_snd, n_off = media.import_zip(f)
         print("* copia de seguranca importada: %d imagem(ns), %d som(ns)" % (n_img, n_snd))
-        return self._json(200, {"ok": True, "images": n_img, "sounds": n_snd, "v": storage.config_version()})
+        return self._json(200, {"ok": True, "images": n_img, "sounds": n_snd,
+                                "schedules_disabled": n_off, "v": storage.config_version()})
 
     def local_autostart(self, body):
         winapi.set_autostart(bool(body.get("on")))
@@ -675,6 +680,20 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             print("  erro no teste:", e)
             return self._json(200, {"ok": False, "error": str(e)})
+
+    def local_schedules(self, q):
+        return self._json(200, agenda.AGENDA.status())
+
+    def local_schedules_run(self, body):
+        sid = body.get("id") if isinstance(body, dict) else None
+        if not isinstance(sid, str) or not agenda.ID_RE.match(sid):
+            return self._json(400, {"ok": False, "error": "id invalido"})
+        err = agenda.AGENDA.run_now(sid)
+        if err is None:
+            return self._json(404, {"ok": False, "error": "agendamento nao encontrado"})
+        if err:
+            return self._json(200, {"ok": False, "error": err})
+        return self._json(200, {"ok": True})
 
     def local_obs(self, q):
         return self._json(200, obs.status())
@@ -719,9 +738,12 @@ class Handler(BaseHTTPRequestHandler):
             if not self._local():
                 print("! edicao recusada de %s: a configuracao so e editada no PC" % self.client_address[0])
                 return self._json(403, {"ok": False, "error": "edite pelo PC"})
-            storage.save_config(self._body_json())
+            cfg = self._body_json()
+            from . import agenda
+            n_once = agenda.AGENDA.guard_once(cfg)   # once que ja rodou nao volta ligado
+            storage.save_config(cfg)
             print("* configuracao salva")
-            return self._json(200, {"ok": True, "v": storage.config_version()})
+            return self._json(200, {"ok": True, "v": storage.config_version(), "once_disabled": n_once})
         except Exception as e:
             print("! erro ao salvar:", e)
             return self._json(400, {"ok": False, "error": str(e)})

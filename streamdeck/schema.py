@@ -4,7 +4,7 @@ import copy
 import json
 import re
 
-from . import actions
+from . import actions, agenda
 from .audio import TARGETS as FADER_TARGETS
 
 CONFIG_VERSION = 2
@@ -19,7 +19,8 @@ FOLDER_KINDS = ("button", "fader")   # pasta dentro de pasta nao
 MAX_FOLDER = 60            # botoes dentro de uma pasta
 MAX_APPS = 20              # apps por pagina (troca automatica)
 LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer",
-        "obs:stream", "obs:record", "obs:scene", "sound")
+        "obs:stream", "obs:record", "obs:scene", "sound",
+        "nowplaying", "nowplaying:title", "nowplaying:artist")
 MAX_LIT = 130
 # botao aceso pelo estado do OBS
 LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,120})$")
@@ -191,6 +192,7 @@ def validate_config(cfg):
             raise ValueError("pagina %d: botoes demais (maximo %d)" % (pi + 1, MAX_BUTTONS))
         for bi, b in enumerate(pg["buttons"]):
             validate_button(b, len(pages), "Pagina %d, botao %d" % (pi + 1, bi + 1))
+    agenda.validate(cfg.get("schedules"), len(pages))
 
 
 # ---------------------------------------------------------------- migracao ---
