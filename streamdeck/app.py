@@ -134,7 +134,7 @@ def main():
     sys.stderr = sys.stdout
     print("Iniciando em %s" % time.strftime("%d/%m/%Y %H:%M:%S"))
     print("Stream Deck %s | dados em %s" % (VERSION, paths.BASE))
-    first_run = storage.ensure_config()
+    storage.ensure_config()   # cria o config.json na primeira vez
     storage.load_config()  # valida o JSON (e migra config antigo) antes de subir
     try:
         from . import library

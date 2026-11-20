@@ -39,7 +39,7 @@ if __name__ == "__main__":
     try:
         from streamdeck.app import main
         main()
-    except SystemExit:
+    except (SystemExit, KeyboardInterrupt):
         raise
     except BaseException:
         _falha(traceback.format_exc())
