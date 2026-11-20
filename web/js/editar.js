@@ -325,6 +325,10 @@
       var t = el("span", "t", esc(pageName(i)), row);
       if (pg.apps && pg.apps.length) el("span", "ap", "auto", row).title = "Troca sozinha: " + pg.apps.join(", ");
       el("span", "c", String(count(pg)), row);
+      var more = el("button", "more", "…", row);
+      more.title = "Mais opções";
+      more.onclick = function (e) { e.stopPropagation(); var r = more.getBoundingClientRect(); pageMenu(i, r.left, r.bottom + 4); };
+      row.oncontextmenu = function (e) { e.preventDefault(); e.stopPropagation(); pageMenu(i, e.clientX, e.clientY); };
       var del = el("button", "del", "×", row);
       del.title = "Apagar página";
       row.onclick = function () {
@@ -436,13 +440,6 @@
       if (page > i || page >= cfg.pages.length) page = Math.max(0, page - 1);
       folder = -1;
       selectOne(-1);
-    });
-  }
-  function addPage() {
-    if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
-    change(function () {
-      cfg.pages.push({ name: "Página " + (cfg.pages.length + 1), buttons: [] });
-      page = cfg.pages.length - 1; folder = -1; selectOne(0);
     });
   }
 
@@ -601,7 +598,7 @@
     if (edEmpty(b)) {
       SD.setClass(t, "empty", true);
       var ps = Math.round(size * 0.3);
-      var ic0 = el("div", "ic", SD.svg("plus", ps, "rgba(235,235,245,0.35)"), t);
+      var ic0 = el("div", "ic", SD.svg("plus", ps, isLight() ? "rgba(60,60,67,0.3)" : "rgba(235,235,245,0.35)"), t);
       ic0.style.left = (W - ps) / 2 - 2 + "px"; ic0.style.top = (H - ps) / 2 - 2 + "px";
       return t;
     }
@@ -621,7 +618,7 @@
       var fg = SD.validColor(L.textColor) ? L.textColor : (SD.validColor(L.color) && !light ? "#fff" : "#1c1c1e");
       icon = icon || FADER_ICON[b.target] || "sound";
       var is = Math.round(size * 0.26);
-      ic = el("div", "ic", SD.svg(icon, is, SD.validColor(L.textColor) ? L.textColor : "#fff"), t);
+      ic = el("div", "ic", SD.iconHtml(icon, is, SD.validColor(L.textColor) ? L.textColor : "#fff"), t);
       ic.style.left = (W - is) / 2 + "px"; ic.style.top = pad + "px";
       lb = el("div", "lb c", esc(label || "Fader"), t);
       lb.style.left = "4px"; lb.style.right = "4px"; lb.style.bottom = pad * 0.8 + "px";
@@ -648,11 +645,11 @@
     if (L.image && label) el("div", "shade", null, t);
     if (icon && (!label || size < 66)) {
       var cs = Math.round(size * 0.44);
-      ic = el("div", "ic", SD.svg(icon, cs, fgc), t);
+      ic = el("div", "ic", SD.iconHtml(icon, cs, fgc), t);
       ic.style.left = (W - cs) / 2 + "px"; ic.style.top = (H - cs) / 2 + "px";
     } else if (icon) {
       var is2 = Math.max(16, Math.round(size * 0.26));
-      ic = el("div", "ic", SD.svg(icon, is2, fgc), t);
+      ic = el("div", "ic", SD.iconHtml(icon, is2, fgc), t);
       ic.style.left = pad + "px"; ic.style.top = pad + "px";
       lb = el("div", "lb", esc(label), t);
       lb.style.left = pad + "px"; lb.style.right = pad * 0.7 + "px"; lb.style.bottom = pad * 0.85 + "px";
@@ -755,6 +752,11 @@
         bd.title = "Incompleto: preencha " + bad[bkey(i)];
       }
       t.onclick = function (e) { clickTile(i, e); };
+      t.oncontextmenu = function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (!isSel(i)) { selectOne(i); renderGrid(); renderInspector(); }
+        tileMenu(e.clientX, e.clientY);
+      };
       if (b && b.kind === "folder") t.ondblclick = function () { openFolder(i); };
       if (b && !edEmpty(b)) {
         t.draggable = true;
@@ -964,17 +966,138 @@
     }
     return box;
   }
-  function iconGrid(parent, cur, set, id) {
-    var ig = el("div", "icons", null, parent);
-    if (id) ig.id = id;
-    var none = el("button", cur ? "" : "on", "nenhum", ig);
-    none.onclick = function () { set(""); };
-    Object.keys(SD.ICONS).forEach(function (name) {
-      var ib = el("button", cur === name ? "on" : "", SD.svg(name, 20), ig);
-      ib.title = name;
-      ib.onclick = function () { set(name); };
+  /* ------------------------------------------------- icone (seletor) --- */
+  var ICON_RECENT_KEY = "sd_ed_recent_icons";
+  var pickSt = {};           /* estado de cada seletor (aba, busca, categoria) entre redesenhos */
+  var EMOJIS = ("🎙️ 🎤 🎧 📻 🎵 🎶 🎼 🎹 🥁 🎸 🎺 🔊 🔉 🔇 📢 📣 🔔 🔕 📷 📸 🎥 📹 🎬 📺 💻 🖥️ ⌨️ 🖱️ 💡 " +
+    "🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ ⭐ ❤️ 👍 👎 👏 🙌 👋 😂 😍 😮 😢 😡 🤔 😎 🎉 🔥 💯 ✅ ❌ ⚠️ ❓ ❗ " +
+    "⏯️ ▶️ ⏸️ ⏹️ ⏺️ ⏭️ ⏮️ ⬆️ ⬇️ ⬅️ ➡️ 🔁 🔀 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟 " +
+    "🇧🇷 ⚽ 🏆 ☕ 📞 💬 ✉️ ⏰ 🕒 🌙 ☀️ 🚀 🔒 🔓 ⚙️ 🗑️ 📁 🎮 💰 📅").split(" ");
+  /* texto sem acento e minusculo, para a busca */
+  function plain(s) {
+    s = String(s == null ? "" : s).toLowerCase();
+    if (s.normalize) s = s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return s;
+  }
+  /* quantidade de caracteres (pares substitutos contam 1, como no servidor) */
+  function charLen(s) { return String(s).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "_").length; }
+  function iconColor() { return isLight() ? "#1c1c1e" : "#fff"; }
+  /* lista para a busca: SD.ICON_META + icones do conjunto sem descricao */
+  function iconMeta() {
+    var out = [], seen = {}, meta = SD.ICON_META || [];
+    for (var k = 0; k < meta.length; k++) {
+      var m = meta[k];
+      if (!m || !m.name || !SD.ICONS.hasOwnProperty(m.name) || seen[m.name]) continue;
+      seen[m.name] = 1;
+      out.push({ name: m.name, label: m.label || m.name, cat: m.cat || m.category || m.group || "",
+        key: plain(m.name + " " + (m.label || "") + " " + (m.tags || []).join(" ") + " " + (m.cat || m.category || m.group || "")) });
+    }
+    Object.keys(SD.ICONS).forEach(function (n) {
+      if (!seen[n]) out.push({ name: n, label: n, cat: "", key: plain(n) });
     });
-    return ig;
+    return out;
+  }
+  function recentIcons() {
+    try { var l = JSON.parse(window.localStorage.getItem(ICON_RECENT_KEY)); return l && l.length != null ? l : []; }
+    catch (e) { return []; }
+  }
+  function pushRecentIcon(v) {
+    if (!SD.hasIcon(v)) return;
+    var l = recentIcons().filter(function (x) { return x !== v; });
+    l.unshift(v);
+    try { window.localStorage.setItem(ICON_RECENT_KEY, JSON.stringify(l.slice(0, 12))); } catch (e) {}
+  }
+  /* iconPicker(pai, atual, set(valor), id): busca, categorias, recentes e aba de emoji */
+  function iconPicker(parent, cur, set, id) {
+    cur = cur || "";
+    var st = pickSt[id] || (pickSt[id] = { tab: SD.isEmoji(cur) ? "emoji" : "icons", q: "", cat: "" });
+    var box = el("div", "ipick", null, parent);
+    box.id = id;
+    function choose(v) { if (v) pushRecentIcon(v); set(v); }
+    function btn(parentEl, v, title) {
+      var b = el("button", "ib" + (cur === v ? " on" : ""), SD.iconHtml(v, 20, iconColor()), parentEl);
+      b.title = title || v;
+      b.setAttribute("data-icon", v);
+      b.onclick = function () { choose(v); };
+      return b;
+    }
+    var top = el("div", "iptop", null, box);
+    var cv = el("div", "ipcur", cur && SD.hasIcon(cur) ? SD.iconHtml(cur, 24, iconColor()) : "", top);
+    cv.title = cur || "Sem ícone";
+    var tabs = el("div", "seg sm", null, top);
+    [["icons", "Ícones"], ["emoji", "Emoji"]].forEach(function (x) {
+      var b = el("button", st.tab === x[0] ? "on" : "", x[1], tabs);
+      b.setAttribute("data-tab", x[0]);
+      b.onclick = function () { st.tab = x[0]; draw(); };
+    });
+    var none = el("button", "mini ipnone" + (cur ? "" : " on"), "Sem ícone", top);
+    none.onclick = function () { set(""); };
+    var body = el("div", "ipbody", null, box);
+    function draw() {
+      for (var c = tabs.firstChild; c; c = c.nextSibling) SD.setClass(c, "on", c.getAttribute("data-tab") === st.tab);
+      body.innerHTML = "";
+      if (st.tab === "emoji") drawEmoji(); else drawIcons();
+    }
+    function drawIcons() {
+      var q = el("input", "in search ipq", null, body);
+      q.placeholder = "Buscar ícone (ex.: microfone, play, OBS)";
+      q.value = st.q;
+      var all = iconMeta(), cats = [];
+      all.forEach(function (m) { if (m.cat && cats.indexOf(m.cat) < 0) cats.push(m.cat); });
+      if (cats.length > 1) {
+        var ch = el("div", "ipcats", null, body);
+        [""].concat(cats).forEach(function (c) {
+          var b = el("button", "ipcat" + (st.cat === c ? " on" : ""), esc(c || "Todos"), ch);
+          b.onclick = function () { st.cat = c; draw(); };
+        });
+      } else st.cat = "";
+      var rec0 = recentIcons().filter(SD.hasIcon);
+      var rw = null;
+      if (rec0.length) {
+        rw = el("div", "iprec", null, body);
+        el("span", "rl", "Recentes", rw);
+        rec0.forEach(function (v) { btn(rw, v); });
+      }
+      var g = el("div", "icons", null, body);
+      function fill() {
+        g.innerHTML = "";
+        var words = plain(SD.trim(q.value)).split(/\s+/).filter(function (w) { return w; }), n = 0;
+        if (rw) rw.style.display = words.length ? "none" : "";
+        all.forEach(function (m) {
+          if (st.cat && m.cat !== st.cat) return;
+          for (var k = 0; k < words.length; k++) if (m.key.indexOf(words[k]) < 0) return;
+          btn(g, m.name, m.label); n++;
+        });
+        if (!n) el("div", "ipnone0", "Nenhum ícone encontrado. Tente a aba Emoji.", g);
+      }
+      q.oninput = function () { st.q = q.value; fill(); };
+      fill();
+    }
+    function drawEmoji() {
+      var row = el("div", "addrow", null, body);
+      var inp = el("input", "in ipemo", null, row);
+      inp.placeholder = "Digite ou cole um emoji";
+      inp.value = SD.isEmoji(cur) ? cur.slice(6) : "";
+      var ok = el("button", "mini", "Usar", row);
+      function use() {
+        var v = SD.trim(inp.value);
+        if (!v) return;
+        if (charLen(v) > 8) { SD.toast("Use no máximo 8 caracteres", true); return; }
+        choose("emoji:" + v);
+      }
+      ok.onclick = use;
+      inp.onkeydown = function (e) { if (e.key === "Enter") use(); };
+      var rec1 = recentIcons().filter(SD.isEmoji);
+      if (rec1.length) {
+        var rw = el("div", "iprec", null, body);
+        el("span", "rl", "Recentes", rw);
+        rec1.forEach(function (v) { btn(rw, v); });
+      }
+      var g = el("div", "icons emo", null, body);
+      EMOJIS.forEach(function (e) { if (e) btn(g, "emoji:" + e, e); });
+    }
+    draw();
+    return box;
   }
   /* imagens: escolher da pasta, enviar nova, remover */
   function imagePicker(parent, cur, set, id) {
@@ -1046,6 +1169,7 @@
     var where = r ? "linha " + (r.y + 1) + ", coluna " + (r.x + 1) : "escondido nesta grade";
     var hdr = el("div", "hdr", (folder >= 0 ? "Dentro da pasta · " : "") + "Posição " + (sel + 1) + " · " + where, box);
     hdr.id = "selinfo";
+    inspMore(hdr);
     var pv = el("div", "preview", null, box);
     pv.id = "prev";
     renderPreview();
@@ -1091,7 +1215,7 @@
 
     /* icone */
     var icf = field(box, "Ícone", b.image && kind !== "fader" ? "A imagem substitui o ícone." : null);
-    iconGrid(icf, b.icon, function (v) { edit(function (x) { x.icon = v; }); }, "iconGrid");
+    iconPicker(icf, b.icon, function (v) { edit(function (x) { x.icon = v; }); }, "iconGrid");
 
     if (kind !== "fader") {
       var imf = field(box, "Imagem");
@@ -1241,7 +1365,7 @@
     li.id = "onLabel"; li.maxLength = 60; li.value = on.label || ""; li.placeholder = b.label || "Texto quando ligado";
     li.oninput = function () { setOn("label", li.value, true); };
     var icf = field(s, "Ícone ligado");
-    iconGrid(icf, on.icon || "", function (v) { setOn("icon", v); }, "onIcon").className += " short";
+    iconPicker(icf, on.icon || "", function (v) { setOn("icon", v); }, "onIcon");
     var cf = field(s, "Cor ligado");
     colorPicker(cf, on.color, { id: "onColor" }, function (v, light) { setOn("color", v, light); });
     var tf = field(s, "Cor do texto ligado");
@@ -1253,7 +1377,9 @@
   /* varios blocos selecionados: cor, cor do texto, tamanho, limpar */
   function renderMulti(box) {
     var bs = list();
-    el("div", "hdr", msel.length + " blocos selecionados", box).id = "selinfo";
+    var mh = el("div", "hdr", msel.length + " blocos selecionados", box);
+    mh.id = "selinfo";
+    inspMore(mh);
     el("div", "help pad", "Ctrl+clique adiciona/tira, Shift+clique seleciona um intervalo. As mudanças abaixo valem para todos.", box);
     var first = bs[msel[0]] || {};
     var cf = field(box, "Cor");
@@ -1782,6 +1908,297 @@
     return m;
   }
 
+  /* ===================================================== menu flutuante === */
+  /* popMenu(x, y, itens): itens = [{label, fn, red, disabled, sub:[itens], sep}] */
+  var popEl = null;
+  function closePop() {
+    if (popEl && popEl.parentNode) popEl.parentNode.removeChild(popEl);
+    popEl = null;
+  }
+  function popMenu(x, y, items, title) {
+    closePop();
+    var m = el("div", "pop", null, document.body);
+    m.id = "pop";
+    popEl = m;
+    m.onclick = function (e) { e.stopPropagation(); };
+    m.oncontextmenu = function (e) { e.preventDefault(); };
+    function fill(list0, head, back) {
+      m.innerHTML = "";
+      if (back) {
+        var bk = el("button", "pi back", "‹ " + esc(head), m);
+        bk.onclick = back;
+      } else if (head) el("div", "ph", esc(head), m);
+      list0.forEach(function (it) {
+        if (it.sep) { el("div", "psep", null, m); return; }
+        var b = el("button", "pi" + (it.red ? " red" : "") + (it.sub ? " more" : ""), esc(it.label), m);
+        if (it.id) b.id = it.id;
+        if (it.disabled) b.disabled = true;
+        b.onclick = function () {
+          if (it.sub) { fill(it.sub, it.label.replace(/…$/, ""), function () { fill(list0, head); }); return; }
+          closePop();
+          it.fn();
+        };
+      });
+      /* mantem dentro da janela */
+      var r = m.getBoundingClientRect();
+      m.style.left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8)) + "px";
+      m.style.top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) + "px";
+    }
+    m.style.left = x + "px"; m.style.top = y + "px";
+    fill(items, title);
+    return m;
+  }
+  function popAt(btnEl, items, title) {
+    var r = btnEl.getBoundingClientRect();
+    return popMenu(r.left, r.bottom + 4, items, title);
+  }
+
+  /* ================================================ paginas: inserir === */
+  /* nome livre: "X", "X (2)", "X (3)"... */
+  function freeName(name) {
+    var used = {};
+    cfg.pages.forEach(function (p, i) { used[plain(pageName(i))] = 1; });
+    if (!used[plain(name)]) return name;
+    for (var n = 2; n < 999; n++) if (!used[plain(name + " (" + n + ")")]) return name + " (" + n + ")";
+    return name;
+  }
+  /* insere pg na posicao at e corrige os "Ir para pagina" das paginas existentes.
+     remapNew: corrige tambem as acoes da pagina nova (copia de uma pagina deste config). */
+  function insertPage(at, pg, remapNew) {
+    var n = cfg.pages.length, map = {};
+    for (var k = 0; k < n; k++) map[k] = k < at ? k : k + 1;
+    if (remapNew) cfg.pages.push(pg);
+    remapAll(map);
+    if (remapNew) cfg.pages.pop();
+    cfg.pages.splice(at, 0, pg);
+    page = at; folder = -1; selectOne(-1);
+  }
+  function addBlankPage() {
+    if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
+    change(function () { insertPage(page + 1, { name: freeName("Página " + (cfg.pages.length + 1)), buttons: [] }); selectOne(0); });
+  }
+  function duplicatePage(i) {
+    if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
+    change(function () {
+      var cp = clone(cfg.pages[i]);
+      cp.name = freeName(pageName(i) + " (cópia)");
+      /* troca automatica por app ficaria repetida: so a original troca sozinha */
+      delete cp.apps;
+      insertPage(i + 1, cp, true);
+    });
+    SD.toast("Página duplicada");
+  }
+  function pageMenu(i, x, y) {
+    var row = $("pages").children[i];
+    popMenu(x, y, [
+      { label: "Duplicar", id: "pmDup", fn: function () { duplicatePage(i); } },
+      { label: "Renomear", id: "pmRen", fn: function () {
+        renderPages();
+        var r = $("pages").children[i];
+        if (r) renamePage(i, r, r.querySelector(".t"));
+      } },
+      { sep: true },
+      { label: "Mover para cima", id: "pmUp", disabled: i === 0, fn: function () { movePage(i, i - 1); } },
+      { label: "Mover para baixo", id: "pmDown", disabled: i >= cfg.pages.length - 1, fn: function () { movePage(i, i + 2); } },
+      { sep: true },
+      { label: "Excluir", id: "pmDel", red: true, disabled: cfg.pages.length <= 1, fn: function () { deletePage(i); } }
+    ], pageName(i));
+    return row;
+  }
+
+  /* --------------------------------------------------------- modelos --- */
+  var templates = null;
+  /* modelos de reserva (quando o servidor ainda nao tem /api/templates) */
+  function mockTemplates() {
+    function hk(l, ic, c, keys) { return { label: l, icon: ic, color: c, action: { type: "hotkey", keys: keys } }; }
+    return [
+      { id: "midia", name: "Mídia", desc: "Tocar, pausar, faixas e volume", icon: "playpause", page: { name: "Mídia", buttons: [
+        hk("Anterior", "back", "#0a84ff", ["prev"]), hk("Play/Pausa", "playpause", "#30d158", ["playpause"]),
+        hk("Próxima", "forward", "#0a84ff", ["next"]), hk("Volume -", "sound", "#636366", ["volumedown"]),
+        hk("Volume +", "sound", "#636366", ["volumeup"]) ] } },
+      { id: "windows", name: "Atalhos do Windows", desc: "Copiar, colar, desfazer e área de trabalho", icon: "copy", page: { name: "Atalhos", buttons: [
+        hk("Copiar", "copy", "#0a84ff", ["ctrl", "c"]), hk("Colar", "emoji:📋", "#0a84ff", ["ctrl", "v"]),
+        hk("Desfazer", "emoji:↩️", "#ff9f0a", ["ctrl", "z"]), hk("Área de trabalho", "emoji:🖥️", "#5e5ce6", ["win", "d"]) ] } }
+    ];
+  }
+  function loadTemplates(cb) {
+    if (templates) { cb(templates); return; }
+    SD.req("GET", "/api/templates", null, function (ok, data) {
+      if (ok && data && data.templates) templates = data.templates;
+      else templates = mockTemplates();
+      cb(templates);
+    });
+  }
+  function miniPage(pg, parentEl) {
+    var d = dims("land"), W = 150, gap = 3;
+    var cw = Math.floor((W - gap * (d.c - 1)) / d.c), H = cw * d.r + gap * (d.r - 1);
+    var wrap = el("div", "tmini", null, parentEl);
+    wrap.style.width = W + "px"; wrap.style.height = H + "px";
+    var fl = SD.flow(pg.buttons || [], d.c, d.r);
+    for (var k = 0; k < fl.length; k++) {
+      var b = (pg.buttons || [])[fl[k].i];
+      if (!b || edEmpty(b)) continue;
+      var w = fl[k].w * cw + (fl[k].w - 1) * gap, h = fl[k].h * cw + (fl[k].h - 1) * gap;
+      var t = paintTile(b, w, h);
+      t.style.position = "absolute";
+      t.style.left = fl[k].x * (cw + gap) + "px"; t.style.top = fl[k].y * (cw + gap) + "px";
+      wrap.appendChild(t);
+    }
+    return wrap;
+  }
+  function openTemplates() {
+    var m = modal("Nova página a partir de um modelo", "tplModal");
+    el("div", "help", "A página entra logo depois de “" + esc(pageName(page)) + "”. Depois dá para mudar qualquer botão.", m.head);
+    var body = m.body;
+    el("div", "none", "Carregando…", body);
+    loadTemplates(function (list0) {
+      body.innerHTML = "";
+      if (!list0.length) { el("div", "none", "Nenhum modelo disponível.", body); return; }
+      var gr = el("div", "titems", null, body);
+      list0.forEach(function (tp) {
+        var c = el("button", "titem", null, gr);
+        c.setAttribute("data-id", tp.id || "");
+        var hd = el("div", "th", null, c);
+        el("span", "ti", SD.hasIcon(tp.icon) ? SD.iconHtml(tp.icon, 22, "#fff") : "", hd);
+        el("div", "tt", "<b>" + esc(tp.name || "Modelo") + "</b>" + (tp.desc ? "<span>" + esc(tp.desc) + "</span>" : ""), hd);
+        miniPage(tp.page || {}, c);
+        c.onclick = function () { m.close(); addTemplate(tp); };
+      });
+    });
+  }
+  function addTemplate(tp) {
+    if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
+    var pg = clone(tp.page || {});
+    pg.name = freeName(SD.trim(pg.name || tp.name || "Página"));
+    if (!pg.buttons) pg.buttons = [];
+    change(function () { insertPage(page + 1, pg, false); });
+    SD.toast("Página “" + pg.name + "” criada");
+  }
+  function setupAddMenu() {
+    var btn = $("addPage"), menu = $("addMenu");
+    btn.onclick = function (e) { e.stopPropagation(); closePop(); menu.style.display = menu.style.display === "block" ? "none" : "block"; };
+    document.addEventListener("click", function () { menu.style.display = "none"; closePop(); });
+    $("addBlank").onclick = function () { menu.style.display = "none"; if (cfg) addBlankPage(); };
+    $("addTpl").onclick = function () { menu.style.display = "none"; if (cfg && !$("tplModal")) openTemplates(); };
+    window.addEventListener("blur", closePop);
+    window.addEventListener("resize", closePop);
+  }
+
+  /* ============================================ blocos: copiar / mover === */
+  /* posicao livre na lista bs a partir de "from" (ou fim) */
+  function freeSlot(bs, from, taken) {
+    for (var i = from; i < bs.length; i++) if (edEmpty(bs[i]) && !taken[i]) return i;
+    var j = Math.max(bs.length, from);
+    while (taken[j]) j++;
+    return j;
+  }
+  function selFull() {
+    var bs = list();
+    return sorted().filter(function (i) { return bs[i] && !edEmpty(bs[i]); });
+  }
+  /* copia (ou move) os selecionados para a pagina p (primeiras posicoes livres) */
+  function sendTo(p, move) {
+    var idx = selFull();
+    if (!idx.length) return;
+    change(function () {
+      var src = list(), dst = cfg.pages[p];
+      if (!dst.buttons) dst.buttons = [];
+      var taken = {};
+      idx.forEach(function (i) {
+        var j = freeSlot(dst.buttons, 0, taken);
+        taken[j] = 1;
+        SD.padButtons(dst, j + 1);
+        dst.buttons[j] = clone(src[i]);
+        if (move) src[i] = SD.emptyButton();
+      });
+    });
+    SD.toast(idx.length + (idx.length > 1 ? " blocos " + (move ? "movidos" : "copiados") : " bloco " + (move ? "movido" : "copiado")) +
+      " para “" + pageName(p) + "”");
+  }
+  function dupHere() {
+    var idx = selFull();
+    if (!idx.length) return;
+    var noFolder = folder >= 0;
+    change(function () {
+      var h = holder(), taken = {}, out = [];
+      idx.forEach(function (i) { taken[i] = 1; });
+      idx.forEach(function (i) {
+        var j = freeSlot(h.buttons, i + 1, taken);
+        taken[j] = 1;
+        SD.padButtons(h, j + 1);
+        var c = clone(h.buttons[i]);
+        if (noFolder && c.kind === "folder") c = SD.emptyButton();
+        h.buttons[j] = c;
+        out.push(j);
+      });
+      msel = out; sel = out[0];
+    });
+  }
+  /* botao "…" no inspetor */
+  function inspMore(hdr) {
+    SD.setClass(hdr, "withmore", true);
+    var b = el("button", "hmore", "…", hdr);
+    b.id = "tileMore"; b.title = "Copiar, mover, duplicar…";
+    b.onclick = function (e) { e.stopPropagation(); var r = b.getBoundingClientRect(); tileMenu(r.right - 220, r.bottom + 4); };
+  }
+  function tileMenu(x, y) {
+    var full = selFull().length > 0;
+    function pages(move) {
+      var l = [];
+      for (var p = 0; p < cfg.pages.length; p++) (function (p) {
+        if (p === page && folder < 0) return;
+        l.push({ label: (p + 1) + ". " + pageName(p) + (p === page ? " (fora da pasta)" : ""), fn: function () { sendTo(p, move); } });
+      })(p);
+      if (!l.length) l.push({ label: "Não há outra página", disabled: true, fn: function () {} });
+      return l;
+    }
+    var n = msel.length > 1 ? msel.length + " blocos" : "Posição " + (sel + 1);
+    popMenu(x, y, [
+      { label: "Copiar para página…", id: "tmCopy", disabled: !full, sub: pages(false) },
+      { label: "Mover para página…", id: "tmMove", disabled: !full, sub: pages(true) },
+      { label: "Duplicar aqui", id: "tmDup", disabled: !full, fn: dupHere },
+      { sep: true },
+      { label: "Limpar", id: "tmClear", red: true, disabled: !full, fn: clearSel }
+    ], n);
+  }
+
+  /* ================================================================ tema === */
+  var THEME_KEY = "sd_ed_theme";
+  var mqLight = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+  function getTheme() {
+    try { var t = window.localStorage.getItem(THEME_KEY); return t === "escuro" || t === "claro" ? t : "auto"; }
+    catch (e) { return "auto"; }
+  }
+  function isLight() { return SD.hasClass(document.documentElement, "light"); }
+  function applyTheme() {
+    var t = getTheme(), l = t === "claro" || (t === "auto" && !!(mqLight && mqLight.matches));
+    var was = isLight();
+    SD.setClass(document.documentElement, "light", l);
+    var mt = document.querySelector("meta[name=theme-color]");
+    if (mt) mt.setAttribute("content", l ? "#f2f2f7" : "#000000");
+    renderTheme();
+    if (was !== l && cfg) renderAll();
+  }
+  function renderTheme() {
+    var s = $("themeSeg"), t = getTheme();
+    s.innerHTML = "";
+    [["auto", "Automático"], ["escuro", "Escuro"], ["claro", "Claro"]].forEach(function (x) {
+      var b = el("button", t === x[0] ? "on" : "", x[1], s);
+      b.setAttribute("data-theme", x[0]);
+      b.onclick = function () {
+        try { window.localStorage.setItem(THEME_KEY, x[0]); } catch (e) {}
+        applyTheme();
+      };
+    });
+  }
+  function setupTheme() {
+    if (mqLight) {
+      if (mqLight.addEventListener) mqLight.addEventListener("change", applyTheme);
+      else if (mqLight.addListener) mqLight.addListener(applyTheme);
+    }
+    applyTheme();
+  }
+
   /* ============================================================ teclado === */
   function clearSel() {
     if (sel < 0) return;
@@ -1828,7 +2245,8 @@
     return -1;
   }
   function onKey(e) {
-    if (!cfg || rec || $("libModal")) return;
+    if (popEl && e.key === "Escape") { closePop(); e.preventDefault(); return; }
+    if (!cfg || rec || $("libModal") || $("tplModal")) return;
     var ctrl = e.ctrlKey || e.metaKey, k = (e.key || "").toLowerCase();
     if (typing(e)) {
       if (e.key === "Escape") e.target.blur();
@@ -2046,7 +2464,8 @@
   function start() {
     $("undo").onclick = undo;
     $("redo").onclick = redo;
-    $("addPage").onclick = addPage;
+    setupAddMenu();
+    setupTheme();
     $("libBtn").onclick = function () { if (cfg) openLibrary(); };
     $("pageBtn").onclick = function () { if (!cfg) return; if (folder >= 0) closeFolder(); selectOne(-1); renderGrid(); renderInspector(); };
     $("openSounds").onclick = function () {

@@ -319,3 +319,143 @@ body.resizing, body.resizing * { cursor: nwse-resize !important; }
 .obsrow select { flex: 0 0 44%; min-width: 0; }
 .obsrow input { flex: 1; min-width: 0; }
 .obsnote { color: #ff9f0a; }
+
+/* ===================================== 2.7: icones, menus, modelos, tema --- */
+.seg.sm button { padding: 4px 10px; font-size: 13px; }
+.tools .seg button { background: none; color: inherit; padding: 4px 10px; }
+.tools .seg button.on { background: #636366; }
+
+/* seletor de icone */
+.ipick { display: flex; flex-direction: column; gap: 8px; }
+.iptop { display: flex; align-items: center; gap: 8px; }
+.ipcur { width: 36px; height: 36px; flex: none; border-radius: 9px; background: #2c2c2e; display: flex; align-items: center; justify-content: center; line-height: 0; }
+.iptop .ipnone { margin-left: auto; }
+.iptop .ipnone.on { color: inherit; opacity: 0.6; }
+.ipbody { display: flex; flex-direction: column; gap: 8px; }
+.ipcats { display: flex; flex-wrap: wrap; gap: 5px; }
+.ipcat { border: 0; background: #2c2c2e; color: #fff; border-radius: 13px; padding: 3px 10px; font-size: 12px; }
+.ipcat.on { background: #0a84ff; color: #fff; }
+.iprec { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.iprec .rl { font-size: 12px; color: rgba(235,235,245,0.5); margin-right: 4px; }
+.ipick .ib { width: 34px; height: 34px; border: 0; border-radius: 8px; background: none; display: flex; align-items: center;
+  justify-content: center; padding: 0; line-height: 0; }
+.ipick .icons .ib { width: auto; }
+.ipick .ib:hover { background: #2c2c2e; }
+.ipick .ib.on { background: rgba(10,132,255,0.28); box-shadow: inset 0 0 0 2px #0a84ff; }
+.ipick .icons { max-height: 200px; }
+.ipick .icons.emo { max-height: 180px; }
+.ipnone0 { grid-column: 1 / -1; font-size: 13px; color: rgba(235,235,245,0.5); padding: 12px 4px; text-align: center; }
+.ipemo { font-size: 18px; }
+
+/* menu flutuante (botao direito / …) */
+.menu.left { left: 0; right: auto; top: 46px; }
+.pop { position: fixed; z-index: 200; min-width: 220px; max-height: 70vh; overflow-y: auto; background: #2c2c2e;
+  border-radius: 12px; padding: 6px; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+.pop .ph { font-size: 12px; color: rgba(235,235,245,0.55); padding: 4px 10px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop .pi { display: block; width: 100%; text-align: left; background: none; border: 0; color: #fff; border-radius: 8px; padding: 7px 10px; font-size: 14px; }
+.pop .pi:hover:not(:disabled) { background: #0a84ff; color: #fff; }
+.pop .pi:disabled { opacity: 0.35; cursor: default; }
+.pop .pi.red { color: #ff453a; }
+.pop .pi.red:hover:not(:disabled) { background: #ff453a; color: #fff; }
+.pop .pi.more:after { content: "›"; float: right; opacity: 0.6; }
+.pop .pi.back { color: #0a84ff; font-size: 13px; }
+.pop .psep { height: 1px; background: rgba(84,84,88,0.55); margin: 5px 4px; }
+.pg .more { visibility: hidden; background: none; border: 0; color: inherit; font-size: 15px; line-height: 1; padding: 0 3px; opacity: 0.8; }
+.pg:hover .more, .pg.on .more { visibility: visible; }
+.hdr.withmore { display: flex; align-items: center; gap: 8px; }
+.hmore { margin-left: auto; background: #2c2c2e; border: 0; color: #0a84ff; border-radius: 8px; padding: 2px 10px; font-size: 15px; text-transform: none; }
+
+/* modelos */
+.titems { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; padding-top: 14px; }
+.titem { display: flex; flex-direction: column; gap: 10px; align-items: stretch; text-align: left; background: #2c2c2e; border: 0;
+  border-radius: 14px; padding: 12px; color: #fff; }
+.titem:hover { background: #3a3a3c; box-shadow: inset 0 0 0 2px #0a84ff; }
+.titem .th { display: flex; gap: 10px; align-items: center; }
+.titem .ti { width: 36px; height: 36px; flex: none; border-radius: 9px; background: #0a84ff; display: flex; align-items: center; justify-content: center; line-height: 0; }
+.titem .tt { min-width: 0; font-size: 15px; }
+.titem .tt span { display: block; font-size: 12px; color: rgba(235,235,245,0.55); margin-top: 2px; }
+.tmini { position: relative; align-self: center; border-radius: 8px; background: #000; padding: 0; outline: 6px solid #000; margin: 6px 0; }
+.tmini .tile { cursor: inherit; }
+.tmini .tile:hover { transform: none; }
+
+/* ------------------------------------------------ tema claro (iOS) --- */
+html.light body { background: #f2f2f7; color: #000; }
+html.light input, html.light select, html.light textarea { color: #000; }
+html.light #top, html.light #left, html.light #right { background: #f2f2f7; border-color: #c6c6c8; }
+html.light #top .back, html.light .crumb .crp { color: #007aff; }
+html.light .tools button, html.light .barbtn, html.light .mini, html.light .szb, html.light .hmore, html.light .ipcat,
+html.light .mclose { background: #fff; color: #000; box-shadow: 0 0 0 0.5px #c6c6c8; }
+html.light .mini, html.light .hmore { color: #007aff; }
+html.light .mini.red { color: #ff3b30; }
+html.light .barbtn.tint, html.light .primary, html.light .acts .test, html.light .vrestore { background: #007aff; color: #fff; box-shadow: none; }
+html.light .barbtn:hover, html.light .mini:hover { background: #e5e5ea; }
+html.light .status, html.light .hdr, html.light .foot, html.light .f > label, html.light .f > .l, html.light .sizes,
+html.light .f .help, html.light .ahelp, html.light .hint, html.light .pg .c, html.light .mbody .lg, html.light .mbody .none,
+html.light #inspector > .help, html.light .sec > .help, html.light .mhead .help, html.light .colors.recent .rl,
+html.light .iprec .rl, html.light .ipnone0, html.light .insp-empty, html.light .crumb .crh, html.light .pop .ph,
+html.light .litem .lt span, html.light .titem .tt span, html.light .vrow span, html.light .sounds div { color: rgba(60,60,67,0.6); }
+html.light .status.ok { color: #34c759; } html.light .status.err { color: #ff3b30; } html.light .status.busy { color: #ff9500; }
+html.light .list, html.light .card, html.light .icons, html.light .imgs, html.light .folderbox, html.light .ipcur,
+html.light .sizes select, html.light #devpick input.num { background: #fff; color: #000; }
+html.light .rowbtn { background: #fff; color: #007aff; }
+html.light .rowbtn:hover, html.light .pg:hover, html.light .icons button:hover, html.light .ipick .ib:hover { background: #e5e5ea; }
+html.light .pg + .pg:before, html.light .sounds div + div { background: #c6c6c8; border-color: #c6c6c8; }
+html.light .pg.on { background: #007aff; color: #fff; }
+html.light .pg.on .c { color: rgba(255,255,255,0.85); }
+html.light .pg input { background: #fff; border-color: #007aff; }
+html.light .in, html.light .in.search, html.light .step .in, html.light .step .sh select { background: #fff; box-shadow: 0 0 0 0.5px #c6c6c8; }
+html.light .in:focus { border-color: #007aff; }
+html.light .step, html.light .vside { background: #fff; box-shadow: 0 0 0 0.5px #c6c6c8; }
+html.light .step .sh button { background: #e5e5ea; color: #000; }
+html.light .seg { background: rgba(118,118,128,0.12); }
+html.light .seg button { color: #000; }
+html.light .seg button.on, html.light .tools .seg button.on { background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.04); }
+html.light .tools .seg button { box-shadow: none; background: none; }
+html.light .szb.on, html.light .ipcat.on { background: #007aff; color: #fff; }
+html.light .szi { background: rgba(60,60,67,0.6); }
+html.light .szb.on .szi { background: #fff; }
+html.light .sec { border-color: #c6c6c8; }
+html.light .colors .sw.on { box-shadow: 0 0 0 2px #f2f2f7, 0 0 0 4px #007aff; }
+html.light .colors .sw.def { background: #e5e5ea; color: rgba(60,60,67,0.7); }
+html.light .imgs .it { background-color: #e5e5ea; }
+html.light .ipick .ib.on { background: rgba(0,122,255,0.15); box-shadow: inset 0 0 0 2px #007aff; }
+html.light .addstep { color: #007aff; }
+html.light .menu, html.light .pop { background: #fff; box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 0 0 0.5px #c6c6c8; }
+html.light .menu button { color: #000; box-shadow: none; background: none; }
+html.light .menu button:hover { background: #e5e5ea; }
+html.light .menu button span { color: rgba(60,60,67,0.6); }
+html.light .pop .pi { color: #000; }
+html.light .pop .pi:hover:not(:disabled) { background: #007aff; color: #fff; }
+html.light .pop .pi.red { color: #ff3b30; }
+html.light .pop .pi.back { color: #007aff; }
+html.light .pop .psep, html.light .mhead { border-color: #c6c6c8; background-color: #c6c6c8; }
+html.light .mhead { background: none; }
+html.light .modal { background: rgba(0,0,0,0.3); }
+html.light .mbox { background: #f2f2f7; box-shadow: 0 20px 80px rgba(0,0,0,0.25); }
+html.light .litem, html.light .titem, html.light .vrow { background: #fff; color: #000; box-shadow: 0 0 0 0.5px #c6c6c8; }
+html.light .litem:hover, html.light .vrow:hover, html.light .titem:hover { background: #fff; box-shadow: inset 0 0 0 2px #007aff; }
+html.light .vrow.on { background: #007aff; color: #fff; }
+html.light .titem .ti { background: #007aff; }
+html.light .crumb { background: rgba(0,122,255,0.1); }
+html.light .crumb .crback { background: #007aff; }
+html.light .warnbox { background: rgba(255,149,0,0.14); color: #c93400; }
+html.light #toast { background: rgba(255,255,255,0.97); color: #000; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+html.light #toast.err { color: #ff3b30; }
+html.light .chip { background: #fff; box-shadow: 0 0 0 0.5px #c6c6c8; }
+html.light .chip button { background: #e5e5ea; color: #000; }
+/* pre-visualizacao do aparelho segue o tema do editor */
+html.light #devbox, html.light #device { background: #f2f2f7; }
+html.light #devbox { box-shadow: 0 0 0 2px #d1d1d6, 0 0 0 9px #e5e5ea, 0 20px 60px rgba(0,0,0,0.15); }
+html.light #dnav { background: rgba(249,249,249,0.85); border-color: #c6c6c8; color: #000; }
+html.light #dnav .dn-l { color: #007aff; }
+html.light #ddots i { background: rgba(0,0,0,0.2); }
+html.light #ddots i.on { background: #000; }
+html.light .tile { background-color: #c7c7cc; }
+html.light .tile.empty { background: transparent; border-color: rgba(60,60,67,0.3); }
+html.light .tile.fader { background: rgba(120,120,128,0.2); }
+html.light .tile.sel { box-shadow: 0 0 0 3px #f2f2f7, 0 0 0 6px #007aff; }
+html.light .tile.msel { box-shadow: 0 0 0 3px #f2f2f7, 0 0 0 6px #af52de; }
+html.light .tile.over { box-shadow: 0 0 0 3px #f2f2f7, 0 0 0 6px #ff9500; }
+html.light .tile.warn { box-shadow: 0 0 0 3px #f2f2f7, 0 0 0 6px #ff3b30; }
+html.light .tmini { background: #f2f2f7; outline-color: #f2f2f7; }
+html.light .sizes .x, html.light .sizes span, html.light .szc .x { color: rgba(60,60,67,0.6); }
