@@ -17,12 +17,6 @@ def page(a):
     pass   # a troca de pagina acontece no aparelho
 
 
-@action("monitor", "Abrir monitor do PC", group="Geral", icon="chart",
-        help="Mostra neste aparelho o uso de CPU, memória, placa de vídeo, disco e rede do PC.")
-def monitor(a):
-    pass   # a tela abre no aparelho
-
-
 @action("multi", "Sequência de ações (avançado)", group="Geral", icon="bolt",
         help="Executa várias ações em ordem, com uma pausa entre elas.",
         fields=[Field("steps", "Passos", "steps", required=True,

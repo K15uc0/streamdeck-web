@@ -111,16 +111,6 @@ async function phone(browser, base, token, size, errors) {
   await page.locator("#fd-back").click();
   await page.locator("#folder").waitFor({ state: "hidden", timeout: 5000 });
 
-  /* monitor do PC: abre pela barra, mostra a CPU em % e fecha pelo Voltar */
-  await page.locator("[aria-label='Monitor do PC']").click();
-  await page.locator("#mon.in").waitFor({ state: "visible", timeout: 5000 });
-  await page.waitForFunction(function () {
-    var v = document.querySelector("#mc-cpu .mc-v");
-    return v && /^\d+%$/.test(v.textContent);
-  }, null, { timeout: 8000 });
-  await page.locator("#mon-back").click();
-  await page.locator("#mon").waitFor({ state: "hidden", timeout: 5000 });
-
   /* folha de ajustes */
   await page.locator("[aria-label=Ajustes]").click();
   await page.locator("#sheetwrap.show").waitFor({ timeout: 5000 });

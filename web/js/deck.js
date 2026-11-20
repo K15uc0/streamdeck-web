@@ -76,40 +76,8 @@
       return fmtTimer((SD.now() + SD.skew) / 1000 - since);
     }
     if (live.indexOf("nowplaying") === 0) return npText(live);
-    if (live.indexOf("sys:") === 0) return sysText(live);
     return "";
   }
-  /* monitor do PC: numeros de /api/state?sys=1 */
-  SD.sys = null;   /* {cpu, ram, gpu, rx, tx, disk, uptime} | null */
-  function pctTxt(v) { return v == null ? "--" : Math.round(v) + "%"; }
-  function sysText(live) {
-    var s = SD.sys;
-    if (live === "sys:cpu") return "CPU " + pctTxt(s && s.cpu);
-    if (live === "sys:ram") return "RAM " + pctTxt(s && s.ram);
-    if (live === "sys:gpu") return "GPU " + pctTxt(s && s.gpu);
-    if (live === "sys:disk") return "Disco " + pctTxt(s && s.disk);
-    if (live === "sys:down") return "\u2193 " + SD.rateText(s && s.rx);
-    if (live === "sys:up") return "\u2191 " + SD.rateText(s && s.tx);
-    if (live === "sys:uptime") return s && s.uptime != null ? SD.durText(s.uptime) : "--";
-    return "";
-  }
-  /* bytes/s -> "1,2 MB/s" */
-  SD.bytesText = function (n) {
-    if (n == null || isNaN(n)) return "--";
-    var u = ["B", "KB", "MB", "GB", "TB"], i = 0;
-    while (Math.abs(n) >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-    var t = i === 0 ? String(Math.round(n)) : n < 10 ? n.toFixed(1).replace(".", ",") : String(Math.round(n));
-    return t + " " + u[i];
-  };
-  SD.rateText = function (n) { return n == null ? "--" : SD.bytesText(n) + "/s"; };
-  /* segundos -> "3d 4h" / "4h 12min" / "12min" */
-  SD.durText = function (s) {
-    s = Math.max(0, Math.floor(s));
-    var d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60;
-    if (d) return d + "d " + h + "h";
-    if (h) return h + "h " + pad2(m) + "min";
-    return m + "min";
-  };
   /* musica tocando agora (2.8): "Musica — Artista", so o nome ou so o artista */
   SD.nowplaying = null;  /* {title, artist, app} | null */
   function npText(live) {
@@ -229,8 +197,6 @@
       ic.innerHTML = SD.iconHtml(icon, is, fg);
       ic.style.left = px(pad); ic.style.top = px(pad);
       var fs = np ? Math.max(11, Math.min(22, Math.round(m * 0.15))) : live ? Math.max(12, Math.min(40, Math.round(m * 0.22))) : Math.max(10, Math.min(19, Math.round(m * 0.118)));
-      /* texto ao vivo comprido ("CPU 100%") nao pode passar da borda */
-      if (live && !np) fs = Math.max(12, Math.min(fs, Math.floor((w - pad * 1.7) / (Math.max(3, label.length) * 0.66))));
       lb.className = "lb bl";
       lb.style.left = px(pad); lb.style.right = px(pad * 0.7); lb.style.bottom = px(pad * 0.85);
       lb.style.fontSize = px(fs);
@@ -590,11 +556,6 @@
     } else {
       el("i", "cdot" + (SD.online ? "" : " off"), null, L);
     }
-    if (SD.openMonitor) {
-      var mb = el("span", "nb ib", SD.svg("chart", 22, SD.TINT), R);
-      mb.setAttribute("aria-label", "Monitor do PC");
-      mb.onclick = function () { SD.openMonitor(); };
-    }
     if (SD.fsAvailable()) {
       var fs = SD.isFullscreen();
       var fb = el("span", "nb ib", SD.svg(fs ? "shrink" : "expand", 22, SD.TINT), R);
@@ -790,7 +751,7 @@
     fillFolder(d);
   }
 
-  function onPop() { if (SD.monitorOpen && SD.monitorOpen()) return; if (folder) { histPushed = false; closeFolder(false, true); } }
+  function onPop() { if (folder) { histPushed = false; closeFolder(false, true); } }
 
   /* ====================================================== ao vivo ===== */
   /* relogio/data: a cada 15 s alinhados; cronometro: a cada segundo, so se estiver na tela */
@@ -877,7 +838,6 @@
     /* liga/desliga sem acao (ex.: ON AIR) ainda alterna o estado no PC */
     if (!b || ((!a || a.type === "none") && !toggles)) return;
     if (a && a.type === "page") { buzz(10); return SD.goPage(parseInt(a.to, 10) || 0); }
-    if (a && a.type === "monitor") { buzz(10); if (SD.openMonitor) SD.openMonitor(); return; }
     if (repeating && pending > 0) return;   /* nao empilha pedidos se a rede estiver lenta */
     if (!quiet) { flash(k, true); buzz(10); }   /* resposta visual na hora */
     var p = k.p, tkey = k.tkey, was = !!SD.toggles[tkey];
@@ -1062,7 +1022,7 @@
   function up() { if (G && G.k) { SD.setClass(G.k.el, "down", false); stopHold(G.k); } }
 
   function start(x, y, target) {
-    if (SD.sheet.isOpen() || SD.alertOpen() || !SD.cfg || (SD.monitorOpen && SD.monitorOpen())) return false;
+    if (SD.sheet.isOpen() || SD.alertOpen() || !SD.cfg) return false;
     if (isIn(target, "nav") || isIn(target, "dots-bar") || isIn(target, "fd-bar")) return false;
     var cell = cellOf(target), k = cell ? cell.sdTile : null;
     if (k && folder && k.f == null) k = null;   /* pasta aberta: a pagina de tras nao responde */
@@ -1191,7 +1151,7 @@
   function onTM(e) {
     if (G) { var t = e.touches[0], p = SD.toLocal(t.clientX, t.clientY); move(p.x, p.y); e.preventDefault(); return; }
     /* sem folha aberta, a tela nao rola nem da zoom */
-    if (!SD.sheet.isOpen() && !SD.alertOpen() && !(SD.monitorOpen && SD.monitorOpen())) e.preventDefault();
+    if (!SD.sheet.isOpen() && !SD.alertOpen()) e.preventDefault();
   }
   function onTE(e) {
     if (G) { e.preventDefault(); end(false); }
@@ -1244,21 +1204,6 @@
     for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf("nowplaying") === 0) return true;
     return false;
   }
-  function needSys() {
-    var v = visible();
-    for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf("sys:") === 0) return true;
-    return false;
-  }
-  var sysKey = "null";
-  SD.applySys = function (s) {
-    s = s && typeof s === "object" ? s : null;
-    var key = JSON.stringify(s);
-    if (key === sysKey) return;
-    sysKey = key;
-    SD.sys = s;
-    var v = visible();
-    for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf("sys:") === 0) repaint(v[i]);
-  };
   SD.applyNowPlaying = function (n) {
     n = n && typeof n === "object" ? n : null;
     var key = JSON.stringify(n);
@@ -1387,13 +1332,10 @@
   /* consulta leve: mudancas feitas no PC, estados liga/desliga, volumes, app em foco e versoes novas */
   function poll() {
     clearTimeout(pollT);
-    var lv = needLevels(), sy = needSys();
-    pollT = setTimeout(poll, needFast() ? 1000 : lv || sy ? 2000 : needNp() ? 3000 : 5000);
+    var lv = needLevels();
+    pollT = setTimeout(poll, needFast() ? 1000 : lv ? 2000 : needNp() ? 3000 : 5000);
     if (SD.denied || !SD.cfg || document.hidden) return;
-    var qs = [];
-    if (lv) qs.push("levels=1");
-    if (sy) qs.push("sys=1");
-    SD.req("GET", "/api/state" + (qs.length ? "?" + qs.join("&") : ""), null, function (ok, st, status, x) {
+    SD.req("GET", "/api/state" + (lv ? "?levels=1" : ""), null, function (ok, st, status, x) {
       if (!ok) { if (status === 403) SD.load(); return; }
       if (offlineToast) { offlineToast = false; SD.toast("Conectado"); }
       readSkew(x);
@@ -1402,7 +1344,6 @@
       SD.applySounds(st.sounds);
       SD.applyObs(st.obs);
       if (st.nowplaying !== undefined) SD.applyNowPlaying(st.nowplaying);
-      if (st.sys !== undefined) SD.applySys(st.sys);
       if (SD.cfgV != null && st.v != null && String(st.v) !== String(SD.cfgV) && !G) SD.load();
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
       if (st.app !== undefined) onApp(st.app);

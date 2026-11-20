@@ -12,11 +12,11 @@ from ..winapi import vk_of
 
 FIELD_KINDS = ("text", "textarea", "keys", "number", "bool", "select", "sound", "page", "steps",
                "app", "color", "obs_scene", "obs_input")
-NO_STEP = ("page", "multi", "monitor")   # tipos que nao podem ser passos de uma sequencia
+NO_STEP = ("page", "multi")   # tipos que nao podem ser passos de uma sequencia
 
 REGISTRY = {}   # tipo -> Action (na ordem de registro)
 # ordem no editor das acoes que vem com o programa; as novas vao no fim
-ORDER = ("none", "hotkey", "open", "command", "page", "monitor", "multi",
+ORDER = ("none", "hotkey", "open", "command", "page", "multi",
          "sound", "stopsound", "text", "http", "mute",
          "app", "apphotkey", "site", "tab",
          "obs_scene", "obs_stream", "obs_record", "obs_mute")
