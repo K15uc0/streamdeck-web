@@ -535,3 +535,5 @@ html.light .chip.on { background: rgba(0,122,255,0.12); color: #007aff; box-shad
 html.light .sumline { background: rgba(0,122,255,0.1); color: #007aff; }
 html.light .in.time, html.light input[type=date].in { color-scheme: light; }
 @media (max-width: 1100px) { #sched { grid-template-columns: minmax(0, 1fr) 340px; } }
+.acts .dup { background: #2c2c2e; color: #0a84ff; }
+html.light .acts .dup { background: #fff; color: #007aff; box-shadow: 0 0 0 0.5px #c6c6c8; }

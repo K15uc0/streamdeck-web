@@ -2269,7 +2269,7 @@
     tb.id = "schTest";
     tb.disabled = !a.type || a.type === "none";
     tb.onclick = function () { runSched(schedSel); };
-    var db = el("button", "test", "Duplicar", acts);
+    var db = el("button", "dup", "Duplicar", acts);
     db.id = "schDup";
     db.onclick = function () { dupSched(schedSel); };
     var xb = el("button", "clear", "Apagar", acts);
