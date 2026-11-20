@@ -232,3 +232,21 @@ Tipos de campo novos: `app` (escolher entre janelas abertas ou digitar), `color`
 
 OBS: obs-websocket v5 (vem no OBS 28+), porta 4455, cliente WebSocket próprio (stdlib),
 autenticação SHA-256 (challenge/salt), reconexão automática a cada 5 s em segundo plano.
+
+## 2.7: modelos, duplicar página, ícones e tema claro
+
+**Ícones:** `icon` aceita um nome do conjunto (`SD.ICONS`) ou `emoji:<caractere(s)>`
+(até 8 caracteres). `SD.iconHtml(icon, size, color)` desenha qualquer um dos dois
+(SVG ou emoji em texto) e é o que celular e editor usam. `SD.ICON_META` =
+`[{name, label, tags:[...]}]` em pt-BR para a busca. O conjunto cresce para ~150 ícones.
+O servidor aceita `emoji:` na validação.
+
+**Modelos de página:** `GET /api/templates` -> `{ok, templates:[{id, name, desc, icon, page:{name, buttons}}]}`
+(Rádio, OBS, Reunião (Teams/Zoom/Discord), Mídia, Atalhos do Windows, Navegador).
+O editor insere uma cópia como nova página (nomes repetidos ganham " (2)").
+
+**Editor:** duplicar página; botão direito/menu do bloco: "Copiar para página…" e
+"Mover para página…" (vai para a primeira posição livre; se não houver, cria no fim).
+
+**Tema:** `sd_prefs.theme` no celular e `sd_ed_theme` no editor = `auto | escuro | claro`
+(auto segue o aparelho). Os blocos coloridos mantêm suas cores nos dois temas.
