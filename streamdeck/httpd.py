@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from . import VERSION, actions, agenda, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
-    tocando, templates, windows, winapi
+    sistema, tocando, templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
 DRAIN_MAX = 256 * 1024 * 1024    # corpo grande demais: descarta ate isso antes de responder
@@ -40,7 +40,7 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
        "base-uri 'none'; form-action 'none'")
 
 TEXT = "text/plain; charset=utf-8"
-QUIET = ("/ping.gif", "/api/state", "/api/volume")   # nao aparecem no log
+QUIET = ("/ping.gif", "/api/state", "/api/volume", "/api/sys")   # nao aparecem no log
 SEEN = set()
 
 # (metodo, caminho) -> metodo do Handler. Rotas /api/local/* so respondem no proprio PC.
@@ -50,6 +50,7 @@ ROUTES = {
     ("POST", "/api/local/quit"): "local_quit",
     ("GET", "/api/update"): "get_update",
     ("GET", "/api/state"): "get_state",
+    ("GET", "/api/sys"): "get_sys",
     ("GET", "/api/volume"): "get_volume",
     ("GET", "/api/config"): "get_config",
     ("GET", "/api/actions"): "get_actions",
@@ -496,7 +497,17 @@ class Handler(BaseHTTPRequestHandler):
         st["nowplaying"] = tocando.current()
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
+        if q.get("sys"):   # botoes com texto ao vivo do monitor (CPU, memoria...)
+            sistema.MONITOR.touch()
+            st["sys"] = sistema.MONITOR.compact()
         return self._json(200, st)
+
+    def get_sys(self, q):
+        """Tela Monitor do celular: tudo, com o historico curto para os graficos."""
+        sistema.MONITOR.touch()
+        out = sistema.MONITOR.full()
+        out["name"] = socket.gethostname()
+        return self._json(200, out)
 
     def get_volume(self, q):
         try:

@@ -1,5 +1,11 @@
 # Novidades
 
+## 2.9.0
+
+- Monitor do PC no celular: toque no ícone de gráfico na barra (ou num botão com a ação "Abrir monitor do PC") para acompanhar ao vivo o uso de CPU (total e por núcleo), memória, placa de vídeo (uso e memória de vídeo), rede (recebendo e enviando), disco (atividade, leitura/gravação e espaço livre de cada unidade), tempo ligado e bateria. Gráficos do último minuto e meio; toque e arraste no gráfico para ver o valor de cada momento.
+- Texto ao vivo nos botões: "CPU 23%", "RAM 41%", "GPU 12%", "Disco 3%", rede recebendo/enviando e tempo ligado.
+- Temperatura não aparece: o Windows só a entrega com programas do fabricante ou como administrador.
+
 ## 2.8.1
 
 - Ao abrir o Stream Deck pelo atalho ou pelo .exe, a tela Conectar abre no navegador (desde a 2.5 o programa não tem janela e parecia que não tinha aberto). O ícone fica perto do relógio.

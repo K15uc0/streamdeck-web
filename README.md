@@ -40,6 +40,7 @@ O app avisa quando sai versão nova; toque em **Atualizar agora**:
 - Biblioteca de comandos prontos (Windows, mídia, OBS, Discord, Spotify, Teams, Zoom…) e efeitos sonoros até 200%
 - Cópia de segurança: exportar/importar um .zip com botões, imagens e sons
 - Abas para vários PCs (casa, trabalho…); só a aba aberta controla o PC dela
+- **Monitor do PC**: CPU (total e por núcleo), memória, placa de vídeo, rede, disco, tempo ligado e bateria ao vivo no celular, com gráficos; números também direto nos botões
 - **Atualizações**: o app avisa quando sai versão nova e atualiza com um toque, mantendo botões, abas e sons
 
 Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão no [CHANGELOG](CHANGELOG.md). Mais detalhes no [LEIA-ME](LEIA-ME.txt).

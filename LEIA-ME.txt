@@ -94,6 +94,10 @@ NO CELULAR
 - Engrenagem (Ajustes): tela cheia, abrir sempre em tela cheia, orientacao
   (Automatica, Vertical, Horizontal), PCs e atualizacoes. Vale so para aquele aparelho.
 - iPhone: para tela cheia, use Compartilhar > Adicionar a Tela de Inicio.
+- Icone de grafico na barra: Monitor do PC (CPU, memoria, placa de video, rede,
+  disco, tempo ligado e bateria, atualizados a cada segundo). Voltar fecha.
+  Tambem da para por num botao (acao "Abrir monitor do PC") ou mostrar um numero
+  no proprio botao (Texto ao vivo: "Monitor: uso da CPU", etc.).
 
 ABAS (VARIOS PCs, EX.: CASA E TRABALHO)
 - Cada PC roda o seu proprio servidor. No topo da pagina aparecem as abas.

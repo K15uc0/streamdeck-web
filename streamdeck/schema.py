@@ -20,7 +20,8 @@ MAX_FOLDER = 60            # botoes dentro de uma pasta
 MAX_APPS = 20              # apps por pagina (troca automatica)
 LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer",
         "obs:stream", "obs:record", "obs:scene", "sound",
-        "nowplaying", "nowplaying:title", "nowplaying:artist")
+        "nowplaying", "nowplaying:title", "nowplaying:artist",
+        "sys:cpu", "sys:ram", "sys:gpu", "sys:down", "sys:up", "sys:disk", "sys:uptime")
 MAX_LIT = 130
 # botao aceso pelo estado do OBS
 LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,120})$")

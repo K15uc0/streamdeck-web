@@ -23,6 +23,7 @@ streamdeck/
   winapi.py               SendInput, pasta Documentos, iniciar com o Windows, abrir pasta
   updates.py              verificação e aplicação de atualizações
   state.py                estado em memória (botões liga/desliga)
+  sistema.py              monitor do PC (CPU, memória, GPU, rede, disco), com histórico curto
   httpd.py                servidor HTTP e tabela de rotas
   app.py                  main(): porta, log, cópias antigas, abrir tela Conectar
   actions/
@@ -282,3 +283,26 @@ Chrome/Edge/Firefox/Opera/Brave, VLC, foobar2000, AIMP, Winamp, MusicBee, iTunes
 regras por app (Spotify Web no navegador não é detectado: o título da aba, "Música • Artista", não
 diz o site e se confunde com outros, como Instagram); atualizado a cada ~3 s em segundo plano. `live: "nowplaying"` mostra
 "Música — Artista" (rolando se não couber); `live: "nowplaying:title"` / `"nowplaying:artist"` só um.
+
+## 2.9: monitor do PC
+
+`streamdeck/sistema.py` (`MONITOR`): uma thread amostra a cada 1 s enquanto alguém consulta
+`/api/sys` ou `/api/state?sys=1` (para sozinha 30 s depois da última consulta) e guarda as últimas
+90 amostras. Windows: `NtQuerySystemInformation` (CPU por núcleo), `GlobalMemoryStatusEx`, PDH com
+nomes em inglês (`PdhAddEnglishCounterW`: rede, disco, `GPU Engine` e `GPU Adapter Memory`),
+`GetLogicalDrives`/`disk_usage`, `GetTickCount64`, `GetSystemPowerStatus`; nome da CPU e da placa de
+vídeo pelo registro. Linux (só para rodar pelo código e nos testes): `/proc`. Cada fonte falha
+sozinha (vira `null`). GPU % = motor mais ocupado (soma dos processos por motor), como o Gerenciador
+de Tarefas. Sem temperatura.
+
+| Método | Rota | |
+|---|---|---|
+| GET | `/api/sys` | `{ok, t, name, interval, cpu:{pct, cores:[%], name, count}, ram:{total, used, pct}, gpu:{pct, mem, mem_total, name}\|null, net:{rx, tx} (B/s), disk:{read, write, busy, drives:[{name, total, used, pct}]}, uptime (s), battery:{pct, charging}\|null, hist:{cpu, ram, gpu, rx, tx, dr, dw}}` |
+| GET | `/api/state?sys=1` | + `sys: {cpu, ram, gpu, rx, tx, disk, uptime} \| null` |
+
+**Ação nova:** `monitor` ("Abrir monitor do PC"): abre a tela no aparelho (nada roda no PC); não vale
+em sequências nem em agendamentos. **`live` novos:** `sys:cpu`, `sys:ram`, `sys:gpu`, `sys:disk`,
+`sys:down`, `sys:up`, `sys:uptime`.
+
+**Celular:** `web/js/monitor.js` (`SD.openMonitor`, `SD.monitorOpen`): camada `#mon` por cima da grade,
+ícone de gráfico na barra, consulta `/api/sys` a cada 1 s só enquanto aberta; "voltar" do aparelho fecha.

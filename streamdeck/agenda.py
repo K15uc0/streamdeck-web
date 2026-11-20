@@ -242,8 +242,8 @@ def validate(items, n_pages):
             raise ValueError("%s: enabled deve ser true ou false" % where)
         validate_when(it.get("when"), where)
         a = it.get("action")
-        if isinstance(a, dict) and a.get("type") == "page":
-            raise ValueError("%s: agendamento nao pode trocar de pagina" % where)
+        if isinstance(a, dict) and a.get("type") in ("page", "monitor"):
+            raise ValueError("%s: agendamento nao pode trocar de pagina nem abrir telas" % where)
         actions.validate(a, max(1, n_pages), where)
 
 

@@ -9,15 +9,20 @@
   var FADERS = [["master", "Som do PC (master)"], ["effects", "Efeitos sonoros"], ["mic", "Microfone"]];
   var FADER_ICON = { master: "sound", effects: "music", mic: "mic" };
   var FADER_MAX = { master: 100, effects: 200, mic: 100 };
-  var NO_STEP = { page: 1, multi: 1 };
+  var NO_STEP = { page: 1, multi: 1, monitor: 1 };
   var LIVE = [["", "Nenhum (mostra o rótulo)"], ["clock", "Relógio (hora)"], ["date", "Data"],
     ["volume:master", "Volume do PC"], ["volume:effects", "Volume dos efeitos"], ["volume:mic", "Volume do microfone"],
     ["timer", "Cronômetro (desde que ligou)"], ["obs:stream", "OBS: transmissão"], ["obs:record", "OBS: gravação"],
     ["obs:scene", "OBS: cena atual"], ["sound", "Progresso do som"],
-    ["nowplaying", "Música tocando agora"], ["nowplaying:title", "Só o nome da música"], ["nowplaying:artist", "Só o artista"]];
+    ["nowplaying", "Música tocando agora"], ["nowplaying:title", "Só o nome da música"], ["nowplaying:artist", "Só o artista"],
+    ["sys:cpu", "Monitor: uso da CPU"], ["sys:ram", "Monitor: uso da memória"], ["sys:gpu", "Monitor: uso da placa de vídeo"],
+    ["sys:disk", "Monitor: atividade do disco"], ["sys:down", "Monitor: rede recebendo"], ["sys:up", "Monitor: rede enviando"],
+    ["sys:uptime", "Monitor: tempo ligado"]];
   var LIVE_SAMPLE = { clock: "", date: "", "volume:master": "75%", "volume:effects": "100%", "volume:mic": "80%", timer: "00:00",
     "obs:stream": "AO VIVO", "obs:record": "REC", "obs:scene": "Cena", sound: "0:12",
-    nowplaying: "Música \u2014 Artista", "nowplaying:title": "Música", "nowplaying:artist": "Artista" };
+    nowplaying: "Música \u2014 Artista", "nowplaying:title": "Música", "nowplaying:artist": "Artista",
+    "sys:cpu": "CPU 23%", "sys:ram": "RAM 41%", "sys:gpu": "GPU 12%", "sys:disk": "Disco 3%",
+    "sys:down": "\u2193 1,2 MB/s", "sys:up": "\u2191 86 KB/s", "sys:uptime": "3h 12min" };
   /* "acender quando" (lit): estado do OBS */
   var LIT = [["", "Nunca (normal)"], ["obs:stream", "OBS transmitindo"], ["obs:record", "OBS gravando"],
     ["obs:scene", "Cena do OBS for…"], ["obs:mute", "Fonte do OBS estiver mutada…"]];
@@ -1271,7 +1276,7 @@
     var acts = el("div", "acts", null, box);
     var test = el("button", "test", "Testar", acts);
     test.id = "test";
-    test.disabled = kind === "fader" || kind === "folder" || !b.action || b.action.type === "none" || b.action.type === "page";
+    test.disabled = kind === "fader" || kind === "folder" || !b.action || b.action.type === "none" || b.action.type === "page" || b.action.type === "monitor";
     test.title = "Executa a ação agora neste PC, sem salvar";
     test.onclick = function () { testAction(curBtn().action); };
     var clr = el("button", "clear", "Limpar", acts);
@@ -1851,7 +1856,7 @@
   var DAY_FULL = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
   var DAY_PRESETS = [["Todos", []], ["Dias úteis", [1, 2, 3, 4, 5]], ["Fim de semana", [0, 6]]];
   var EVERY_OPTS = [5, 10, 15, 30, 60, 120];
-  var SKIP_SCHED = { page: 1 };
+  var SKIP_SCHED = { page: 1, monitor: 1 };
   var schedOpen = false;     /* painel aberto */
   var schedSel = -1;         /* indice em edicao (-1 = nenhum) */
   var schedInfo = {};        /* id -> {next, last, last_error} de /api/local/schedules */
@@ -2302,7 +2307,7 @@
       var w = s.when || {};
       if (w.days) w.days = sortedDays(w.days);
       if (w.type === "every") { if (!w.from) delete w.from; if (!w.to) delete w.to; }
-      if (!s.action || !s.action.type || s.action.type === "page") s.action = { type: "none" };
+      if (!s.action || !s.action.type || s.action.type === "page" || s.action.type === "monitor") s.action = { type: "none" };
       var m = s.action.type === "none" ? null : missing(s.action, false);
       if (m) {
         if (!warn) warn = "Agendamento “" + (s.name || i + 1) + "” incompleto: preencha " + m;
