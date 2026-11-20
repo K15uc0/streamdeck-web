@@ -272,7 +272,7 @@
           var w = badText() || schedWarn;
           if (w) setStatus(w, "err"); else setStatus("Salvo ✓", "ok");
           /* o PC desligou um "uma vez" que ja rodou: recarrega para mostrar */
-          if (data && data.once_disabled > 0) loadConfig(false);
+          if (data && data.once_disabled > 0 && !dirty) loadConfig(false);   /* nao descarta edicoes feitas durante o salvamento */
         }
         if (schedOpen) loadSchedInfo();
       } else if (status === 400) {
@@ -296,6 +296,8 @@
         if (first) setTimeout(function () { loadConfig(true); }, 2000);
         return;
       }
+      /* recarga automatica nao atropela edicoes feitas enquanto ela vinha */
+      if (!first && !msg && dirty) return;
       cfg = data;
       savedV = x.getResponseHeader("X-Config-Version");
       if (page >= cfg.pages.length) page = 0;
@@ -1996,6 +1998,9 @@
     if (!window.confirm("Apagar o agendamento “" + (s.name || "sem nome") + "”?")) return;
     change(function () {
       cfg.schedules.splice(i, 1);
+      /* o selecionado acompanha a lista quando um anterior e apagado */
+      if (i < schedSel) schedSel--;
+      else if (i === schedSel) schedSel = Math.min(i, cfg.schedules.length - 1);
       if (schedSel >= cfg.schedules.length) schedSel = cfg.schedules.length - 1;
     });
     SD.toast("Agendamento apagado (Ctrl+Z desfaz)");
