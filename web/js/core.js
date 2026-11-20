@@ -158,7 +158,18 @@
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
       '" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">' + body + "</svg>";
   };
-  SD.hasIcon = function (name) { return !!(name && SD.ICONS.hasOwnProperty(name)); };
+  SD.isEmoji = function (name) { return typeof name === "string" && name.indexOf("emoji:") === 0 && name.length > 6; };
+  SD.hasIcon = function (name) { return !!(name && (SD.ICONS.hasOwnProperty(name) || SD.isEmoji(name))); };
+  /* iconHtml(icone, tamanho, cor): SVG do conjunto ou emoji ("emoji:🎙") em texto */
+  SD.iconHtml = function (name, size, color) {
+    if (SD.isEmoji(name)) {
+      var t = String(name.slice(6)).replace(/[<>&"]/g, "");
+      return '<span class="emo" style="display:inline-block;font-size:' + Math.round(size * 0.92) + "px;line-height:" +
+        size + "px;width:" + size + "px;height:" + size + 'px;text-align:center">' + t + "</span>";
+    }
+    return SD.svg(name, size, color);
+  };
+  SD.ICON_META = SD.ICON_META || [];   /* [{name, label, tags}] para a busca (preenchido abaixo) */
 
   /* ------------------------------------------------------ estado global --- */
   SD.TOKEN = qs("k");
