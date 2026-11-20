@@ -419,7 +419,7 @@ html.theme-light, html.theme-light body { background: #f2f2f7; color: #000; }
 .theme-light .key.empty { background: rgba(0,0,0,0.05); -webkit-box-shadow: none; box-shadow: none; }
 .theme-light .key.light .gl { background: -webkit-linear-gradient(top, rgba(255,255,255,0.5), rgba(255,255,255,0) 55%);
   background: linear-gradient(to bottom, rgba(255,255,255,0.5), rgba(255,255,255,0) 55%); }
-.theme-light .key.lit { -webkit-box-shadow: 0 0 0 0.5px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.12); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.12); }
+.theme-light .key.lit { -webkit-box-shadow: 0 0 0 2px #007aff, 0 2px 10px rgba(0,122,255,0.25); box-shadow: 0 0 0 2px #007aff, 0 2px 10px rgba(0,122,255,0.25); }
 .theme-light .key.lit.onlook { -webkit-box-shadow: 0 0 0 2px #007aff, 0 2px 12px rgba(0,122,255,0.3); box-shadow: 0 0 0 2px #007aff, 0 2px 12px rgba(0,122,255,0.3); }
 .theme-light .key.confirm { -webkit-box-shadow: 0 0 0 2px #ff3b30, 0 2px 14px rgba(255,59,48,0.4); box-shadow: 0 0 0 2px #ff3b30, 0 2px 14px rgba(255,59,48,0.4); }
 .theme-light .key .cf { background: #ff3b30; }

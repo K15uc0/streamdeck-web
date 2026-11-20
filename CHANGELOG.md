@@ -1,5 +1,12 @@
 # Novidades
 
+## 2.7.0
+
+- 176 ícones (antes 56) com busca em português e ícones recentes; agora também dá para usar qualquer emoji como ícone.
+- Modelos de página prontos no editor: Rádio, OBS, Reunião (Teams/Zoom/Discord), Mídia, Atalhos do Windows e Navegador (Nova página > A partir de um modelo).
+- Duplicar página e mover para cima/baixo; botão direito num botão: copiar, mover ou duplicar para outra página (Ctrl+Z desfaz).
+- Tema claro no celular (Ajustes > Aparência) e no editor do PC: Automático, Escuro ou Claro.
+
 ## 2.6.0
 
 - OBS direto pelo WebSocket (OBS 28 ou mais novo): trocar de cena pelo nome, iniciar/parar transmissão e gravação, mutar fontes. Configure em Conectar > OBS (no OBS: Ferramentas > Configurações do WebSocket).
