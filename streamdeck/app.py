@@ -154,8 +154,9 @@ def main():
         except OSError:
             continue
     if srv is None:
-        print("Nenhuma porta livre (%s)." % ", ".join(map(str, PORTS)))
-        sys.exit(1)
+        # vira caixa de mensagem no server.py (o .exe nao tem janela)
+        raise RuntimeError("nenhuma porta livre (%s): outro programa esta usando as portas do Stream Deck"
+                           % ", ".join(map(str, PORTS)))
     state.PORT[0] = port
     base = "http://%s%s" % (lan_ip(), "" if port == 80 else ":%d" % port)
     print("=" * 56)
@@ -190,7 +191,10 @@ def main():
         # com o icone, a janela some (volta pelo menu "Mostrar janela do log")
         if not (tray_on and tray.show_console(False)):
             winapi.minimize_console()
-    if (first_run and not minimized) or "--conectar" in sys.argv:
+    # aberto pela pessoa (sem --minimizado): sempre mostra a tela Conectar,
+    # senao o programa sem janela parece que "nao abriu"
+    # (--sem-bandeja e o modo de teste/depuracao: nao abre navegador)
+    if (not minimized and "--sem-bandeja" not in sys.argv) or "--conectar" in sys.argv:
         threading.Timer(1.0, webbrowser.open, ["http://127.0.0.1:%d/conectar" % port]).start()
     try:
         srv.serve_forever()

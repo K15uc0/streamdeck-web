@@ -1,5 +1,10 @@
 # Novidades
 
+## 2.8.1
+
+- Ao abrir o Stream Deck pelo atalho ou pelo .exe, a tela Conectar abre no navegador (desde a 2.5 o programa não tem janela e parecia que não tinha aberto). O ícone fica perto do relógio.
+- Se algo impedir o programa de abrir, aparece uma mensagem com o motivo, também gravada em Documentos\StreamDeck\erro-ao-abrir.txt.
+
 ## 2.8.0
 
 - Agendamentos (editor do PC > Automação > Agendamentos): disparar qualquer ação todo dia num horário, a cada N minutos (alinhado ao relógio, com faixa de horário opcional) ou uma vez numa data. Escolha os dias da semana, veja a próxima execução e teste na hora.
