@@ -188,6 +188,8 @@ def _import_zip(fileobj):
         cfg = json.loads(z.read(info).decode("utf-8-sig"))
         cfg, _ = schema.migrate(cfg)
         schema.validate_config(cfg)
+        from . import agenda
+        n_off = agenda.disable_all(cfg)   # agendamentos importados chegam desligados
 
         todo, skipped = [], 0
         for i in infos:
@@ -225,4 +227,4 @@ def _import_zip(fileobj):
         storage.save_config(cfg, force=True)
         if skipped:
             print("  importar: %d arquivo(s) ignorado(s)" % skipped)
-        return n_img, n_snd
+        return n_img, n_snd, n_off

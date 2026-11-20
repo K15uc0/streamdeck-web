@@ -44,26 +44,30 @@ class NextRun(unittest.TestCase):
     def test_every_window(self):
         it = item({"type": "every", "minutes": 30, "from": "09:00", "to": "18:00"})
         self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 6, 0)), D(2026, 11, 20, 9, 0))
-        self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 17, 31)), D(2026, 11, 21, 9, 0))  # 18:00 fora
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 17, 31)), D(2026, 11, 20, 18, 0))  # 18:00 dentro
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 18, 1)), D(2026, 11, 21, 9, 0))
         self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 17, 29)), D(2026, 11, 20, 17, 30))
 
     def test_every_window_midnight(self):
         it = item({"type": "every", "minutes": 60, "from": "22:00", "to": "02:00"})
         self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 12, 0)), D(2026, 11, 20, 22, 0))
         self.assertEqual(agenda.next_run(it, D(2026, 11, 21, 0, 30)), D(2026, 11, 21, 1, 0))
-        self.assertEqual(agenda.next_run(it, D(2026, 11, 21, 1, 30)), D(2026, 11, 21, 22, 0))
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 21, 1, 30)), D(2026, 11, 21, 2, 0))
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 21, 2, 1)), D(2026, 11, 21, 22, 0))
         # so sexta: sabado 01:00 conta como a noite de sexta
         it = item({"type": "every", "minutes": 60, "from": "22:00", "to": "02:00", "days": [5]})
         self.assertTrue(agenda.matches(it["when"], D(2026, 11, 21, 1, 0)))
         self.assertFalse(agenda.matches(it["when"], D(2026, 11, 20, 1, 0)))  # quinta a noite
-        self.assertEqual(agenda.next_run(it, D(2026, 11, 21, 2, 0)), D(2026, 11, 27, 22, 0))
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 21, 2, 0)), D(2026, 11, 21, 2, 0))
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 21, 2, 1)), D(2026, 11, 27, 22, 0))
 
     def test_every_from_only_to_only(self):
         it = item({"type": "every", "minutes": 60, "from": "20:00"})
         self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 21, 1)), D(2026, 11, 20, 22, 0))
         self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 23, 1)), D(2026, 11, 21, 20, 0))
         it = item({"type": "every", "minutes": 60, "to": "03:00"})
-        self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 2, 1)), D(2026, 11, 21, 0, 0))
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 2, 1)), D(2026, 11, 20, 3, 0))
+        self.assertEqual(agenda.next_run(it, D(2026, 11, 20, 3, 1)), D(2026, 11, 21, 0, 0))
 
     def test_once(self):
         it = item({"type": "once", "at": "2026-12-01T10:30"})
@@ -127,9 +131,54 @@ class Runner(unittest.TestCase):
         self.assertEqual(len(self.ran), 2)
         st = self.ag.status(D(2026, 11, 20, 9, 1, 30))
         self.assertTrue(st["ok"])
-        self.assertEqual(st["items"][0]["next"], "2026-11-20T09:01:00")
+        self.assertEqual(st["items"][0]["next"], "2026-11-20T09:02:00")  # ja rodou as 09:01
         self.assertIsNotNone(st["items"][0]["last"])
         self.assertIsNone(st["items"][0]["last_error"])
+
+    def test_status_after_fire_daily(self):
+        self.cfg["schedules"] = [item({"type": "daily", "time": "09:00"}, sid="d")]
+        self.tick(D(2026, 11, 20, 9, 0, 1))
+        st = self.ag.status(D(2026, 11, 20, 9, 0, 30))
+        self.assertEqual(st["items"][0]["next"], "2026-11-21T09:00:00")
+
+    def test_malformed_isolated(self):
+        bads = [item({"type": "every", "minutes": 0}, sid="b1"),
+                item({"type": "daily", "time": "8:00"}, sid="b2"),
+                item("todo dia", sid="b3")]
+        self.cfg["schedules"] = bads + [item({"type": "every", "minutes": 1}, sid="ok")]
+        for b in bads:
+            self.assertIsNone(agenda.next_run(b, D(2026, 11, 20, 9, 0)))
+            self.assertFalse(agenda.due(b, None, D(2026, 11, 20, 8, 0)))
+        self.tick(D(2026, 11, 20, 8, 0, 1))
+        self.tick(D(2026, 11, 20, 8, 1, 1))
+        self.assertEqual([k for _a, k in self.ran], ["agenda:ok", "agenda:ok"])
+        st = {x["id"]: x for x in self.ag.status(D(2026, 11, 20, 8, 1, 30))["items"]}
+        for sid in ("b1", "b2", "b3"):
+            self.assertEqual(st[sid]["last_error"], "agendamento invalido")
+            self.assertIsNone(st[sid]["next"])
+        self.assertEqual(st["ok"]["next"], "2026-11-20T08:02:00")
+        self.assertEqual(self.ag.bad, {"b1", "b2", "b3"})
+
+    def test_guard_once(self):
+        self.cfg["schedules"] = [item({"type": "once", "at": "2026-11-20T10:00"}, sid="o")]
+        orig = self.ag._disable
+        self.ag._disable = lambda sid: True
+        self.tick(D(2026, 11, 20, 10, 0, 1))
+        self.ag._disable = orig
+        old = {"schedules": [item({"type": "once", "at": "2026-11-20T10:00"}, sid="o")]}
+        self.assertEqual(self.ag.guard_once(old, D(2026, 11, 20, 10, 5)), 1)
+        self.assertIs(old["schedules"][0]["enabled"], False)
+        # novo horario no futuro: pode religar
+        new = {"schedules": [item({"type": "once", "at": "2026-11-21T10:00"}, sid="o")]}
+        self.assertEqual(self.ag.guard_once(new, D(2026, 11, 20, 10, 5)), 0)
+        self.assertIs(new["schedules"][0]["enabled"], True)
+
+    def test_disable_all(self):
+        cfg = {"schedules": [item({"type": "daily", "time": "08:00"}),
+                             item({"type": "daily", "time": "09:00"}, sid="b", enabled=False)]}
+        self.assertEqual(agenda.disable_all(cfg), 1)
+        self.assertEqual([x["enabled"] for x in cfg["schedules"]], [False, False])
+        self.assertEqual(agenda.disable_all({}), 0)
 
     def test_error_recorded(self):
         def boom(a, key=None):

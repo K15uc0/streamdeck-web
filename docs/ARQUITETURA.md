@@ -263,16 +263,22 @@ O editor insere uma cópia como nova página (nomes repetidos ganham " (2)").
 
 - `when.type`:
   - `daily`: `time` "HH:MM", `days` 0=domingo..6=sábado (vazio = todos);
-  - `every`: `minutes` 1..1440, `from`/`to` "HH:MM" opcionais (janela do dia), `days`; alinhado ao relógio
+  - `every`: `minutes` 1..1440, `from`/`to` "HH:MM" opcionais (janela do dia, as duas pontas
+    inclusive: das 08:00 às 22:00 roda também às 22:00; pode cruzar a meia-noite), `days`; alinhado ao relógio
     (a cada 60 min = toda hora cheia; a cada 15 = :00 :15 :30 :45);
   - `once`: `at` "YYYY-MM-DDTHH:MM" (desliga sozinho depois de rodar).
 - `action`: qualquer ação válida (exceto `page`). Horário do PC (hora local).
 - Roda no máximo uma vez por minuto previsto; se o PC estava desligado, não recupera atrasados.
+- Um agendamento malformado não atrapalha os outros (fica com `last_error: "agendamento invalido"`).
+- Importar (`/api/local/import`) ou restaurar cópia chega com todos os agendamentos desligados; a resposta
+  traz `schedules_disabled` (quantos foram desligados) para o usuário revisar e ligar.
+- Um `once` que já rodou não volta ligado se o editor salvar uma cópia antiga dele.
 - API (só no PC): `GET /api/local/schedules` -> `{ok, now, items:[{id, next, last, last_error}]}`;
   `POST /api/local/schedules/run {id}` testa agora.
 
 **Música tocando agora:** `GET /api/state` ganha `nowplaying: {title, artist, app} | null`.
 Fonte: título das janelas de players conhecidos (Spotify, YouTube/YouTube Music/Deezer/SoundCloud no
 Chrome/Edge/Firefox/Opera/Brave, VLC, foobar2000, AIMP, Winamp, MusicBee, iTunes/Apple Music) com
-regras por app; atualizado a cada ~3 s em segundo plano. `live: "nowplaying"` mostra
+regras por app (Spotify Web no navegador não é detectado: o título da aba, "Música • Artista", não
+diz o site e se confunde com outros, como Instagram); atualizado a cada ~3 s em segundo plano. `live: "nowplaying"` mostra
 "Música — Artista" (rolando se não couber); `live: "nowplaying:title"` / `"nowplaying:artist"` só um.

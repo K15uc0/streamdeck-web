@@ -148,10 +148,9 @@ def _browser(title):
             song, artist = body.rsplit(" by ", 1)
             return _np(song, artist, "SoundCloud")
         return None
-    # Spotify Web: "Musica • Artista" (sem sufixo de site)
-    parts = t.split(" • ")
-    if len(parts) == 2 and parts[0].strip() and parts[1].strip() and " - " not in t:
-        return _np(parts[0], parts[1], "Spotify Web")
+    # Spotify Web nao e detectado: a aba fica so "Musica • Artista", sem
+    # sufixo do site, e o mesmo formato aparece em outros sites (Instagram etc).
+    # Sem como confirmar que veio de open.spotify.com, preferimos nao adivinhar.
     return None
 
 

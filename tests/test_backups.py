@@ -116,6 +116,18 @@ class BackupsTest(unittest.TestCase):
         # o estado de antes de restaurar ("a") ficou guardado
         self.assertEqual(storage.read_backup(d["backups"][0]["name"])["title"], "a")
 
+    def test_restaurar_desliga_agendamentos(self):
+        c = _cfg("com agenda")
+        c["schedules"] = [{"id": "s1", "enabled": True, "when": {"type": "daily", "time": "08:00"},
+                           "action": {"type": "none"}}]
+        storage.save_config(c, force=True)
+        storage.save_config(_cfg("b"), force=True)
+        name = [x for x in call("GET", "/api/local/backups")[2]["backups"]
+                if storage.read_backup(x["name"]).get("schedules")][0]["name"]
+        st, _, d = call("POST", "/api/local/backups/restore", {"name": name})
+        self.assertEqual((st, d["schedules_disabled"]), (200, 1))
+        self.assertIs(storage.load_config()["schedules"][0]["enabled"], False)
+
     def test_nome_invalido_e_inexistente(self):
         st, _, _ = call("GET", "/api/local/backups/..%2Fconfig.json")
         self.assertEqual(st, 400)

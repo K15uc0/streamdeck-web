@@ -4,7 +4,7 @@
 Formato em docs/ARQUITETURA.md (2.8). Regras:
 - daily: "time" HH:MM nos dias "days" (0=domingo..6=sabado; vazio = todos);
 - every: a cada "minutes" (1..1440) alinhado a meia-noite (15 -> :00 :15 :30 :45),
-  janela opcional "from" (inclusive) / "to" (exclusive), que pode cruzar a
+  janela opcional "from" / "to" (as duas inclusive), que pode cruzar a
   meia-noite (22:00 a 02:00); nesse caso a parte depois da meia-noite conta
   como do dia em que a janela comecou (para o filtro "days");
 - once: "at" YYYY-MM-DDTHH:MM; depois de rodar fica enabled=false.
@@ -59,23 +59,25 @@ def _in_window(when, m, d):
     if f is None and t is None:
         return True, d
     if f is None:
-        return m < t, d
+        return m <= t, d
     if t is None:
         return m >= f, d
     if f < t:
-        return f <= m < t, d
+        return f <= m <= t, d
     if f == t:          # mesma hora: o dia todo
         return True, d
     # cruza a meia-noite
     if m >= f:
         return True, d
-    if m < t:
+    if m <= t:
         return True, d - _dt.timedelta(days=1)
     return False, d
 
 
 def matches(when, minute):
     """O minuto (datetime sem segundos) e um horario previsto?"""
+    if not isinstance(when, dict):
+        return False
     typ = when.get("type")
     days = when.get("days") or []
     m = minute.hour * 60 + minute.minute
@@ -97,6 +99,8 @@ def next_run(item, now):
     if not isinstance(item, dict) or item.get("enabled") is False:
         return None
     when = item.get("when") or {}
+    if not isinstance(when, dict):
+        return None
     start = _floor(now)
     typ = when.get("type")
     try:
@@ -112,6 +116,8 @@ def next_run(item, now):
             return None
         if typ == "every":
             step = int(when["minutes"])
+            if step < 1:
+                raise ValueError("minutos invalidos")
             for i in range(LOOKAHEAD):
                 day = _dt.datetime.combine(start.date() + _dt.timedelta(days=i), _dt.time(0, 0))
                 m0 = 0
@@ -123,7 +129,7 @@ def next_run(item, now):
                     if matches(when, d):
                         return d
             return None
-    except (KeyError, TypeError, ValueError):
+    except Exception:  # noqa: BLE001 - item malformado nao derruba os outros
         return None
     return None
 
@@ -138,8 +144,20 @@ def due(item, last_minute, now):
         return False
     try:
         return matches(item.get("when") or {}, minute)
-    except (KeyError, TypeError, ValueError):
+    except Exception:  # noqa: BLE001
         return False
+
+
+def disable_all(cfg):
+    """Importar/restaurar: desliga todos os agendamentos (o usuario revisa e
+    liga). Devolve quantos estavam ligados."""
+    n = 0
+    items = cfg.get("schedules") if isinstance(cfg, dict) else None
+    for x in items if isinstance(items, list) else []:
+        if isinstance(x, dict) and x.get("enabled") is not False:
+            x["enabled"] = False
+            n += 1
+    return n
 
 
 # --------------------------------------------------------------- validacao ---
@@ -234,6 +252,12 @@ def _iso(d):
     return d.isoformat(timespec="seconds") if d is not None else None
 
 
+def _check(it):
+    """Levanta ValueError se o "when" de um item ligado esta malformado."""
+    if it.get("enabled") is not False:
+        validate_when(it.get("when"), "agendamento")
+
+
 def _load_config():
     from . import storage
     return storage.load_config()
@@ -248,6 +272,8 @@ class Agenda(object):
         self.lock = threading.Lock()
         self.fired = {}       # id -> minuto em que rodou (so em memoria)
         self.info = {}        # id -> {"last": epoch, "last_error": str|None}
+        self.once_done = {}   # id -> "at" de once que ja rodou (so em memoria)
+        self.bad = set()      # ids malformados ja avisados no log
         self._stop = threading.Event()
         self._thread = None
 
@@ -289,7 +315,12 @@ class Agenda(object):
         for it in self.items():
             sid = it.get("id")
             with self.lock:
-                if not due(it, self.fired.get(sid), now):
+                try:
+                    _check(it)
+                    if not due(it, self.fired.get(sid), now):
+                        continue
+                except Exception as e:  # noqa: BLE001
+                    self._broken(sid, e)
                     continue
                 self.fired[sid] = minute
             t = threading.Thread(target=self._run, args=(it, True), name="agenda:%s" % sid, daemon=True)
@@ -308,7 +339,10 @@ class Agenda(object):
             print("! agendamento %s: %s" % (it.get("name") or sid, err))
         with self.lock:
             self.info[sid] = {"last": time.time(), "last_error": err}
-        if scheduled and (it.get("when") or {}).get("type") == "once":
+        when = it.get("when") if isinstance(it.get("when"), dict) else {}
+        if scheduled and when.get("type") == "once":
+            with self.lock:
+                self.once_done[sid] = when.get("at")
             self._disable(sid)
         return err
 
@@ -325,6 +359,38 @@ class Agenda(object):
         except Exception as e:  # noqa: BLE001
             print("! agendamento %s: nao deu para desligar (%s)" % (sid, e))
         return False
+
+    def _broken(self, sid, e):
+        """Chamado com self.lock: avisa uma vez por id e marca o erro."""
+        if sid not in self.bad:
+            self.bad.add(sid)
+            print("! agendamento %s invalido: %s" % (sid, e))
+        inf = self.info.setdefault(sid, {"last": None, "last_error": None})
+        inf["last_error"] = "agendamento invalido"
+
+    def guard_once(self, cfg, now=None):
+        """Salvar pelo editor: um once que ja rodou (e cujo horario passou) nao
+        volta ligado por causa de um autosave com dados antigos. Devolve quantos
+        foram desligados."""
+        now = now or self.clock()
+        n = 0
+        items = cfg.get("schedules") if isinstance(cfg, dict) else None
+        for x in items if isinstance(items, list) else []:
+            if not isinstance(x, dict) or x.get("enabled") is False:
+                continue
+            w = x.get("when")
+            if not isinstance(w, dict) or w.get("type") != "once":
+                continue
+            with self.lock:
+                done = self.once_done.get(x.get("id"))
+            try:
+                past = parse_at(w.get("at")) <= _floor(now)
+            except Exception:  # noqa: BLE001
+                past = False
+            if done is not None and done == w.get("at") and past:
+                x["enabled"] = False
+                n += 1
+        return n
 
     def find(self, sid):
         for it in self.items():
@@ -347,8 +413,21 @@ class Agenda(object):
             sid = it.get("id")
             with self.lock:
                 inf = dict(self.info.get(sid) or {})
+                fired = self.fired.get(sid)
             last = inf.get("last")
-            out.append({"id": sid, "next": _iso(next_run(it, now)),
+            ref = now
+            if fired is not None and fired == _floor(now):
+                # ja rodou neste minuto: o proximo e a partir do minuto seguinte
+                ref = _floor(now) + _dt.timedelta(minutes=1)
+            try:
+                _check(it)
+                nxt = next_run(it, ref)
+            except Exception as e:  # noqa: BLE001
+                with self.lock:
+                    self._broken(sid, e)
+                    inf = dict(self.info.get(sid) or {})
+                nxt = None
+            out.append({"id": sid, "next": _iso(nxt),
                         "last": _iso(_dt.datetime.fromtimestamp(last)) if last else None,
                         "last_error": inf.get("last_error")})
         return {"ok": True, "now": _iso(now.replace(microsecond=0)), "items": out}

@@ -172,7 +172,12 @@
     lb.style.color = fg;
     var pad = Math.max(7, Math.round(Math.min(m, 140) * 0.12));
     var np = live.indexOf("nowplaying") === 0;
-    lb.innerHTML = np ? '<span class="mqi"><b>' + esc(label) + "</b></span>" : esc(label);
+    /* letreiro ja medido com o mesmo texto e tamanho: nao reescreve (a animacao nao recomeca) */
+    var keep = np && t.mqLabel === label && t.mqW === w && t.mqH === h && !!lb.firstChild;
+    if (!keep) {
+      t.mqLabel = null;
+      lb.innerHTML = np ? '<span class="mqi"><b>' + esc(label) + "</b></span>" : esc(label);
+    }
     if (img) {
       /* imagem cobre o bloco; rotulo embaixo sobre um degrade */
       ic.innerHTML = "";
@@ -205,25 +210,49 @@
       lb.style.fontSize = px(f2);
       lb.style.top = "50%";
     }
-    if (np) fitMarquee(t, label);
+    if (keep) lb.className += " mq" + (t.mqRun ? " run" : "");
+    else if (np) fitMarquee(t, label, w, h);
   };
 
   /* texto que nao cabe: rola (letreiro). Duas copias lado a lado; anima de 0 a -50%.
      So liga quando transborda; prefers-reduced-motion desliga no CSS. */
-  function fitMarquee(t, label) {
+  function fitMarquee(t, label, w, h) {
     var lb = t.lb, sp = lb.firstChild;
     lb.className += " mq";
     if (!sp || !lb.clientWidth) {
-      /* ainda fora da tela: mede de novo logo depois (uma vez) */
-      if (!t.mqT && !t.mqTry) t.mqT = setTimeout(function () { t.mqT = null; t.mqTry = 1; if (t.w) SD.paintTile(t, t.w, t.h); }, 80);
+      /* ainda sem largura (fora da tela, aba escondida, layout pendente):
+         tenta de novo ate medir; quadros primeiro, depois a cada 500 ms */
+      if (t.mqT) return;
+      var again = function () {
+        t.mqT = null;
+        if (!t.el || !document.body.contains(t.el) || t.mqLabel != null) { t.mqTry = 0; return; }
+        t.mqTry = (t.mqTry || 0) + 1;
+        if (t.w) SD.paintTile(t, t.w, t.h);
+      };
+      if ((t.mqTry || 0) < 10 && window.requestAnimationFrame && !document.hidden) {
+        t.mqT = 1;
+        window.requestAnimationFrame(again);
+      } else {
+        t.mqT = setTimeout(again, 500);
+      }
       return;
     }
     t.mqTry = 0;
+    t.mqLabel = label; t.mqW = w; t.mqH = h; t.mqRun = false;
     if (sp.offsetWidth <= lb.clientWidth + 1) return;
     sp.innerHTML = "<b>" + esc(label) + "</b><b>" + esc(label) + "</b>";
     lb.className += " run";
+    t.mqRun = true;
     var dur = Math.max(5, Math.round(sp.offsetWidth / 2 / 28)) + "s";
     sp.style.webkitAnimationDuration = dur; sp.style.animationDuration = dur;
+  }
+  /* voltou a ficar visivel / mudou o layout: mede os letreiros que ainda nao mediram */
+  function remeasureMarquees() {
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var k = v[i];
+      if (k.w && k.b && String(k.b.live || "").indexOf("nowplaying") === 0 && k.mqLabel == null) SD.paintTile(k, k.w, k.h);
+    }
   }
 
   /* camadas do 2.6: progresso de segurar, confirmacao e barra do som (criadas sob demanda) */
@@ -1206,6 +1235,11 @@
       if (!k.w || !k.b || k.kind !== "button" || !showsSound(k)) continue;
       var has = !!soundOf(k);
       if (has) any = true;
+      if (String(k.b.live || "").indexOf("nowplaying") === 0) {
+        /* bloco de musica: so a barra do som; redesenhar reiniciaria o letreiro */
+        paintSound(k);
+        continue;
+      }
       if (k.b.live === "sound") {
         /* texto mm:ss: redesenha so quando muda */
         var txt = String(liveText(k, "sound"));
@@ -1341,7 +1375,8 @@
     window.addEventListener("resize", SD.layoutSoon, false);
     window.addEventListener("orientationchange", function () { setTimeout(SD.layout, 300); }, false);
     window.addEventListener("popstate", onPop, false);
-    document.addEventListener("visibilitychange", function () { if (!document.hidden) { pollSoon(); SD.pingAll(); setupLive(); soundTick(true); } }, false);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { pollSoon(); SD.pingAll(); setupLive(); soundTick(true); remeasureMarquees(); } }, false);
+    window.addEventListener("resize", function () { setTimeout(remeasureMarquees, 120); }, false);
     $("scrim").onclick = function () { SD.sheet.cancel(); };
     setInterval(function () { if (!document.hidden) SD.pingAll(); }, 20000);
 

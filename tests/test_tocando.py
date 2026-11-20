@@ -42,7 +42,9 @@ CASES = [
     ("chrome.exe", "▶︎ Track One by Some DJ | Listen online for free on SoundCloud - Google Chrome",
      ("Track One", "Some DJ", "SoundCloud")),
     # Spotify Web
-    ("chrome.exe", "Get Lucky • Daft Punk - Google Chrome", ("Get Lucky", "Daft Punk", "Spotify Web")),
+    # (nao suportado: titulo sem sufixo do site, ambiguo)
+    ("chrome.exe", "Get Lucky • Daft Punk - Google Chrome", None),
+    ("chrome.exe", "Fulano (@fulano) • Instagram photos and videos - Google Chrome", None),
     ("msedge.exe", "Spotify - Web Player: Music for everyone - " + E, None),
     # outras abas
     ("chrome.exe", "Gmail - Caixa de entrada - Google Chrome", None),

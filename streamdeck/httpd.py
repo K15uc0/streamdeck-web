@@ -620,14 +620,14 @@ class Handler(BaseHTTPRequestHandler):
     def local_backup_restore(self, body):
         name = body.get("name") if isinstance(body, dict) else None
         try:
-            v = storage.restore_backup(name)
+            v, n_off = storage.restore_backup(name)
         except KeyError:
             return self._json(404, {"ok": False, "error": "copia nao encontrada"})
         except (ValueError, OSError) as e:
             print("! erro ao restaurar copia: %s" % e)
             return self._json(400, {"ok": False, "error": str(e)})
         print("* versao anterior restaurada: %s" % name)
-        return self._json(200, {"ok": True, "v": v})
+        return self._json(200, {"ok": True, "v": v, "schedules_disabled": n_off})
 
     def local_openlog(self, body):
         if paths.IS_WINDOWS:
@@ -648,9 +648,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def local_import(self, q, f):
         storage.backup_current()
-        n_img, n_snd = media.import_zip(f)
+        n_img, n_snd, n_off = media.import_zip(f)
         print("* copia de seguranca importada: %d imagem(ns), %d som(ns)" % (n_img, n_snd))
-        return self._json(200, {"ok": True, "images": n_img, "sounds": n_snd, "v": storage.config_version()})
+        return self._json(200, {"ok": True, "images": n_img, "sounds": n_snd,
+                                "schedules_disabled": n_off, "v": storage.config_version()})
 
     def local_autostart(self, body):
         winapi.set_autostart(bool(body.get("on")))
@@ -737,7 +738,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self._local():
                 print("! edicao recusada de %s: a configuracao so e editada no PC" % self.client_address[0])
                 return self._json(403, {"ok": False, "error": "edite pelo PC"})
-            storage.save_config(self._body_json())
+            cfg = self._body_json()
+            from . import agenda
+            agenda.AGENDA.guard_once(cfg)   # once que ja rodou nao volta ligado
+            storage.save_config(cfg)
             print("* configuracao salva")
             return self._json(200, {"ok": True, "v": storage.config_version()})
         except Exception as e:
