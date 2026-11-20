@@ -501,3 +501,19 @@ html.theme-light, html.theme-light body { background: #f2f2f7; color: #000; }
 .theme-light .fd-back { color: #007aff; }
 .theme-light .fd-back:before { border-color: #007aff; }
 .theme-light #fd-t { color: #000; }
+
+/* ---- 2.8: letreiro da musica tocando agora (so quando o texto nao cabe) ---- */
+.key .lb.mq { display: block; white-space: nowrap; overflow: hidden; max-height: none; -webkit-line-clamp: none; }
+.key .lb.mq .mqi { display: inline-block; white-space: nowrap; }
+.key .lb.mq .mqi b { font-weight: inherit; }
+.key .lb.mq.run .mqi b { padding-right: 2em; }
+.key .lb.mq.run { text-align: left; }
+.key .lb.mq.run .mqi { -webkit-animation: sdmarq 10s linear 1s infinite; animation: sdmarq 10s linear 1s infinite; }
+.key .lb.mq.mid { -webkit-transform: translateY(-50%); transform: translateY(-50%); }
+@-webkit-keyframes sdmarq { from { -webkit-transform: translateX(0); transform: translateX(0); } to { -webkit-transform: translateX(-50%); transform: translateX(-50%); } }
+@keyframes sdmarq { from { -webkit-transform: translateX(0); transform: translateX(0); } to { -webkit-transform: translateX(-50%); transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .key .lb.mq.run .mqi { -webkit-animation: none; animation: none; }
+  .key .lb.mq.run { text-overflow: ellipsis; }
+  .key .lb.mq.run .mqi b + b { display: none; }
+}

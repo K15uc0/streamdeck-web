@@ -75,7 +75,17 @@
       if (!t.lit || !since) return "00:00";
       return fmtTimer((SD.now() + SD.skew) / 1000 - since);
     }
+    if (live.indexOf("nowplaying") === 0) return npText(live);
     return "";
+  }
+  /* musica tocando agora (2.8): "Musica — Artista", so o nome ou so o artista */
+  SD.nowplaying = null;  /* {title, artist, app} | null */
+  function npText(live) {
+    var n = SD.nowplaying, ti = n ? SD.trim(n.title) : "", ar = n ? SD.trim(n.artist) : "";
+    if (!ti && !ar) return "Nada tocando";
+    if (live === "nowplaying:title") return ti || ar;
+    if (live === "nowplaying:artist") return ar || "--";
+    return ti && ar ? ti + " \u2014 " + ar : ti || ar;
   }
   SD.liveText = liveText;
 
@@ -161,7 +171,8 @@
     if (t.bgi !== bgi) { st.backgroundImage = bgi; t.bgi = bgi; }
     lb.style.color = fg;
     var pad = Math.max(7, Math.round(Math.min(m, 140) * 0.12));
-    lb.innerHTML = esc(label);
+    var np = live.indexOf("nowplaying") === 0;
+    lb.innerHTML = np ? '<span class="mqi"><b>' + esc(label) + "</b></span>" : esc(label);
     if (img) {
       /* imagem cobre o bloco; rotulo embaixo sobre um degrade */
       ic.innerHTML = "";
@@ -180,21 +191,40 @@
       var is = Math.max(16, Math.round(Math.min(m, 160) * 0.26));
       ic.innerHTML = SD.iconHtml(icon, is, fg);
       ic.style.left = px(pad); ic.style.top = px(pad);
-      var fs = live ? Math.max(12, Math.min(40, Math.round(m * 0.22))) : Math.max(10, Math.min(19, Math.round(m * 0.118)));
+      var fs = np ? Math.max(11, Math.min(22, Math.round(m * 0.15))) : live ? Math.max(12, Math.min(40, Math.round(m * 0.22))) : Math.max(10, Math.min(19, Math.round(m * 0.118)));
       lb.className = "lb bl";
       lb.style.left = px(pad); lb.style.right = px(pad * 0.7); lb.style.bottom = px(pad * 0.85);
       lb.style.fontSize = px(fs);
     } else {
       /* so texto: centralizado, maior */
       ic.innerHTML = "";
-      var f2 = live ? Math.max(12, Math.min(56, Math.floor(Math.min(m * 0.3, (w - pad * 1.4) / (Math.max(3, label.length) * 0.62)))))
+      var f2 = np ? Math.max(12, Math.min(28, Math.round(m * 0.19))) : live ? Math.max(12, Math.min(56, Math.floor(Math.min(m * 0.3, (w - pad * 1.4) / (Math.max(3, label.length) * 0.62)))))
                     : Math.max(11, Math.min(24, Math.round(m * 0.16)));
       lb.className = "lb mid";
       lb.style.left = px(pad * 0.6); lb.style.right = px(pad * 0.6);
       lb.style.fontSize = px(f2);
       lb.style.top = "50%";
     }
+    if (np) fitMarquee(t, label);
   };
+
+  /* texto que nao cabe: rola (letreiro). Duas copias lado a lado; anima de 0 a -50%.
+     So liga quando transborda; prefers-reduced-motion desliga no CSS. */
+  function fitMarquee(t, label) {
+    var lb = t.lb, sp = lb.firstChild;
+    lb.className += " mq";
+    if (!sp || !lb.clientWidth) {
+      /* ainda fora da tela: mede de novo logo depois (uma vez) */
+      if (!t.mqT && !t.mqTry) t.mqT = setTimeout(function () { t.mqT = null; t.mqTry = 1; if (t.w) SD.paintTile(t, t.w, t.h); }, 80);
+      return;
+    }
+    t.mqTry = 0;
+    if (sp.offsetWidth <= lb.clientWidth + 1) return;
+    sp.innerHTML = "<b>" + esc(label) + "</b><b>" + esc(label) + "</b>";
+    lb.className += " run";
+    var dur = Math.max(5, Math.round(sp.offsetWidth / 2 / 28)) + "s";
+    sp.style.webkitAnimationDuration = dur; sp.style.animationDuration = dur;
+  }
 
   /* camadas do 2.6: progresso de segurar, confirmacao e barra do som (criadas sob demanda) */
   function paintExtras(t, w, h, m, r) {
@@ -1138,6 +1168,23 @@
     }
   };
 
+  /* musica tocando agora: redesenha so os blocos "nowplaying" e so quando muda */
+  var npKey = "null";
+  function needNp() {
+    var v = visible();
+    for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf("nowplaying") === 0) return true;
+    return false;
+  }
+  SD.applyNowPlaying = function (n) {
+    n = n && typeof n === "object" ? n : null;
+    var key = JSON.stringify(n);
+    if (key === npKey) return;
+    npKey = key;
+    SD.nowplaying = n;
+    var v = visible();
+    for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf("nowplaying") === 0) repaint(v[i]);
+  };
+
   /* lista do PC -> mapa por chave, com a hora local para interpolar */
   var soundT = null;
   SD.applySounds = function (list) {
@@ -1252,7 +1299,7 @@
   function poll() {
     clearTimeout(pollT);
     var lv = needLevels();
-    pollT = setTimeout(poll, needFast() ? 1000 : lv ? 2000 : 5000);
+    pollT = setTimeout(poll, needFast() ? 1000 : lv ? 2000 : needNp() ? 3000 : 5000);
     if (SD.denied || !SD.cfg || document.hidden) return;
     SD.req("GET", "/api/state" + (lv ? "?levels=1" : ""), null, function (ok, st, status, x) {
       if (!ok) { if (status === 403) SD.load(); return; }
@@ -1262,6 +1309,7 @@
       if (st.levels) SD.applyLevels(st.levels);
       SD.applySounds(st.sounds);
       SD.applyObs(st.obs);
+      if (st.nowplaying !== undefined) SD.applyNowPlaying(st.nowplaying);
       if (SD.cfgV != null && st.v != null && String(st.v) !== String(SD.cfgV) && !G) SD.load();
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
       if (st.app !== undefined) onApp(st.app);
