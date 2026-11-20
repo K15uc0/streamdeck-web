@@ -194,5 +194,29 @@ test("remapPages com esquema (de /api/actions): troca de ordem", function () {
   SD.actionMap = {};
 });
 
+test("remapPages: segurar, toque duplo e pastas", function () {
+  SD.actionMap = {};
+  var c = { pages: [
+    { buttons: [
+      { label: "H", action: { type: "hotkey", keys: ["a"] }, hold: { type: "page", to: 2 },
+        double: { type: "multi", steps: [{ type: "page", to: 1 }, { type: "page", to: 2 }] } },
+      { label: "X", action: { type: "none" }, hold: { type: "page", to: 1 }, double: { type: "page", to: 2 } },
+      { kind: "folder", label: "P", buttons: [
+        { label: "F1", action: { type: "page", to: 2 }, hold: { type: "page", to: 1 } },
+        { label: "F2", action: { type: "page", to: 1 } }] }] },
+    { buttons: [] }, { buttons: [] }
+  ] };
+  SD.remapPages(c, { 0: 0, 1: -1, 2: 1 });
+  var b = c.pages[0].buttons;
+  assert.strictEqual(b[0].hold.to, 1);
+  same(b[0].double.steps, [{ type: "page", to: 1 }]);
+  assert.strictEqual(b[1].hold, undefined);
+  assert.strictEqual(b[1].double.to, 1);
+  var f = b[2].buttons;
+  assert.strictEqual(f[0].action.to, 1);
+  assert.strictEqual(f[0].hold, undefined);
+  assert.ok(SD.isEmpty(f[1]), "F2 deveria ficar vazio");
+});
+
 console.log("\n" + passed + " ok, " + failed + " com falha");
 process.exit(failed ? 1 : 0);

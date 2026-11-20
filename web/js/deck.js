@@ -140,7 +140,7 @@
       return;
     }
     var a = look(t);
-    var color = SD.validColor(a.color) ? a.color : SD.DEFAULT_TILE;
+    var color = SD.validColor(a.color) ? a.color : SD.lightTheme ? "#ffffff" : SD.DEFAULT_TILE;
     var tc = SD.validColor(a.textColor) ? a.textColor : "";
     var img = a.image ? String(a.image) : "";
     var fg, bg;
@@ -172,13 +172,13 @@
     } else if (icon && (!label || m < 66)) {
       /* pequeno ou sem rotulo: so o icone, centralizado */
       var cs = Math.round(Math.min(m, 160) * 0.44);
-      ic.innerHTML = SD.svg(icon, cs, fg);
+      ic.innerHTML = SD.iconHtml(icon, cs, fg);
       ic.style.left = px((w - cs) / 2); ic.style.top = px((h - cs) / 2);
       lb.style.display = "none";
     } else if (icon) {
       /* como no app Atalhos: icone em cima a esquerda, rotulo embaixo a esquerda */
       var is = Math.max(16, Math.round(Math.min(m, 160) * 0.26));
-      ic.innerHTML = SD.svg(icon, is, fg);
+      ic.innerHTML = SD.iconHtml(icon, is, fg);
       ic.style.left = px(pad); ic.style.top = px(pad);
       var fs = live ? Math.max(12, Math.min(40, Math.round(m * 0.22))) : Math.max(10, Math.min(19, Math.round(m * 0.118)));
       lb.className = "lb bl";
@@ -249,21 +249,23 @@
     var fs = Math.max(10, Math.min(16, Math.round(m * 0.105)));
     var vs = Math.max(12, Math.min(30, Math.round(m * 0.17)));
     var small = m < 80;
-    var pairs = [[t.ic, t.lb, t.val, "#fff", "rgba(235,235,245,0.6)"],
+    /* tema claro: trilho cinza claro, texto escuro nas duas camadas */
+    var lt = !!SD.lightTheme, top = lt ? "rgba(0,0,0,0.78)" : "#fff";
+    var pairs = [[t.ic, t.lb, t.val, top, lt ? "rgba(60,60,67,0.6)" : "rgba(235,235,245,0.6)"],
                  [t.ic2, t.lb2, t.val2, muted || SD.isLight(color) ? "#1c1c1e" : color, "rgba(0,0,0,0.5)"]];
-    var key = icon + "|" + is + "|" + color + "|" + muted;
+    var key = icon + "|" + is + "|" + color + "|" + muted + "|" + lt;
     var top0 = Math.round(Math.min(m, 140) * 0.1);
     for (var i = 0; i < 2; i++) {
       var p = pairs[i];
       if (p[0].getAttribute("data-k") !== key) {
-        p[0].innerHTML = SD.svg(icon, is, i === 0 ? "#fff" : pairs[1][3]);
+        p[0].innerHTML = SD.iconHtml(icon, is, i === 0 ? top : pairs[1][3]);
         p[0].setAttribute("data-k", key);
       }
       p[0].style.left = px((w - is) / 2); p[0].style.bottom = px(Math.round(Math.min(m, 140) * 0.12)); p[0].style.top = "auto";
       p[1].innerHTML = small ? "" : esc(label);
       p[1].style.fontSize = px(fs); p[1].style.top = px(top0); p[1].style.color = p[4];
       p[2].innerHTML = esc(val);
-      p[2].style.fontSize = px(vs); p[2].style.color = i === 0 ? "#fff" : p[3];
+      p[2].style.fontSize = px(vs); p[2].style.color = i === 0 ? top : p[3];
       p[2].style.top = px(small ? top0 : top0 + fs + 3);
     }
   }
@@ -286,9 +288,10 @@
 
   /* ============================================ ajustes deste aparelho === */
   /* sd_prefs = { orientation: "auto"|"portrait"|"landscape", autoFullscreen: bool,
-                  vibrate: bool (padrao true), autoPage: bool (padrao true) } */
+                  vibrate: bool (padrao true), autoPage: bool (padrao true),
+                  theme: "auto"|"escuro"|"claro" } */
   var PREFS_KEY = "sd_prefs";
-  SD.prefs = { orientation: "auto", autoFullscreen: false, vibrate: true, autoPage: true };
+  SD.prefs = { orientation: "auto", autoFullscreen: false, vibrate: true, autoPage: true, theme: "auto" };
   function loadPrefs() {
     try {
       var p = JSON.parse(window.localStorage.getItem(PREFS_KEY));
@@ -297,6 +300,7 @@
         SD.prefs.autoFullscreen = !!p.autoFullscreen;
         if (typeof p.vibrate === "boolean") SD.prefs.vibrate = p.vibrate;
         if (typeof p.autoPage === "boolean") SD.prefs.autoPage = p.autoPage;
+        if (p.theme === "escuro" || p.theme === "claro") SD.prefs.theme = p.theme;
       }
     } catch (e) {}
   }
@@ -304,7 +308,43 @@
     SD.prefs[name] = value;
     try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(SD.prefs)); } catch (e) {}
     if (name === "orientation") { lockOrientation(); SD.layout(); }
+    if (name === "theme") SD.applyTheme();
   };
+
+  /* ============================================================ tema === */
+  /* sd_prefs.theme = "auto" | "escuro" | "claro"; auto segue o aparelho.
+     Tema claro = classe "theme-light" no <html> (sobrescritas no CSS). */
+  SD.lightTheme = false;
+  var themeMq = null;
+  function systemLight() {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches); } catch (e) { return false; }
+  }
+  SD.applyTheme = function () {
+    var p = SD.prefs.theme, light = p === "claro" ? true : p === "escuro" ? false : systemLight();
+    var root = document.documentElement, cls = root.className.replace(/(^|\s)theme-light(\s|$)/g, " ").replace(/^\s+|\s+$/g, "");
+    root.className = light ? (cls ? cls + " " : "") + "theme-light" : cls;
+    var tm = document.querySelector ? document.querySelector('meta[name="theme-color"]') : null;
+    if (tm) tm.setAttribute("content", light ? "#f2f2f7" : "#000000");
+    var sb = document.querySelector ? document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]') : null;
+    if (sb) sb.setAttribute("content", light ? "default" : "black-translucent");
+    if (light === SD.lightTheme) return;
+    SD.lightTheme = light;
+    SD.TINT = light ? "#007aff" : "#0a84ff";
+    if (SD.cfg) SD.render(); else SD.layout();
+    if (SD.sheet && SD.sheet.isOpen()) SD.sheet.refresh();
+  };
+  function watchTheme() {
+    try {
+      if (window.matchMedia) {
+        themeMq = window.matchMedia("(prefers-color-scheme: light)");
+        if (themeMq.addEventListener) themeMq.addEventListener("change", SD.applyTheme, false);
+        else if (themeMq.addListener) themeMq.addListener(SD.applyTheme);
+      }
+    } catch (e) {}
+    /* navegadores antigos sem aviso: confere ao voltar para o app */
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) SD.applyTheme(); }, false);
+    SD.applyTheme();
+  }
 
   /* ======================================================= tela cheia === */
   /* instalado na tela de inicio (PWA): ja ocupa a tela toda */
@@ -1135,7 +1175,7 @@
   var offlineToast = false, pollT = null;
 
   function showMsg(icon, title, text) {
-    msg.innerHTML = '<div class="m-ic">' + SD.svg(icon, 34, "rgba(235,235,245,0.6)") + "</div><b>" + esc(title) + "</b><p>" + esc(text) + "</p>";
+    msg.innerHTML = '<div class="m-ic">' + SD.svg(icon, 34, SD.lightTheme ? "rgba(60,60,67,0.6)" : "rgba(235,235,245,0.6)") + "</div><b>" + esc(title) + "</b><p>" + esc(text) + "</p>";
     msg.style.display = "block";
   }
 
@@ -1240,6 +1280,7 @@
     fwrap = $("folder"); fbar = $("fd-bar"); fgrid = $("fgrid"); ftitle = $("fd-t");
     $("fd-back").onclick = function () { closeFolder(false); };
     loadPrefs();
+    watchTheme();
     document.addEventListener("touchstart", onTS, { passive: false });
     document.addEventListener("touchmove", onTM, { passive: false });
     document.addEventListener("touchend", onTE, { passive: false });

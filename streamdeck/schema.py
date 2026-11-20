@@ -23,6 +23,9 @@ LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer
 MAX_LIT = 130
 # botao aceso pelo estado do OBS
 LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,120})$")
+# icone: nome do conjunto (SD.ICONS em web/js/core.js) ou "emoji:<1..8 caracteres>"
+ICON_NAME_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
+MAX_EMOJI = 8
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()\-]{0,99}$")
 # nome de executavel: letras/digitos (inclusive acentos), espaco e pontuacao
@@ -39,6 +42,34 @@ def _opt_str(obj, key, limit, where):
         raise ValueError("%s: %s invalido" % (where, key))
     if len(v) > limit:
         raise ValueError("%s: %s muito longo (maximo %d caracteres)" % (where, key, limit))
+
+
+def valid_icon(v):
+    """"" (sem icone), nome do conjunto ou emoji:<1..8 caracteres, sem
+    caracteres de controle nem < > & ">."""
+    if not isinstance(v, str):
+        return False
+    if v == "" or ICON_NAME_RE.fullmatch(v):
+        return True
+    if not v.startswith("emoji:"):
+        return False
+    t = v[6:]
+    if not 1 <= len(t) <= MAX_EMOJI or t.strip() == "":
+        return False
+    for ch in t:
+        o = ord(ch)
+        if o < 32 or 0x7f <= o < 0xa0 or ch in '<>&"' or ch in "\u2028\u2029":
+            return False
+    return True
+
+
+def _opt_icon(obj, key, where):
+    v = obj.get(key)
+    if v is None:
+        return
+    if not valid_icon(v):
+        raise ValueError("%s: icone invalido (use um nome da lista ou emoji:<ate %d caracteres>)"
+                         % (where, MAX_EMOJI))
 
 
 def _opt_hex(obj, key, where):
@@ -65,7 +96,7 @@ def _opt_image(obj, key, where):
 def _looks(b, where):
     """Campos de aparencia (do botao e do "on")."""
     _opt_str(b, "label", MAX_LABEL, where)
-    _opt_str(b, "icon", MAX_SHORT, where)
+    _opt_icon(b, "icon", where)
     _opt_str(b, "color", MAX_SHORT, where)
     _opt_hex(b, "textColor", where)
     _opt_image(b, "image", where)
@@ -169,8 +200,39 @@ def migrate(cfg):
         return cfg, False
     ver = cfg.get("version")
     if isinstance(ver, int) and not isinstance(ver, bool) and ver >= CONFIG_VERSION:
-        return cfg, False
+        if ver != CONFIG_VERSION or not _has_bad_icon(cfg.get("pages")):
+            return cfg, False
+        out = copy.deepcopy(cfg)
+        for page in out["pages"]:
+            for btn in page.get("buttons", []) if isinstance(page, dict) else []:
+                if isinstance(btn, dict):
+                    fix_icon(btn)
+        return out, True
     return migrate_v1(cfg), True
+
+
+def fix_icon(btn):
+    """Icone antigo fora do formato atual vira "" (sem icone). Devolve True se mudou."""
+    changed = False
+    for o in (btn, btn.get("on")):
+        if isinstance(o, dict) and "icon" in o and not valid_icon(o["icon"]):
+            o["icon"] = ""
+            changed = True
+    for x in btn.get("buttons") if isinstance(btn.get("buttons"), list) else []:
+        if isinstance(x, dict) and fix_icon(x):
+            changed = True
+    return changed
+
+
+def _has_bad_icon(pages):
+    """Ha algum icone invalido (sem alterar a config)?"""
+    if not isinstance(pages, list):
+        return False
+    for page in pages:
+        for btn in page.get("buttons", []) if isinstance(page, dict) else []:
+            if isinstance(btn, dict) and fix_icon(copy.deepcopy(btn)):
+                return True
+    return False
 
 
 def _empty_button():
@@ -350,6 +412,7 @@ def migrate_v1(cfg):
         for btn in page.get("buttons", []) if isinstance(page, dict) else []:
             if isinstance(btn, dict):
                 remap(btn.get("action"))
+                fix_icon(btn)
 
     out = {"version": CONFIG_VERSION}
     for k, v in cfg.items():

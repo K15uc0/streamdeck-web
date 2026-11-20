@@ -128,7 +128,134 @@
     forward: '<path d="M9 4l8 8-8 8"' + S + '/>',
     updown: '<path d="M12 4v16M7 9l5-5 5 5M7 15l5 5 5-5"' + S + '/>',
     close: '<path d="M5 5l14 14M19 5L5 19"' + S + '/>',
-    plus: '<path d="M12 4v16M4 12h16"' + S + '/>'
+    plus: '<path d="M12 4v16M4 12h16"' + S + '/>',
+    /* --- 2.7: midia --- */
+    pause: '<path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="#fff"/>',
+    rewind: '<path d="M11 6v12l-8-6zM20 6v12l-8-6z" fill="#fff"/>',
+    fastforward: '<path d="M4 6v12l8-6zM13 6v12l8-6z" fill="#fff"/>',
+    shuffle: '<path d="M3 7h3.5c4 0 6 10 10 10H21M3 17h3.5c1.6 0 2.8-1.6 3.8-3.5M13.7 9.5c1-1.9 2.2-3.5 3.8-3.5H21M18 3l3 3-3 3M18 14l3 3-3 3"' + S + '/>',
+    repeat: '<path d="M4 11V9a3 3 0 0 1 3-3h13M17 3l3 3-3 3M20 13v2a3 3 0 0 1-3 3H4M7 21l-3-3 3-3"' + S + '/>',
+    eject: '<path d="M12 4l8 9H4z" fill="#fff"/><rect x="4" y="16" width="16" height="3" rx="1" fill="#fff"/>',
+    disc: '<circle cx="12" cy="12" r="9"' + S + '/><circle cx="12" cy="12" r="2.5" fill="#fff"/><path d="M7 12a5 5 0 0 1 5-5"' + S + '/>',
+    equalizer: '<path d="M4 20v-6M9 20V6M14 20v-9M19 20V9"' + S + ' stroke-width="3"/>',
+    waveform: '<path d="M3 12h1M6.5 8v8M10 4v16M13.5 7v10M17 10v4M20.5 11v2"' + S + '/>',
+    podcast: '<circle cx="12" cy="10" r="2.5" fill="#fff"/><path d="M8.5 13.5a5 5 0 1 1 7 0M5.6 16.4a9 9 0 1 1 12.8 0M12 14v7"' + S + '/>',
+    speaker: '<rect x="5" y="2" width="14" height="20" rx="2"' + S + '/><circle cx="12" cy="14.5" r="3.5"' + S + '/><circle cx="12" cy="6.5" r="1.3" fill="#fff"/>',
+    volmid: '<path d="M3 9v6h4l5 5V4L7 9H3z" fill="#fff"/><path d="M16 8.5a5 5 0 0 1 0 7"' + S + '/>',
+    /* --- transmissao / OBS --- */
+    video: '<rect x="2" y="6" width="14" height="12" rx="2" fill="#fff"/><path d="M17 10l5-3v10l-5-3z" fill="#fff"/>',
+    videooff: '<path d="M2 6h10l4 4v8H2z" fill="#fff"/><path d="M17 10l5-3v10l-5-3z" fill="#fff"/><path d="M2 2l20 20"' + S + '/>',
+    camoff: '<path d="M4 7h4l2-2h4l2 2h4v12H4z" fill="#fff"/><path d="M2 2l20 20"' + S + '/>',
+    webcam: '<circle cx="12" cy="10" r="7"' + S + '/><circle cx="12" cy="10" r="2.5" fill="#fff"/><path d="M8 21h8M12 17v4"' + S + '/>',
+    broadcast: '<circle cx="12" cy="10" r="2" fill="#fff"/><path d="M8.5 6.5a5 5 0 0 0 0 7M15.5 6.5a5 5 0 0 1 0 7M5.6 3.6a9 9 0 0 0 0 12.8M18.4 3.6a9 9 0 0 1 0 12.8M12 12l-4 9M12 12l4 9"' + S + '/>',
+    live: '<rect x="2" y="6" width="20" height="12" rx="3"' + S + '/><circle cx="7" cy="12" r="2" fill="#fff"/><path d="M11 9.5v5h2.5M16.5 9.5v5"' + S + ' stroke-width="1.8"/>',
+    screen: '<rect x="2" y="3" width="20" height="14" rx="2"' + S + '/><path d="M8 21h8M12 17v4M9 10l3-3 3 3M12 7v6"' + S + '/>',
+    cast: '<path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M2 12a8 8 0 0 1 8 8M2 16a4 4 0 0 1 4 4"' + S + '/><circle cx="2.5" cy="19.5" r="1.3" fill="#fff"/>',
+    film: '<rect x="3" y="3" width="18" height="18" rx="2"' + S + '/><path d="M7 3v18M17 3v18M3 8h4M3 12h4M3 16h4M17 8h4M17 12h4M17 16h4"' + S + '/>',
+    layers: '<path d="M12 3l9 5-9 5-9-5z" fill="#fff"/><path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5"' + S + '/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"' + S + '/><circle cx="12" cy="12" r="3" fill="#fff"/>',
+    eyeoff: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"' + S + '/><circle cx="12" cy="12" r="3" fill="#fff"/><path d="M3 3l18 18"' + S + '/>',
+    transition: '<rect x="2" y="5" width="9" height="14" rx="1" fill="#fff"/><rect x="13" y="5" width="9" height="14" rx="1"' + S + '/><path d="M8 12h8M14 9.5l2.5 2.5-2.5 2.5"' + S + '/>',
+    clip: '<rect x="3" y="7" width="18" height="13" rx="2"' + S + '/><path d="M3 7l3-4h3l-3 4M10 7l3-4h3l-3 4M17 7l3-4"' + S + '/><path d="M10 11v6l5-3z" fill="#fff"/>',
+    /* --- comunicacao --- */
+    call: '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#fff"/>',
+    callend: '<path d="M2 14.5c5.5-5 14.5-5 20 0l-2.5 3-4-1.5v-2.8a12 12 0 0 0-7 0V16l-4 1.5z" fill="#fff"/>',
+    headset: '<path d="M4 14v-2a8 8 0 0 1 16 0v2M20 17v1a3 3 0 0 1-3 3h-4"' + S + '/><rect x="2.5" y="13" width="4" height="6" rx="1.5" fill="#fff"/><rect x="17.5" y="13" width="4" height="6" rx="1.5" fill="#fff"/>',
+    user: '<circle cx="12" cy="8" r="4.5" fill="#fff"/><path d="M3.5 21a8.5 8.5 0 0 1 17 0z" fill="#fff"/>',
+    users: '<circle cx="9" cy="8" r="4" fill="#fff"/><path d="M1.5 20a7.5 7.5 0 0 1 15 0z" fill="#fff"/><path d="M15.5 4.3a4 4 0 0 1 0 7.4M18.5 13.5A7.5 7.5 0 0 1 22.5 20"' + S + '/>',
+    megaphone: '<path d="M3 10v4h3l9 5V5L6 10z" fill="#fff"/><path d="M6 14l1.5 6h3L9 14.5M18.5 9a4 4 0 0 1 0 6"' + S + '/>',
+    send: '<path d="M3 11L21 3l-8 18-2.5-7.5z" fill="#fff"/>',
+    at: '<circle cx="12" cy="12" r="4"' + S + '/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"' + S + '/>',
+    hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11V4a1.5 1.5 0 0 1 3 0v7V5.5a1.5 1.5 0 0 1 3 0V13V9a1.5 1.5 0 0 1 3 0v5a8 8 0 0 1-8 8c-3 0-4.5-1.5-6-3.5L3.5 14a1.6 1.6 0 0 1 2.5-2z" fill="#fff"/>',
+    /* --- sistema --- */
+    restart: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 3v5h-5"' + S + '/>',
+    sleep: '<path d="M20 15A8.5 8.5 0 0 1 9 4a8.5 8.5 0 1 0 11 11z" fill="#fff"/><path d="M14 3h4l-4 4h4"' + S + ' stroke-width="1.6"/>',
+    unlock: '<rect x="5" y="10" width="14" height="11" rx="2" fill="#fff"/><path d="M8 10V7a4 4 0 0 1 7.7-1.5"' + S + '/>',
+    key: '<circle cx="7.5" cy="15.5" r="4.5"' + S + '/><path d="M10.7 12.3L20 3M16 7l3 3M18 5l2 2"' + S + '/>',
+    shield: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" fill="#fff"/>',
+    wifi: '<path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0" stroke="#fff" stroke-width="2.2" fill="none"/><circle cx="12" cy="19.5" r="1.6" fill="#fff"/>',
+    bluetooth: '<path d="M7 7l10 10-5 5V2l5 5L7 17"' + S + '/>',
+    battery: '<rect x="2" y="7" width="17" height="10" rx="2"' + S + '/><rect x="4.5" y="9.5" width="9" height="5" fill="#fff"/><path d="M21.5 10.5v3"' + S + '/>',
+    brightness: '<circle cx="12" cy="12" r="4" fill="#fff"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"' + S + '/>',
+    mouse: '<rect x="6" y="2" width="12" height="20" rx="6"' + S + '/><path d="M12 6v4"' + S + '/>',
+    monitor: '<rect x="2" y="3" width="20" height="14" rx="2" fill="#fff"/><path d="M8 21h8M12 17v4"' + S + '/>',
+    laptop: '<rect x="4" y="4" width="16" height="11" rx="1.5"' + S + '/><path d="M2 19h20l-2-4H4z" fill="#fff"/>',
+    printer: '<path d="M6 9V3h12v6"' + S + '/><rect x="2" y="9" width="20" height="9" rx="2" fill="#fff"/><rect x="6" y="14" width="12" height="7" fill="#fff" stroke="rgba(0,0,0,0.45)" stroke-width="1.5"/>',
+    trash: '<path d="M3 6h18M9 6V3h6v3"' + S + '/><path d="M5 6h14l-1 15H6z" fill="#fff"/>',
+    download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16" stroke="#fff" stroke-width="2.2" fill="none"/>',
+    upload: '<path d="M12 15V3M7 8l5-5 5 5M4 20h16" stroke="#fff" stroke-width="2.2" fill="none"/>',
+    cloud: '<path d="M7 19a5 5 0 0 1-.6-10A6.5 6.5 0 0 1 19 10a4.5 4.5 0 0 1-.5 9z" fill="#fff"/>',
+    cpu: '<rect x="6" y="6" width="12" height="12" rx="1.5"' + S + '/><rect x="9.5" y="9.5" width="5" height="5" fill="#fff"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"' + S + '/>',
+    usb: '<path d="M12 22V4M9 6l3-4 3 4M12 17l-5-3v-3M12 14l5-3V8"' + S + '/><circle cx="7" cy="10" r="1.6" fill="#fff"/><rect x="15.5" y="6" width="3" height="3" fill="#fff"/>',
+    window: '<rect x="3" y="4" width="18" height="16" rx="2"' + S + '/><path d="M3 9h18" ' + S + '/><circle cx="6" cy="6.5" r="0.9" fill="#fff"/><circle cx="9" cy="6.5" r="0.9" fill="#fff"/>',
+    windows: '<path d="M3 5.5l7.5-1v7H3zM12 4.3L21 3v8.5h-9zM3 12.5h7.5v7L3 18.5zM12 12.5h9V21l-9-1.3z" fill="#fff"/>',
+    /* --- edicao --- */
+    bold: '<path d="M7 4h6a4 4 0 0 1 0 8H7zM7 12h7a4 4 0 0 1 0 8H7z"' + S + ' stroke-width="2.6"/>',
+    italic: '<path d="M10 4h9M5 20h9M15 4L9 20"' + S + '/>',
+    underline: '<path d="M6 3v7a6 6 0 0 0 12 0V3M4 21h16"' + S + '/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"' + S + '/><path d="M15.5 15.5L21 21"' + S + ' stroke-width="2.6"/>',
+    zoomin: '<circle cx="10.5" cy="10.5" r="6.5"' + S + '/><path d="M15.5 15.5L21 21M10.5 7.5v6M7.5 10.5h6"' + S + '/>',
+    zoomout: '<circle cx="10.5" cy="10.5" r="6.5"' + S + '/><path d="M15.5 15.5L21 21M7.5 10.5h6"' + S + '/>',
+    pen: '<path d="M16.5 3.5l4 4L8 20H4v-4z" fill="#fff"/>',
+    brush: '<path d="M20 3l1 1-9 10-2-2z" fill="#fff"/><path d="M9.5 13.5c-3 0-4.5 2-4.5 4S3.5 21 3 21c4 0 9 0 9-4.5z" fill="#fff"/>',
+    palette: '<path d="M12 3a9 9 0 0 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8z"' + S + '/><circle cx="7.5" cy="11" r="1.5" fill="#fff"/><circle cx="10" cy="7" r="1.5" fill="#fff"/><circle cx="15" cy="7.5" r="1.5" fill="#fff"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="1"' + S + '/><rect x="9" y="2" width="6" height="4" rx="1" fill="#fff"/><path d="M9 11h6M9 15h4"' + S + '/>',
+    /* --- navegacao --- */
+    up: '<path d="M12 20V4M5 11l7-7 7 7"' + S + '/>',
+    down: '<path d="M12 4v16M5 13l7 7 7-7"' + S + '/>',
+    left: '<path d="M20 12H4M11 5l-7 7 7 7"' + S + '/>',
+    right: '<path d="M4 12h16M13 5l7 7-7 7"' + S + '/>',
+    refresh: '<path d="M20 11a8 8 0 0 0-14.5-4.5M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5M20 20v-4h-4"' + S + '/>',
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"' + S + '/>',
+    grid: '<rect x="3" y="3" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2" fill="#fff"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" fill="#fff"/>',
+    fullscreen: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"' + S + '/>',
+    external: '<path d="M14 3h7v7M21 3l-9 9M18 14v6H4V6h6"' + S + '/>',
+    /* --- simbolos --- */
+    check: '<path d="M4.5 12.5l5 5 10-11" stroke="#fff" stroke-width="2.6" fill="none"/>',
+    minus: '<path d="M6 12h12" stroke="#fff" stroke-width="3" fill="none"/>',
+    xcircle: '<circle cx="12" cy="12" r="10" fill="#fff"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="rgba(0,0,0,0.45)" stroke-width="2.4" fill="none"/>',
+    checkcircle: '<circle cx="12" cy="12" r="10" fill="#fff"/><path d="M7.5 12.5l3 3 6-6.5" stroke="rgba(0,0,0,0.45)" stroke-width="2.4" fill="none"/>',
+    question: '<circle cx="12" cy="12" r="9.5"' + S + '/><path d="M9.2 9.5a2.9 2.9 0 1 1 4.2 2.6c-1 .5-1.4 1.1-1.4 2.2"' + S + '/><circle cx="12" cy="17.3" r="1.3" fill="#fff"/>',
+    alert: '<path d="M12 3L2 20h20z" fill="#fff"/><path d="M12 9v5" stroke="rgba(0,0,0,0.45)" stroke-width="2.2"/><circle cx="12" cy="17" r="1.3" fill="rgba(0,0,0,0.45)"/>',
+    fire: '<path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 1.5-5 3-6 0 2 1 3 2 3-1-3 0-6 1-9z" fill="#fff"/>',
+    flag: '<path d="M5 21V4"' + S + '/><path d="M5 4h13l-2.5 4.5L18 13H5z" fill="#fff"/>',
+    clock: '<circle cx="12" cy="12" r="9"' + S + '/><path d="M12 7v5l3.5 2"' + S + '/>',
+    timer: '<circle cx="12" cy="13.5" r="8"' + S + '/><path d="M12 9.5v4l2.5 1.5M10 2h4M19 5.5l1.5-1.5"' + S + '/>',
+    alarm: '<circle cx="12" cy="13" r="7.5"' + S + '/><path d="M12 9v4l2.5 1.5M3 5.5L6 3M21 5.5L18 3M6.5 19.5L5 21.5M17.5 19.5l1.5 2"' + S + '/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"' + S + '/><path d="M3 10h18M8 3v4M16 3v4"' + S + '/><rect x="7" y="13" width="3" height="3" fill="#fff"/>',
+    sun: '<circle cx="12" cy="12" r="4.5" fill="#fff"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"' + S + '/>',
+    moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="#fff"/>',
+    gift: '<rect x="3" y="8" width="18" height="5" rx="1" fill="#fff"/><rect x="5" y="13" width="14" height="8" fill="#fff"/><path d="M12 8v13" stroke="rgba(0,0,0,0.45)" stroke-width="2"/><path d="M12 8C10 4 6 4 7 7c.5 1 3 1 5 1zM12 8c2-4 6-4 5-1-.5 1-3 1-5 1z"' + S + '/>',
+    trophy: '<path d="M7 3h10v6a5 5 0 0 1-10 0z" fill="#fff"/><path d="M7 5H3.5v1.5A3.5 3.5 0 0 0 7 10M17 5h3.5v1.5A3.5 3.5 0 0 1 17 10M12 14v4M8 21h8"' + S + '/>',
+    crown: '<path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 11H5z" fill="#fff"/><rect x="5" y="19" width="14" height="2" rx="1" fill="#fff"/>',
+    gamepad: '<path d="M7 6h10a5 5 0 0 1 5 5v4a3 3 0 0 1-5.4 1.8L15 15H9l-1.6 1.8A3 3 0 0 1 2 15v-4a5 5 0 0 1 5-5z" fill="#fff"/><path d="M7.5 9v4M5.5 11h4" stroke="rgba(0,0,0,0.45)" stroke-width="1.8"/><circle cx="16" cy="9.8" r="1.2" fill="rgba(0,0,0,0.45)"/><circle cx="17.5" cy="12.6" r="1.2" fill="rgba(0,0,0,0.45)"/>',
+    dice: '<rect x="3" y="3" width="18" height="18" rx="3.5" fill="#fff"/><circle cx="8" cy="8" r="1.6" fill="rgba(0,0,0,0.45)"/><circle cx="12" cy="12" r="1.6" fill="rgba(0,0,0,0.45)"/><circle cx="16" cy="16" r="1.6" fill="rgba(0,0,0,0.45)"/>',
+    coffee: '<path d="M4 8h13v6a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z" fill="#fff"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2.5v2.5M12 2.5v2.5"' + S + '/>',
+    pizza: '<path d="M12 22L3 6.5a17 17 0 0 1 18 0z" fill="#fff"/><path d="M3 6.5a17 17 0 0 1 18 0"' + S + '/><circle cx="10" cy="10" r="1.5" fill="rgba(0,0,0,0.45)"/><circle cx="14" cy="13" r="1.5" fill="rgba(0,0,0,0.45)"/><circle cx="12" cy="17" r="1.2" fill="rgba(0,0,0,0.45)"/>',
+    beer: '<path d="M5 6h11v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="#fff"/><path d="M16 9h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M5 4h11"' + S + '/>',
+    mappin: '<path d="M12 22s-7-7.5-7-12.5a7 7 0 0 1 14 0C19 14.5 12 22 12 22z" fill="#fff"/><circle cx="12" cy="9.5" r="2.5" fill="rgba(0,0,0,0.45)"/>',
+    pin: '<path d="M9 3h6l-1 6 4 4H6l4-4z" fill="#fff"/><path d="M12 13v8"' + S + '/>',
+    file: '<path d="M6 2h8l5 5v15H6z"' + S + '/><path d="M14 2v5h5"' + S + '/>',
+    image: '<rect x="3" y="4" width="18" height="16" rx="2"' + S + '/><circle cx="8.5" cy="9" r="1.8" fill="#fff"/><path d="M4 18l5-5 3 3 3-3 5 5z" fill="#fff"/>',
+    book: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v16H6.5A2.5 2.5 0 0 0 4 20.5z" fill="#fff"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"' + S + '/>',
+    bookmark: '<path d="M6 3h12v18l-6-4-6 4z" fill="#fff"/>',
+    tag: '<path d="M3 3h8l10 10-8 8L3 11z" fill="#fff"/><circle cx="7.5" cy="7.5" r="1.6" fill="rgba(0,0,0,0.45)"/>',
+    cart: '<path d="M2 3h3l2.5 12h11L21 7H6.2"' + S + '/><circle cx="9" cy="19.5" r="1.8" fill="#fff"/><circle cx="17" cy="19.5" r="1.8" fill="#fff"/>',
+    dollar: '<path d="M12 2v20M17 6.5C16 5 14.5 4.5 12 4.5c-3 0-4.5 1.5-4.5 3.5 0 5 9.5 2.5 9.5 8 0 2-1.5 3.5-5 3.5-2.5 0-4-.8-5-2.3"' + S + '/>',
+    thumbsup: '<path d="M2 10h4v11H2z" fill="#fff"/><path d="M8 10l4-8c1.5 0 3 1 2.5 3L14 9h6a2 2 0 0 1 2 2.3l-1.4 7.4A3 3 0 0 1 17.7 21H8z" fill="#fff"/>',
+    thumbsdown: '<path d="M2 3h4v11H2z" fill="#fff"/><path d="M8 14l4 8c1.5 0 3-1 2.5-3L14 15h6a2 2 0 0 0 2-2.3l-1.4-7.4A3 3 0 0 0 17.7 3H8z" fill="#fff"/>',
+    rocket: '<path d="M12 2c4 3 5.5 7.5 4.5 13h-9C6.5 9.5 8 5 12 2z" fill="#fff"/><circle cx="12" cy="9" r="1.8" fill="rgba(0,0,0,0.45)"/><path d="M7.5 12L4 16v3l4-2M16.5 12l3.5 4v3l-4-2M10 18.5l2 3.5 2-3.5"' + S + '/>',
+    target: '<circle cx="12" cy="12" r="9"' + S + '/><circle cx="12" cy="12" r="5"' + S + '/><circle cx="12" cy="12" r="1.8" fill="#fff"/>',
+    sparkles: '<path d="M10 3l1.8 5.2L17 10l-5.2 1.8L10 17l-1.8-5.2L3 10l5.2-1.8z" fill="#fff"/><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z" fill="#fff"/>',
+    drop: '<path d="M12 2.5S5 10 5 15a7 7 0 0 0 14 0c0-5-7-12.5-7-12.5z" fill="#fff"/>',
+    leaf: '<path d="M4 20C4 9 10 4 21 3c-1 11-6 17-17 17z" fill="#fff"/><path d="M4 20L13 11" stroke="rgba(0,0,0,0.45)" stroke-width="2" fill="none"/>',
+    car: '<path d="M3 16v-4l2.5-6h13L21 12v4z" fill="#fff"/><path d="M6.5 8.5h11l1.3 3.5H5.2z" fill="rgba(0,0,0,0.45)"/><rect x="4" y="16" width="3.5" height="3" rx="1" fill="#fff"/><rect x="16.5" y="16" width="3.5" height="3" rx="1" fill="#fff"/>',
+    plane: '<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="#fff"/>',
+    hashtag: '<path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"' + S + '/>',
+    infocircle: '<circle cx="12" cy="12" r="9.5"' + S + '/><path d="M12 11v6"' + S + ' stroke-width="2.4"/><circle cx="12" cy="7.5" r="1.4" fill="#fff"/>',
+    num1: '<rect x="3" y="3" width="18" height="18" rx="4" fill="#fff"/><path d="M10 8.5l2.5-1.5v10" stroke="rgba(0,0,0,0.45)" stroke-width="2.4" fill="none"/>',
+    num2: '<rect x="3" y="3" width="18" height="18" rx="4" fill="#fff"/><path d="M9 9.5a3 3 0 1 1 5 2.2L9 17h6.5" stroke="rgba(0,0,0,0.45)" stroke-width="2.2" fill="none"/>',
+    num3: '<rect x="3" y="3" width="18" height="18" rx="4" fill="#fff"/><path d="M9 7.5h6l-3.5 4a3 3 0 1 1-2.7 4.3" stroke="rgba(0,0,0,0.45)" stroke-width="2.2" fill="none"/>'
   };
   /* icones da interface (nao aparecem na grade de escolha) */
   var UI_ICONS = {
@@ -152,13 +279,211 @@
 
   /* svg(nome, tamanho, cor): troca o branco do desenho pela cor pedida */
   SD.svg = function (name, size, color) {
-    var body = SD.ICONS[name] || UI_ICONS[name];
+    /* so chaves proprias ("constructor" etc. nao sao icones) */
+    var body = SD.ICONS.hasOwnProperty(name) ? SD.ICONS[name] : UI_ICONS.hasOwnProperty(name) ? UI_ICONS[name] : "";
     if (!body) return "";
     if (color && color !== "#fff") body = body.replace(/#fff/g, color);
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
       '" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">' + body + "</svg>";
   };
-  SD.hasIcon = function (name) { return !!(name && SD.ICONS.hasOwnProperty(name)); };
+  SD.isEmoji = function (name) { return typeof name === "string" && name.indexOf("emoji:") === 0 && name.length > 6; };
+  SD.hasIcon = function (name) { return !!(name && (SD.ICONS.hasOwnProperty(name) || SD.isEmoji(name))); };
+  /* iconHtml(icone, tamanho, cor): SVG do conjunto ou emoji ("emoji:🎙") em texto */
+  SD.iconHtml = function (name, size, color) {
+    if (SD.isEmoji(name)) {
+      var t = String(name.slice(6)).replace(/[<>&"]/g, "");
+      return '<span class="emo" style="display:inline-block;font-size:' + Math.round(size * 0.92) + "px;line-height:" +
+        size + "px;width:" + size + "px;height:" + size + 'px;text-align:center">' + t + "</span>";
+    }
+    return SD.svg(name, size, color);
+  };
+  SD.ICON_META = SD.ICON_META || [];   /* [{name, label, tags}] para a busca (preenchido abaixo) */
+  /* tabela "nome|rotulo|etiquetas separadas por espaco" (pt-BR + ingles) */
+  (function (rows) {
+    var i, c;
+    if (SD.ICON_META.length) return;
+    for (i = 0; i < rows.length; i++) {
+      c = rows[i].split("|");
+      if (SD.ICONS.hasOwnProperty(c[0])) SD.ICON_META.push({ name: c[0], label: c[1], tags: c[2].split(" ") });
+    }
+  })([
+    "playpause|Play/pausa|play pausa tocar midia media music",
+    "play|Play|tocar iniciar start video youtube",
+    "stop|Parar|stop parar quadrado fim",
+    "prev|Anterior|anterior previous voltar faixa track",
+    "next|Próxima|proxima next pular skip faixa track",
+    "record|Gravar|gravar record rec ponto obs",
+    "sound|Som|som volume audio alto-falante speaker",
+    "volup|Volume +|volume aumentar mais up louder",
+    "voldown|Volume -|volume diminuir menos down",
+    "mute|Mudo|mudo silenciar mute som off",
+    "mic|Microfone|mic microfone voz voice audio",
+    "micoff|Mic desligado|mic microfone mudo mute off silenciar",
+    "headphones|Fones|fone headphones ouvido audio ensurdecer deafen",
+    "music|Música|musica music nota note spotify",
+    "playlist|Playlist|playlist lista fila queue musica",
+    "radio|Rádio|radio fm am estacao station",
+    "onair|No ar|no ar on air ao vivo live transmissao sinal",
+    "sliders|Mixer|mixer faders ajustes controles equalizador sliders",
+    "globe|Internet|internet web site globo navegador browser",
+    "link|Link|link url corrente endereco",
+    "folder|Pasta|pasta folder diretorio arquivos explorer",
+    "terminal|Terminal|terminal prompt cmd console comando shell",
+    "calc|Calculadora|calculadora calculator contas",
+    "camera|Câmera|camera foto captura screenshot print webcam",
+    "desktop|Área de trabalho|area de trabalho desktop tela monitor pc",
+    "chart|Gráfico|grafico chart desempenho estatisticas tarefas",
+    "lock|Bloquear|bloquear cadeado lock seguranca senha",
+    "keyboard|Teclado|teclado keyboard teclas atalho",
+    "text|Texto|texto text digitar fonte localizar",
+    "copy|Copiar|copiar copy duplicar ctrl c",
+    "paste|Colar|colar paste area de transferencia clipboard",
+    "cut|Recortar|recortar cut tesoura scissors",
+    "undo|Desfazer|desfazer undo voltar",
+    "redo|Refazer|refazer redo",
+    "save|Salvar|salvar save disquete gravar",
+    "select|Selecionar|selecionar tudo select all",
+    "apps|Apps|apps aplicativos janelas programas grade",
+    "list|Lista|lista list itens",
+    "page|Página|pagina documento page doc",
+    "scene|Cena|cena scene obs imagem quadro",
+    "chat|Chat|chat mensagem conversa balao message",
+    "mail|E-mail|email e-mail correio mail carta",
+    "bell|Sino|sino notificacao alerta bell campainha",
+    "smile|Emoji|emoji sorriso smile feliz rosto",
+    "star|Estrela|estrela favorito star",
+    "heart|Coração|coracao amor like heart favorito",
+    "bolt|Raio|raio energia bolt flash rapido",
+    "home|Início|inicio casa home principal",
+    "code|Código|codigo code programacao dev",
+    "power|Desligar|desligar ligar power energia shutdown",
+    "gear|Engrenagem|configuracoes ajustes settings engrenagem gear",
+    "back|Voltar|voltar back esquerda anterior",
+    "forward|Avançar|avancar forward direita proximo",
+    "updown|Subir/descer|subir descer cima baixo setas rolar",
+    "close|Fechar|fechar close x sair cancelar",
+    "plus|Mais|mais plus adicionar novo add",
+    "pause|Pausa|pausa pause parar",
+    "rewind|Retroceder|retroceder rewind voltar",
+    "fastforward|Avançar rápido|avancar adiantar fast forward",
+    "shuffle|Aleatório|aleatorio shuffle misturar",
+    "repeat|Repetir|repetir repeat loop",
+    "eject|Ejetar|ejetar eject",
+    "disc|Disco|disco cd vinil disc vinyl",
+    "equalizer|Equalizador|equalizador equalizer barras niveis",
+    "waveform|Onda sonora|onda forma de onda waveform audio",
+    "podcast|Podcast|podcast transmissao audio",
+    "speaker|Caixa de som|caixa de som speaker alto-falante",
+    "volmid|Volume médio|volume medio som",
+    "video|Vídeo|video filmadora camera gravacao",
+    "videooff|Vídeo desligado|video desligado camera off sem camera",
+    "camoff|Câmera desligada|camera desligada off sem foto",
+    "webcam|Webcam|webcam camera reuniao",
+    "broadcast|Transmitir|transmitir broadcast antena stream live ao vivo",
+    "live|Ao vivo|ao vivo live stream transmissao rec",
+    "screen|Compartilhar tela|tela compartilhar share screen monitor",
+    "cast|Espelhar|espelhar cast chromecast tv",
+    "film|Filme|filme film cinema video",
+    "layers|Camadas|camadas layers fontes sources obs",
+    "eye|Mostrar|mostrar visivel eye olho ver",
+    "eyeoff|Ocultar|ocultar esconder hide invisivel olho",
+    "transition|Transição|transicao transition corte cut obs",
+    "clip|Replay|replay clipe clip claquete buffer",
+    "call|Ligar|ligar telefone phone chamada call",
+    "callend|Desligar chamada|desligar chamada encerrar hang up",
+    "headset|Headset|headset fone suporte atendimento",
+    "user|Pessoa|pessoa usuario user perfil conta",
+    "users|Pessoas|pessoas usuarios users grupo equipe",
+    "megaphone|Megafone|megafone anuncio announce aviso",
+    "send|Enviar|enviar send aviao papel",
+    "at|Arroba|arroba at mencao email",
+    "hand|Levantar a mão|mao levantar hand raise reuniao",
+    "restart|Reiniciar|reiniciar restart reboot",
+    "sleep|Suspender|suspender sleep dormir hibernar",
+    "unlock|Desbloquear|desbloquear unlock cadeado aberto",
+    "key|Chave|chave key senha password",
+    "shield|Escudo|escudo shield seguranca protecao antivirus",
+    "wifi|Wi-Fi|wifi rede internet sinal wireless",
+    "bluetooth|Bluetooth|bluetooth sem fio",
+    "battery|Bateria|bateria battery energia carga",
+    "brightness|Brilho|brilho brightness luz tela",
+    "mouse|Mouse|mouse clique ponteiro",
+    "monitor|Monitor|monitor tela screen display",
+    "laptop|Notebook|notebook laptop computador",
+    "printer|Impressora|impressora printer imprimir print",
+    "trash|Lixeira|lixeira lixo trash excluir apagar delete",
+    "download|Baixar|baixar download",
+    "upload|Enviar arquivo|enviar upload subir",
+    "cloud|Nuvem|nuvem cloud onedrive drive",
+    "cpu|Processador|processador cpu chip hardware",
+    "usb|USB|usb pendrive dispositivo",
+    "window|Janela|janela window aplicativo",
+    "windows|Windows|windows logo iniciar start menu",
+    "bold|Negrito|negrito bold",
+    "italic|Itálico|italico italic",
+    "underline|Sublinhado|sublinhado underline",
+    "search|Buscar|buscar pesquisar search lupa localizar procurar",
+    "zoomin|Ampliar|ampliar zoom in aumentar lupa",
+    "zoomout|Reduzir|reduzir zoom out diminuir lupa",
+    "pen|Caneta|caneta pen editar escrever lapis",
+    "brush|Pincel|pincel brush pintar",
+    "palette|Paleta|paleta cores palette tema",
+    "clipboard|Prancheta|prancheta clipboard lista tarefas",
+    "up|Para cima|cima up seta arrow",
+    "down|Para baixo|baixo down seta arrow",
+    "left|Esquerda|esquerda left seta arrow",
+    "right|Direita|direita right seta arrow",
+    "refresh|Atualizar|atualizar recarregar refresh reload f5",
+    "menu|Menu|menu hamburguer opcoes",
+    "grid|Grade|grade grid blocos apps",
+    "fullscreen|Tela cheia|tela cheia fullscreen expandir maximizar",
+    "external|Abrir fora|abrir externo external nova janela",
+    "check|Confirmar|confirmar check ok certo feito",
+    "minus|Menos|menos minus remover subtrair",
+    "xcircle|Cancelar|cancelar x erro remover",
+    "checkcircle|Concluído|concluido ok sucesso check feito",
+    "question|Ajuda|ajuda pergunta duvida help",
+    "alert|Atenção|atencao alerta aviso warning perigo",
+    "fire|Fogo|fogo fire quente hype",
+    "flag|Bandeira|bandeira flag marcar",
+    "clock|Relógio|relogio hora clock tempo",
+    "timer|Cronômetro|cronometro timer tempo contagem",
+    "alarm|Alarme|alarme despertador alarm",
+    "calendar|Calendário|calendario data agenda calendar",
+    "sun|Sol|sol dia claro sun tema",
+    "moon|Lua|lua noite escuro moon tema",
+    "gift|Presente|presente gift doacao sub",
+    "trophy|Troféu|trofeu trophy premio vitoria",
+    "crown|Coroa|coroa crown vip rei",
+    "gamepad|Controle|controle jogo game gamepad videogame",
+    "dice|Dado|dado sorteio aleatorio dice",
+    "coffee|Café|cafe coffee pausa intervalo",
+    "pizza|Pizza|pizza comida lanche food",
+    "beer|Cerveja|cerveja beer bebida chopp",
+    "mappin|Local|local mapa pin endereco localizacao",
+    "pin|Fixar|fixar alfinete pin",
+    "file|Arquivo|arquivo file documento",
+    "image|Imagem|imagem foto image picture",
+    "book|Livro|livro book leitura",
+    "bookmark|Favoritos|favoritos marcador bookmark",
+    "tag|Etiqueta|etiqueta tag preco",
+    "cart|Carrinho|carrinho compras cart loja",
+    "dollar|Dinheiro|dinheiro dolar real money pix",
+    "thumbsup|Curtir|curtir like joinha positivo",
+    "thumbsdown|Não curtir|nao curtir dislike negativo",
+    "rocket|Foguete|foguete rocket lancar",
+    "target|Alvo|alvo target mira objetivo",
+    "sparkles|Brilhos|brilhos sparkles magica efeito novo",
+    "drop|Gota|gota agua drop",
+    "leaf|Folha|folha leaf natureza eco",
+    "car|Carro|carro car veiculo",
+    "plane|Avião|aviao plane viagem modo aviao",
+    "hashtag|Hashtag|hashtag cerquilha tag",
+    "infocircle|Informação|informacao info sobre",
+    "num1|Número 1|numero 1 um one cena",
+    "num2|Número 2|numero 2 dois two cena",
+    "num3|Número 3|numero 3 tres three cena"
+  ]);
 
   /* ------------------------------------------------------ estado global --- */
   SD.TOKEN = qs("k");
@@ -392,13 +717,20 @@
     }
     return true;
   }
-  SD.remapPages = function (cfg, map) {
-    for (var p = 0; p < cfg.pages.length; p++) {
-      var bs = cfg.pages[p].buttons || [];
-      for (var i = 0; i < bs.length; i++) {
-        if (bs[i] && bs[i].action && !remapAction(bs[i].action, map)) bs[i] = SD.emptyButton();
-      }
+  /* acao principal invalida esvazia o botao; "segurar"/"toque duplo" invalidos somem.
+     Entra nas pastas tambem. */
+  function remapList(bs, map) {
+    for (var i = 0; i < bs.length; i++) {
+      var b = bs[i];
+      if (!b) continue;
+      if (b.kind === "folder" && b.buttons && b.buttons.length != null) remapList(b.buttons, map);
+      if (b.action && !remapAction(b.action, map)) { bs[i] = SD.emptyButton(); continue; }
+      if (b.hold && !remapAction(b.hold, map)) delete b.hold;
+      if (b.double && !remapAction(b.double, map)) delete b.double;
     }
+  }
+  SD.remapPages = function (cfg, map) {
+    for (var p = 0; p < cfg.pages.length; p++) remapList(cfg.pages[p].buttons || [], map);
   };
 
   /* ---------------------------------------------- abas (um PC por aba) --- */
@@ -684,6 +1016,8 @@
     return g;
   };
 
+  /* cor apagada (setas) conforme o tema */
+  function dimColor() { return SD.lightTheme ? "rgba(60,60,67,0.3)" : "rgba(235,235,245,0.3)"; }
   /* linha: {icon, iconColor, iconHtml, title, sub, value, chevron, check, tint, red, center, bold, onTap, badge} */
   ui.row = function (g, o) {
     var r = el("div", "row" + (o.onTap ? " tap" : "") + (o.center ? " center" : "") + (o.icon || o.iconHtml ? " has-ic" : ""), null, g);
@@ -695,7 +1029,7 @@
     if (o.badge) h += '<span class="r-badge">' + esc(o.badge) + "</span>";
     if (o.value != null && o.value !== "") h += '<span class="r-v">' + esc(o.value) + "</span>";
     if (o.check) h += '<span class="r-chk">' + SD.svg("check", 18, SD.TINT) + "</span>";
-    if (o.chevron) h += '<span class="r-chev">' + SD.svg("chevron", 14, "rgba(235,235,245,0.3)") + "</span>";
+    if (o.chevron) h += '<span class="r-chev">' + SD.svg("chevron", 14, dimColor()) + "</span>";
     r.innerHTML = h;
     if (o.onTap) r.onclick = function () { o.onTap(r); };
     return r;
@@ -792,7 +1126,7 @@
     var r = el("div", "row sel tap", null, g);
     el("span", "r-t", esc(label), r);
     var shown = el("span", "r-v", "", r);
-    el("span", "r-chev", SD.svg("updown", 14, "rgba(235,235,245,0.3)"), r);
+    el("span", "r-chev", SD.svg("updown", 14, dimColor()), r);
     var s = el("select", "r-sel", null, r);
     var cur = "";
     for (var i = 0; i < options.length; i++) {

@@ -75,6 +75,14 @@
     el("div", "grp-f", esc("Vale só para este aparelho. Automática segue o aparelho. Vertical/Horizontal travam a tela " +
       "(em tela cheia ou no app instalado); onde o sistema não deixa travar, a tela é girada pelo Stream Deck."), body);
 
+    /* aparencia */
+    el("div", "grp-h", "Aparência", body);
+    var tw = el("div", "seg-wrap", null, body);
+    ui.segmented(tw, [["auto", "Automático"], ["escuro", "Escuro"], ["claro", "Claro"]], SD.prefs.theme || "auto", function (v) {
+      SD.setPref("theme", v);
+    });
+    el("div", "grp-f", esc("Automático segue o modo claro/escuro do aparelho. Os blocos coloridos mantêm suas cores."), body);
+
     /* computadores */
     var cg = ui.group(body, "Computadores");
     for (var j = 0; j < SD.conns.length; j++) (function (idx) {

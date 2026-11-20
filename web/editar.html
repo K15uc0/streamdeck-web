@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#000000">
+<script>
+/* aplica o tema antes de desenhar (evita piscar) */
+(function () { var t = "auto"; try { t = localStorage.getItem("sd_ed_theme") || "auto"; } catch (e) {}
+  var l = t === "claro" || (t === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches);
+  if (l) document.documentElement.className += " light"; })();
+</script>
 <title>Stream Deck · Editar botões</title>
 <link rel="stylesheet" href="/css/editar.css">
 </head>
@@ -12,6 +18,7 @@
   <a href="/conectar" class="back" title="Voltar para Conectar">&#8249; Conectar</a>
   <h1>Editar botões</h1>
   <div class="tools">
+    <div id="themeSeg" class="seg sm" title="Tema do editor"></div>
     <button id="undo" title="Desfazer (Ctrl+Z)">Desfazer</button>
     <button id="redo" title="Refazer (Ctrl+Y)">Refazer</button>
     <div class="menuwrap">
@@ -30,8 +37,14 @@
   <aside id="left">
     <div class="hdr">Páginas</div>
     <div id="pages" class="list"></div>
-    <button id="addPage" class="rowbtn">+ Nova página</button>
-    <p class="foot">Clique duas vezes no nome para renomear. Arraste para mudar a ordem.</p>
+    <div class="menuwrap">
+      <button id="addPage" class="rowbtn">+ Nova página</button>
+      <div id="addMenu" class="menu left">
+        <button id="addBlank">Página em branco<span>começa vazia</span></button>
+        <button id="addTpl">A partir de um modelo…<span>Rádio, OBS, Reunião, Mídia…</span></button>
+      </div>
+    </div>
+    <p class="foot">Clique duas vezes no nome para renomear. Arraste para mudar a ordem. Botão direito ou … para mais opções.</p>
 
     <div id="soundZone">
       <div class="hdr">Sons</div>

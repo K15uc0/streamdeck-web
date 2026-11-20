@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from . import VERSION, actions, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
-    windows, winapi
+    templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
 DRAIN_MAX = 256 * 1024 * 1024    # corpo grande demais: descarta ate isso antes de responder
@@ -56,6 +56,7 @@ ROUTES = {
     ("GET", "/api/info"): "get_info",
     ("GET", "/api/press"): "get_press",
     ("GET", "/api/library"): "get_library",
+    ("GET", "/api/templates"): "get_templates",
     ("GET", "/api/images"): "get_images",
     ("GET", "/api/local/windows"): "local_windows",
     ("GET", "/api/local/export"): "local_export",
@@ -553,6 +554,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_library(self, q):
         return self._json(200, {"ok": True, "groups": library.groups()})
+
+    def get_templates(self, q):
+        return self._json(200, {"ok": True, "templates": templates.templates()})
 
     def get_images(self, q):
         return self._json(200, {"ok": True, "images": media.list_images()})
