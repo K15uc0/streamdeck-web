@@ -740,10 +740,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(403, {"ok": False, "error": "edite pelo PC"})
             cfg = self._body_json()
             from . import agenda
-            agenda.AGENDA.guard_once(cfg)   # once que ja rodou nao volta ligado
+            n_once = agenda.AGENDA.guard_once(cfg)   # once que ja rodou nao volta ligado
             storage.save_config(cfg)
             print("* configuracao salva")
-            return self._json(200, {"ok": True, "v": storage.config_version()})
+            return self._json(200, {"ok": True, "v": storage.config_version(), "once_disabled": n_once})
         except Exception as e:
             print("! erro ao salvar:", e)
             return self._json(400, {"ok": False, "error": str(e)})

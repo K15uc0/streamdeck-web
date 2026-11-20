@@ -56,7 +56,7 @@
 
   /* salvamento */
   var schedWarn = "";        /* agendamento com acao incompleta (texto do aviso) */
-  var savedV = null, dirty = false, inflight = false, saveT = null, seq = 0;
+  var savedV = null, dirty = false, inflight = false, saveT = null, seq = 0, saveBad = false;
   var retryMs = 0;           /* espera atual antes de tentar de novo (falha de rede/PC) */
   var bad = {};              /* "pagina:posicao[:filho]" -> campo faltando (acao incompleta) */
 
@@ -265,17 +265,19 @@
     SD.req("POST", "/api/config", body, function (ok, data, status) {
       inflight = false;
       if (ok) {
-        retryMs = 0;
+        retryMs = 0; saveBad = false;
         if (data && data.v != null) savedV = String(data.v);
         if (mySeq === seq) {
           dirty = false;
           var w = badText() || schedWarn;
           if (w) setStatus(w, "err"); else setStatus("Salvo ✓", "ok");
+          /* o PC desligou um "uma vez" que ja rodou: recarrega para mostrar */
+          if (data && data.once_disabled > 0) loadConfig(false);
         }
         if (schedOpen) loadSchedInfo();
       } else if (status === 400) {
         /* erro de validacao: tentar de novo nao adianta; espera a proxima mudanca */
-        retryMs = 0;
+        retryMs = 0; saveBad = true;
         setStatus("Não salvou: " + SD.errText(data, status, "dados inválidos"), "err");
       } else {
         /* rede ou PC com problema: tenta de novo com espera crescente (2s, 4s, 8s... ate 30s) */
@@ -2007,8 +2009,10 @@
     var s = cfg.schedules[i];
     if (!s) return;
     if (missing(s.action || {}, false) || !s.action || s.action.type === "none") { SD.toast("Escolha e preencha a ação primeiro", true); return; }
+    if (saveBad) { SD.toast("Corrija o erro antes de testar", true); return; }
     var id = s.id, tries = 0;
     function go() {
+      if (saveBad) { SD.toast("Corrija o erro antes de testar", true); return; }
       if ((dirty || inflight) && tries++ < 40) { setTimeout(go, 250); return; }
       SD.req("POST", "/api/local/schedules/run", JSON.stringify({ id: id }), function (ok, data, status) {
         if (ok) SD.toast("Agendamento executado");
@@ -2152,8 +2156,13 @@
   function timeInput(parent, val, id, set) {
     var t = el("input", "in time", null, parent);
     t.type = "time"; t.id = id; t.value = val || ""; t.required = true;
-    t.onchange = function () { if (/^\d\d:\d\d/.test(t.value)) set(t.value.substring(0, 5)); };
+    /* edicao leve: nao redesenha o formulario enquanto digita, so o resumo */
+    t.onchange = function () { if (/^\d\d:\d\d/.test(t.value)) { set(t.value.substring(0, 5)); schedSummary(); } };
     return t;
+  }
+  function schedSummary() {
+    var s = curSched(), sm = $("schSummary");
+    if (s && sm) sm.innerHTML = esc(whenText(s.when));
   }
   function renderSchedForm() {
     var f = $("schForm");
@@ -2191,7 +2200,7 @@
 
     if (typ === "daily") {
       var hf = field(f, "Horário");
-      timeInput(hf, w.time, "schTime", function (v) { editSched(function (x) { x.when.time = v; }); });
+      timeInput(hf, w.time, "schTime", function (v) { editSched(function (x) { x.when.time = v; }, "time", true); });
       var df = field(f, "Dias");
       dayChips(df, w.days, function (v) { editSched(function (x) { x.when.days = v; }); });
     } else if (typ === "every") {
@@ -2231,9 +2240,9 @@
       if (w.from || w.to) {
         var wr = el("div", "row2 win", null, wf);
         el("span", "unit", "das", wr);
-        timeInput(wr, w.from || "00:00", "schFrom", function (v) { editSched(function (x) { x.when.from = v; }); });
+        timeInput(wr, w.from || "00:00", "schFrom", function (v) { editSched(function (x) { x.when.from = v; }, "from", true); });
         el("span", "unit", "às", wr);
-        timeInput(wr, w.to || "23:59", "schTo", function (v) { editSched(function (x) { x.when.to = v; }); });
+        timeInput(wr, w.to || "23:59", "schTo", function (v) { editSched(function (x) { x.when.to = v; }, "to", true); });
       }
       var df2 = field(f, "Dias");
       dayChips(df2, w.days, function (v) { editSched(function (x) { x.when.days = v; }); });
@@ -2246,7 +2255,8 @@
       var setAt = function () {
         if (/^\d{4}-\d\d-\d\d$/.test(di.value) && /^\d\d:\d\d/.test(ti.value)) {
           var v = di.value + "T" + ti.value.substring(0, 5);
-          editSched(function (x) { x.when.at = v; });
+          editSched(function (x) { x.when.at = v; }, "at", true);
+          schedSummary();
         }
       };
       di.onchange = setAt;
@@ -2900,12 +2910,18 @@
       setStatus("Importando…", "busy");
       upload("/api/local/import", f, function (ok, data, status) {
         if (!ok) { setStatus("Não importou: " + SD.errText(data, status), "err"); return; }
-        dirty = false; clearTimeout(saveT);
+        dirty = false; clearTimeout(saveT); saveBad = false;
         page = 0; folder = -1; selectOne(-1);
         loadConfig(false, "Backup importado ✓");
+        schedOffToast(data);
         loadInfo(); loadImages();
       });
     });
+  }
+  /* importar/restaurar: o PC desliga os agendamentos que chegaram */
+  function schedOffToast(data) {
+    var n = data && data.schedules_disabled;
+    if (n > 0) SD.toast(n + " agendamento(s) importado(s) desligado(s) — revise e ligue");
   }
   /* versoes anteriores (copias guardadas pelo PC a cada salvamento) */
   function two(n) { return (n < 10 ? "0" : "") + n; }
@@ -2950,8 +2966,9 @@
       SD.req("POST", "/api/local/backups/restore", JSON.stringify({ name: b.name }), function (ok, data, status) {
         if (!ok || !data || !data.ok) { setStatus("Não restaurou: " + SD.errText(data, status), "err"); SD.toast("Não restaurou: " + SD.errText(data, status), true); return; }
         m.close();
-        dirty = false; clearTimeout(saveT);
+        dirty = false; clearTimeout(saveT); saveBad = false;
         page = 0; folder = -1; selectOne(-1);
+        schedOffToast(data);
         loadConfig(false, "Versão de " + fmtWhen(b.when) + " restaurada ✓");
       });
     }
