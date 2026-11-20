@@ -211,6 +211,27 @@ class MigracaoTest(unittest.TestCase):
         self.assertIs(new, c)
         self.assertEqual(schema.migrate("x"), ("x", False))
 
+    def test_v2_icone_antigo_limpo(self):
+        c = apoio.base_config()
+        b = c["pages"][0]["buttons"]
+        b[0]["icon"] = "Icone Velho"
+        b[0]["on"] = {"icon": "emoji:<b>"}
+        b.append({"kind": "folder", "label": "P", "icon": "ok\n",
+                  "buttons": [{"label": "x", "icon": "emoji:   ", "action": {"type": "none"}}]})
+        orig = copy.deepcopy(c)
+        new, changed = schema.migrate(c)
+        self.assertTrue(changed)
+        self.assertEqual(c, orig)
+        nb = new["pages"][0]["buttons"]
+        self.assertEqual(nb[0]["icon"], "")
+        self.assertEqual(nb[0]["on"]["icon"], "")
+        self.assertEqual(nb[-1]["icon"], "")
+        self.assertEqual(nb[-1]["buttons"][0]["icon"], "")
+
+    def test_icone_nome_sem_quebra_final(self):
+        self.assertTrue(schema.valid_icon("play"))
+        self.assertFalse(schema.valid_icon("play\n"))
+
 
 if __name__ == "__main__":
     unittest.main()

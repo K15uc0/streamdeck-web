@@ -716,13 +716,20 @@
     }
     return true;
   }
-  SD.remapPages = function (cfg, map) {
-    for (var p = 0; p < cfg.pages.length; p++) {
-      var bs = cfg.pages[p].buttons || [];
-      for (var i = 0; i < bs.length; i++) {
-        if (bs[i] && bs[i].action && !remapAction(bs[i].action, map)) bs[i] = SD.emptyButton();
-      }
+  /* acao principal invalida esvazia o botao; "segurar"/"toque duplo" invalidos somem.
+     Entra nas pastas tambem. */
+  function remapList(bs, map) {
+    for (var i = 0; i < bs.length; i++) {
+      var b = bs[i];
+      if (!b) continue;
+      if (b.kind === "folder" && b.buttons && b.buttons.length != null) remapList(b.buttons, map);
+      if (b.action && !remapAction(b.action, map)) { bs[i] = SD.emptyButton(); continue; }
+      if (b.hold && !remapAction(b.hold, map)) delete b.hold;
+      if (b.double && !remapAction(b.double, map)) delete b.double;
     }
+  }
+  SD.remapPages = function (cfg, map) {
+    for (var p = 0; p < cfg.pages.length; p++) remapList(cfg.pages[p].buttons || [], map);
   };
 
   /* ---------------------------------------------- abas (um PC por aba) --- */
@@ -1008,6 +1015,8 @@
     return g;
   };
 
+  /* cor apagada (setas) conforme o tema */
+  function dimColor() { return SD.lightTheme ? "rgba(60,60,67,0.3)" : "rgba(235,235,245,0.3)"; }
   /* linha: {icon, iconColor, iconHtml, title, sub, value, chevron, check, tint, red, center, bold, onTap, badge} */
   ui.row = function (g, o) {
     var r = el("div", "row" + (o.onTap ? " tap" : "") + (o.center ? " center" : "") + (o.icon || o.iconHtml ? " has-ic" : ""), null, g);
@@ -1019,7 +1028,7 @@
     if (o.badge) h += '<span class="r-badge">' + esc(o.badge) + "</span>";
     if (o.value != null && o.value !== "") h += '<span class="r-v">' + esc(o.value) + "</span>";
     if (o.check) h += '<span class="r-chk">' + SD.svg("check", 18, SD.TINT) + "</span>";
-    if (o.chevron) h += '<span class="r-chev">' + SD.svg("chevron", 14, "rgba(235,235,245,0.3)") + "</span>";
+    if (o.chevron) h += '<span class="r-chev">' + SD.svg("chevron", 14, dimColor()) + "</span>";
     r.innerHTML = h;
     if (o.onTap) r.onclick = function () { o.onTap(r); };
     return r;
@@ -1116,7 +1125,7 @@
     var r = el("div", "row sel tap", null, g);
     el("span", "r-t", esc(label), r);
     var shown = el("span", "r-v", "", r);
-    el("span", "r-chev", SD.svg("updown", 14, "rgba(235,235,245,0.3)"), r);
+    el("span", "r-chev", SD.svg("updown", 14, dimColor()), r);
     var s = el("select", "r-sel", null, r);
     var cur = "";
     for (var i = 0; i < options.length; i++) {

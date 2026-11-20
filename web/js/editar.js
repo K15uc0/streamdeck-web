@@ -130,6 +130,7 @@
      key: mudancas seguidas no mesmo campo viram um passo so do desfazer.
      light: nao redesenha o formulario (o campo em edicao continua com o foco). */
   function change(fn, key, light) {
+    closePop();
     fn();
     var t = new Date().getTime();
     var snap = snapshot();
@@ -148,6 +149,7 @@
     if (folder >= 0 && !fold()) { folder = -1; selectOne(-1); }
   }
   function restore() {
+    closePop();
     cfg = JSON.parse(hist[pos]);
     lastKey = null;
     fixView();
@@ -376,15 +378,7 @@
     inp.onclick = function (e) { e.stopPropagation(); };
   }
   /* remapeia acoes "Ir para pagina" das paginas e de dentro das pastas */
-  function remapAll(map) {
-    SD.remapPages(cfg, map);
-    for (var p = 0; p < cfg.pages.length; p++) {
-      var bs = cfg.pages[p].buttons || [];
-      for (var i = 0; i < bs.length; i++) {
-        if (bs[i] && bs[i].kind === "folder" && bs[i].buttons) SD.remapPages({ pages: [{ buttons: bs[i].buttons }] }, map);
-      }
-    }
-  }
+  function remapAll(map) { SD.remapPages(cfg, map); }   /* SD.remapPages ja entra nas pastas */
   /* move a pagina "from" para antes da posicao "to" e corrige os botoes "Ir para pagina" */
   function movePage(from, to) {
     var n = cfg.pages.length;
@@ -968,6 +962,7 @@
   }
   /* ------------------------------------------------- icone (seletor) --- */
   var ICON_RECENT_KEY = "sd_ed_recent_icons";
+  var MAX_NAME = 60, MAX_PAGE_BTNS = 120, MAX_FOLDER_BTNS = 60;   /* limites do servidor (schema.py) */
   var pickSt = {};           /* estado de cada seletor (aba, busca, categoria) entre redesenhos */
   var EMOJIS = ("🎙️ 🎤 🎧 📻 🎵 🎶 🎼 🎹 🥁 🎸 🎺 🔊 🔉 🔇 📢 📣 🔔 🔕 📷 📸 🎥 📹 🎬 📺 💻 🖥️ ⌨️ 🖱️ 💡 " +
     "🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ ⭐ ❤️ 👍 👎 👏 🙌 👋 😂 😍 😮 😢 😡 🤔 😎 🎉 🔥 💯 ✅ ❌ ⚠️ ❓ ❗ " +
@@ -980,6 +975,15 @@
     return s;
   }
   /* quantidade de caracteres (pares substitutos contam 1, como no servidor) */
+  /* mesma regra do servidor (valid_icon em streamdeck/schema.py) */
+  function emojiOk(t) {
+    if (!/\S/.test(t)) return false;
+    for (var i = 0; i < t.length; i++) {
+      var o = t.charCodeAt(i);
+      if (o < 32 || (o >= 0x7f && o < 0xa0) || o === 0x2028 || o === 0x2029 || '<>&"'.indexOf(t.charAt(i)) >= 0) return false;
+    }
+    return true;
+  }
   function charLen(s) { return String(s).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "_").length; }
   function iconColor() { return isLight() ? "#1c1c1e" : "#fff"; }
   /* lista para a busca: SD.ICON_META + icones do conjunto sem descricao */
@@ -1010,7 +1014,10 @@
   /* iconPicker(pai, atual, set(valor), id): busca, categorias, recentes e aba de emoji */
   function iconPicker(parent, cur, set, id) {
     cur = cur || "";
-    var st = pickSt[id] || (pickSt[id] = { tab: SD.isEmoji(cur) ? "emoji" : "icons", q: "", cat: "" });
+    var who = page + "/" + folder + "/" + sel;
+    var st = pickSt[id] || (pickSt[id] = { q: "", cat: "" });
+    /* aba volta ao padrao quando outro botao e selecionado */
+    if (st.who !== who) { st.who = who; st.tab = SD.isEmoji(cur) ? "emoji" : "icons"; }
     var box = el("div", "ipick", null, parent);
     box.id = id;
     function choose(v) { if (v) pushRecentIcon(v); set(v); }
@@ -1083,6 +1090,7 @@
         var v = SD.trim(inp.value);
         if (!v) return;
         if (charLen(v) > 8) { SD.toast("Use no máximo 8 caracteres", true); return; }
+        if (!emojiOk(v)) { SD.toast("Emoji inválido: não use < > & \" nem caracteres de controle", true); return; }
         choose("emoji:" + v);
       }
       ok.onclick = use;
@@ -1955,12 +1963,27 @@
 
   /* ================================================ paginas: inserir === */
   /* nome livre: "X", "X (2)", "X (3)"... */
-  function freeName(name) {
+  /* corta s para caber em max caracteres (sem quebrar par de surrogates) */
+  function cutName(s, max) {
+    s = String(s);
+    if (charLen(s) <= max) return s;
+    var out = "", n = 0;
+    for (var i = 0; i < s.length && n < max; i++, n++) {
+      var c = s.charAt(i);
+      if (/[\uD800-\uDBFF]/.test(c) && i + 1 < s.length) { c += s.charAt(i + 1); i++; }
+      out += c;
+    }
+    return SD.trim(out);
+  }
+  /* tail: final fixo (ex.: " (copia)"); o nome inteiro fica com ate MAX_NAME caracteres */
+  function freeName(name, tail) {
     var used = {};
+    tail = tail || "";
     cfg.pages.forEach(function (p, i) { used[plain(pageName(i))] = 1; });
-    if (!used[plain(name)]) return name;
-    for (var n = 2; n < 999; n++) if (!used[plain(name + " (" + n + ")")]) return name + " (" + n + ")";
-    return name;
+    function mk(suf) { return cutName(name, MAX_NAME - charLen(tail + suf)) + tail + suf; }
+    if (!used[plain(mk(""))]) return mk("");
+    for (var n = 2; n < 999; n++) if (!used[plain(mk(" (" + n + ")"))]) return mk(" (" + n + ")");
+    return mk("");
   }
   /* insere pg na posicao at e corrige os "Ir para pagina" das paginas existentes.
      remapNew: corrige tambem as acoes da pagina nova (copia de uma pagina deste config). */
@@ -1981,7 +2004,7 @@
     if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
     change(function () {
       var cp = clone(cfg.pages[i]);
-      cp.name = freeName(pageName(i) + " (cópia)");
+      cp.name = freeName(pageName(i), " (cópia)");
       /* troca automatica por app ficaria repetida: so a original troca sozinha */
       delete cp.apps;
       insertPage(i + 1, cp, true);
@@ -2024,9 +2047,9 @@
   function loadTemplates(cb) {
     if (templates) { cb(templates); return; }
     SD.req("GET", "/api/templates", null, function (ok, data) {
-      if (ok && data && data.templates) templates = data.templates;
-      else templates = mockTemplates();
-      cb(templates);
+      /* reserva nao fica guardada: tenta o servidor de novo na proxima vez */
+      if (ok && data && data.templates) { templates = data.templates; cb(templates); }
+      else cb(mockTemplates());
     });
   }
   function miniPage(pg, parentEl) {
@@ -2069,7 +2092,7 @@
   function addTemplate(tp) {
     if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
     var pg = clone(tp.page || {});
-    pg.name = freeName(SD.trim(pg.name || tp.name || "Página"));
+    pg.name = freeName(SD.trim(pg.name || tp.name || "Página"));   /* freeName ja limita o tamanho */
     if (!pg.buttons) pg.buttons = [];
     change(function () { insertPage(page + 1, pg, false); });
     SD.toast("Página “" + pg.name + "” criada");
@@ -2097,9 +2120,21 @@
     return sorted().filter(function (i) { return bs[i] && !edEmpty(bs[i]); });
   }
   /* copia (ou move) os selecionados para a pagina p (primeiras posicoes livres) */
+  /* tamanho final da lista bs depois de ocupar n posicoes livres a partir de from */
+  function sizeAfter(bs, n, from, taken0) {
+    var taken = {}, k, max = bs.length;
+    for (k in taken0) if (taken0.hasOwnProperty(k)) taken[k] = 1;
+    for (k = 0; k < n; k++) {
+      var j = freeSlot(bs, from, taken);
+      taken[j] = 1;
+      if (j + 1 > max) max = j + 1;
+    }
+    return max;
+  }
   function sendTo(p, move) {
     var idx = selFull();
     if (!idx.length) return;
+    if (sizeAfter(cfg.pages[p].buttons || [], idx.length, 0, {}) > MAX_PAGE_BTNS) { SD.toast("Página cheia", true); return; }
     change(function () {
       var src = list(), dst = cfg.pages[p];
       if (!dst.buttons) dst.buttons = [];
@@ -2119,6 +2154,14 @@
     var idx = selFull();
     if (!idx.length) return;
     var noFolder = folder >= 0;
+    var h0 = holder(), taken0 = {}, size = h0.buttons.length;
+    idx.forEach(function (i) { taken0[i] = 1; });
+    idx.forEach(function (i) {
+      var j = freeSlot(h0.buttons, i + 1, taken0);
+      taken0[j] = 1;
+      if (j + 1 > size) size = j + 1;
+    });
+    if (size > (noFolder ? MAX_FOLDER_BTNS : MAX_PAGE_BTNS)) { SD.toast(noFolder ? "Pasta cheia" : "Página cheia", true); return; }
     change(function () {
       var h = holder(), taken = {}, out = [];
       idx.forEach(function (i) { taken[i] = 1; });
@@ -2244,7 +2287,11 @@
     }
     return -1;
   }
+  /* atalho tratado fecha o menu flutuante */
   function onKey(e) {
+    if (onKey0(e) || e.defaultPrevented) closePop();
+  }
+  function onKey0(e) {
     if (popEl && e.key === "Escape") { closePop(); e.preventDefault(); return; }
     if (!cfg || rec || $("libModal") || $("tplModal")) return;
     var ctrl = e.ctrlKey || e.metaKey, k = (e.key || "").toLowerCase();
@@ -2256,7 +2303,7 @@
     if (ctrl && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
     if (sel < 0) {
       if (/^arrow/.test(k)) { selectOne(0); renderGrid(); renderInspector(); e.preventDefault(); }
-      else if (k === "escape" && folder >= 0) closeFolder();
+      else if (k === "escape" && folder >= 0) { closeFolder(); return true; }
       return;
     }
     if (ctrl && k === "a") {
@@ -2277,8 +2324,8 @@
     }
     if (ctrl && k === "v") { paste(); e.preventDefault(); return; }
     if (k === "delete" || k === "backspace") { e.preventDefault(); clearSel(); return; }
-    if (k === "escape") { selectOne(-1); renderGrid(); renderInspector(); return; }
-    if (k === "enter" && curBtn() && curBtn().kind === "folder") { openFolder(sel); return; }
+    if (k === "escape") { selectOne(-1); renderGrid(); renderInspector(); return true; }
+    if (k === "enter" && curBtn() && curBtn().kind === "folder") { openFolder(sel); return true; }
     var L = layout(), r = rectOf(L, sel), n = sel;
     if (k === "arrowleft") n = sel - 1;
     else if (k === "arrowright") n = sel + 1;

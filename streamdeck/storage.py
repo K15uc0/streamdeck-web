@@ -62,19 +62,26 @@ def _migrate_file(data, raw):
     new, changed = schema.migrate(data)
     if not changed:
         return data
-    try:
-        with open(paths.CONFIG_V1_BAK, "wb") as f:
-            f.write(raw)
-    except OSError as e:
-        print("  aviso: sem copia do config antigo (%s)" % e)
+    # so a migracao da 1.x grava config.v1.bak.json; limpeza de icones num
+    # config que ja e v2 nao pode sobrescrever essa copia original
+    era_v1 = not (isinstance(data, dict) and data.get("version") == schema.CONFIG_VERSION)
+    if era_v1:
+        try:
+            with open(paths.CONFIG_V1_BAK, "wb") as f:
+                f.write(raw)
+        except OSError as e:
+            print("  aviso: sem copia do config antigo (%s)" % e)
     _backup_bytes(raw)
     try:
         schema.validate_config(new)
     except ValueError as e:
         print("  aviso: config migrado tem problemas: %s" % e)
     write_json(paths.CONFIG_PATH, new)
-    print("* configuracao atualizada para a versao %d (copia em %s)"
-          % (schema.CONFIG_VERSION, os.path.basename(paths.CONFIG_V1_BAK)))
+    if era_v1:
+        print("* configuracao atualizada para a versao %d (copia em %s)"
+              % (schema.CONFIG_VERSION, os.path.basename(paths.CONFIG_V1_BAK)))
+    else:
+        print("* icones invalidos removidos da configuracao (copia em backups)")
     return new
 
 

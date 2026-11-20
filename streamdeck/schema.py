@@ -24,7 +24,7 @@ MAX_LIT = 130
 # botao aceso pelo estado do OBS
 LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,120})$")
 # icone: nome do conjunto (SD.ICONS em web/js/core.js) ou "emoji:<1..8 caracteres>"
-ICON_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+ICON_NAME_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
 MAX_EMOJI = 8
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()\-]{0,99}$")
@@ -49,7 +49,7 @@ def valid_icon(v):
     caracteres de controle nem < > & ">."""
     if not isinstance(v, str):
         return False
-    if v == "" or ICON_NAME_RE.match(v):
+    if v == "" or ICON_NAME_RE.fullmatch(v):
         return True
     if not v.startswith("emoji:"):
         return False
@@ -200,8 +200,39 @@ def migrate(cfg):
         return cfg, False
     ver = cfg.get("version")
     if isinstance(ver, int) and not isinstance(ver, bool) and ver >= CONFIG_VERSION:
-        return cfg, False
+        if ver != CONFIG_VERSION or not _has_bad_icon(cfg.get("pages")):
+            return cfg, False
+        out = copy.deepcopy(cfg)
+        for page in out["pages"]:
+            for btn in page.get("buttons", []) if isinstance(page, dict) else []:
+                if isinstance(btn, dict):
+                    fix_icon(btn)
+        return out, True
     return migrate_v1(cfg), True
+
+
+def fix_icon(btn):
+    """Icone antigo fora do formato atual vira "" (sem icone). Devolve True se mudou."""
+    changed = False
+    for o in (btn, btn.get("on")):
+        if isinstance(o, dict) and "icon" in o and not valid_icon(o["icon"]):
+            o["icon"] = ""
+            changed = True
+    for x in btn.get("buttons") if isinstance(btn.get("buttons"), list) else []:
+        if isinstance(x, dict) and fix_icon(x):
+            changed = True
+    return changed
+
+
+def _has_bad_icon(pages):
+    """Ha algum icone invalido (sem alterar a config)?"""
+    if not isinstance(pages, list):
+        return False
+    for page in pages:
+        for btn in page.get("buttons", []) if isinstance(page, dict) else []:
+            if isinstance(btn, dict) and fix_icon(copy.deepcopy(btn)):
+                return True
+    return False
 
 
 def _empty_button():
@@ -376,15 +407,6 @@ def migrate_v1(cfg):
         steps = a.get("steps")
         for s in steps if isinstance(steps, list) else []:
             remap(s)
-
-    def fix_icon(btn):
-        """Icone antigo fora do formato atual vira "" (sem icone)."""
-        for o in (btn, btn.get("on")):
-            if isinstance(o, dict) and "icon" in o and not valid_icon(o["icon"]):
-                o["icon"] = ""
-        for x in btn.get("buttons") if isinstance(btn.get("buttons"), list) else []:
-            if isinstance(x, dict):
-                fix_icon(x)
 
     for page in pages:
         for btn in page.get("buttons", []) if isinstance(page, dict) else []:
