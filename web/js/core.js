@@ -279,7 +279,8 @@
 
   /* svg(nome, tamanho, cor): troca o branco do desenho pela cor pedida */
   SD.svg = function (name, size, color) {
-    var body = SD.ICONS[name] || UI_ICONS[name];
+    /* so chaves proprias ("constructor" etc. nao sao icones) */
+    var body = SD.ICONS.hasOwnProperty(name) ? SD.ICONS[name] : UI_ICONS.hasOwnProperty(name) ? UI_ICONS[name] : "";
     if (!body) return "";
     if (color && color !== "#fff") body = body.replace(/#fff/g, color);
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +

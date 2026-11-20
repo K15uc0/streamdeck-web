@@ -413,7 +413,7 @@
       for (var i = 0; i < bs.length; i++) {
         if (!bs[i] || bs[i].kind === "fader") continue;
         if (bs[i].kind === "folder") walkList(bs[i].buttons || []);
-        else walk(bs[i].action);
+        else { walk(bs[i].action); walk(bs[i].hold); walk(bs[i].double); }   /* gestos tambem contam */
       }
     }
     for (var p = 0; p < cfg.pages.length; p++) walkList(cfg.pages[p].buttons || []);
