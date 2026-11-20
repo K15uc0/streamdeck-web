@@ -21,8 +21,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
-    templates, windows, winapi
+from . import VERSION, actions, agenda, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
+    tocando, templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
 DRAIN_MAX = 256 * 1024 * 1024    # corpo grande demais: descarta ate isso antes de responder
@@ -74,6 +74,8 @@ ROUTES = {
     ("GET", "/api/local/obs"): "local_obs",
     ("POST", "/api/local/obs"): "local_obs_save",
     ("GET", "/api/local/obs/scenes"): "local_obs_scenes",
+    ("GET", "/api/local/schedules"): "local_schedules",
+    ("POST", "/api/local/schedules/run"): "local_schedules_run",
     ("POST", "/api/update/check"): "post_update_check",
     ("POST", "/api/update/apply"): "post_update_apply",
     ("POST", "/api/config"): "post_config",
@@ -490,6 +492,8 @@ class Handler(BaseHTTPRequestHandler):
         ob = obs.state_for_api()
         if ob is not None:
             st["obs"] = ob
+        tocando.touch()
+        st["nowplaying"] = tocando.current()
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         return self._json(200, st)
@@ -675,6 +679,20 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             print("  erro no teste:", e)
             return self._json(200, {"ok": False, "error": str(e)})
+
+    def local_schedules(self, q):
+        return self._json(200, agenda.AGENDA.status())
+
+    def local_schedules_run(self, body):
+        sid = body.get("id") if isinstance(body, dict) else None
+        if not isinstance(sid, str) or not agenda.ID_RE.match(sid):
+            return self._json(400, {"ok": False, "error": "id invalido"})
+        err = agenda.AGENDA.run_now(sid)
+        if err is None:
+            return self._json(404, {"ok": False, "error": "agendamento nao encontrado"})
+        if err:
+            return self._json(200, {"ok": False, "error": err})
+        return self._json(200, {"ok": True})
 
     def local_obs(self, q):
         return self._json(200, obs.status())
