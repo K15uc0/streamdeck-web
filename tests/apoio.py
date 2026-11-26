@@ -168,3 +168,13 @@ def _patch_audio():
 
 
 _patch_audio()
+
+
+# Monitor tambem simulado: no Windows do CI a lista real de processos nao tem
+# os processos de exemplo que os testes encerram. Testes so-Windows religam.
+def _patch_monitor():
+    from streamdeck import monitor
+    monitor.IS_WINDOWS = False
+
+
+_patch_monitor()

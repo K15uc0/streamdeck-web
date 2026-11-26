@@ -238,7 +238,8 @@ class IaTests(unittest.TestCase):
                     mock.patch.object(pc.os.path, "isfile", return_value=False), \
                     mock.patch.object(pc.shutil, "which", return_value="D:/bash.exe"):
                 self.assertEqual(pc._acha_bash(), "D:/bash.exe")
-        self.assertEqual(pc._argv("echo a"), ["/bin/sh", "-c", "echo a"])
+        with mock.patch.object(pc.sys, "platform", "linux"):
+            self.assertEqual(pc._argv("echo a"), ["/bin/sh", "-c", "echo a"])
 
     def test_ponte_lixo(self):
         script = os.path.join(paths.PKG_DIR, "ponte_claude.py")

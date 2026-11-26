@@ -129,6 +129,13 @@ class SemBaselineTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform.startswith("win"), "so no Windows")
 class MonitorWindowsTests(unittest.TestCase):
+    # apoio.py deixa o monitor simulado; aqui testa o Windows de verdade
+    def setUp(self):
+        monitor.IS_WINDOWS = True
+
+    def tearDown(self):
+        monitor.IS_WINDOWS = False
+
     def test_if_row2_tamanho(self):
         w = monitor._win()
         self.assertEqual(w["ctypes"].sizeof(w["IFROW2"]), 1352)
