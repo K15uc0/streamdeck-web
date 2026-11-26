@@ -19,7 +19,8 @@ $env:STREAMDECK_DATA = $data
 $env:STREAMDECK_UPDATE_URL = "http://127.0.0.1:9/sem-rede"
 
 # 0) ponte da status line (exe de console): stdin -> stdout e ia/claude.json
-if (Test-Path $Ponte) {
+if (-not (Test-Path $Ponte)) { Write-Host "FALHA: ponte nao encontrada em $Ponte"; exit 1 }
+& {
   $pdata = Join-Path ([IO.Path]::GetTempPath()) ("sd-ponte-" + [guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Path $pdata | Out-Null
   $env:STREAMDECK_DATA = $pdata

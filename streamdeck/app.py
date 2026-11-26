@@ -147,7 +147,7 @@ def main():
     winapi.migrate_autostart()
     try:
         from . import ia
-        ia.refresh_bridge()
+        threading.Thread(target=ia.refresh_bridge, daemon=True).start()   # sem atrasar a partida
     except Exception as e:  # noqa: BLE001
         print("Aviso: ponte do Claude Code: %s" % e)
     stop_old_instances()

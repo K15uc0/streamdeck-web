@@ -82,7 +82,7 @@ jobs:
         run: |
           python tools/versao.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pyinstaller --onedir --console --noupx --name StreamDeckPonte --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --collect-submodules streamdeck --workpath build/ponte --specpath build/ponte --distpath dist/ponte ponte_entry.py
+          pyinstaller --onedir --console --noupx --name StreamDeckPonte --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --hidden-import streamdeck.paths --hidden-import streamdeck.winapi --workpath build/ponte --specpath build/ponte --distpath dist/ponte ponte_entry.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path build/ponte.zip) { Remove-Item build/ponte.zip }
           Compress-Archive -Path "dist/ponte/StreamDeckPonte/*" -DestinationPath build/ponte.zip
