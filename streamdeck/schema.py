@@ -23,11 +23,11 @@ LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer
         "nowplaying", "nowplaying:title", "nowplaying:artist",
         "pc:cpu", "pc:mem", "pc:gpu", "pc:temp_cpu", "pc:temp_gpu", "pc:net",
         "ia:claude:5h", "ia:claude:week", "ia:codex:5h", "ia:codex:week")
-DISK_LIVE_RE = re.compile(r"^pc:disk:[A-Z]$")   # uma letra de unidade, maiuscula
+DISK_LIVE_RE = re.compile(r"pc:disk:[A-Z]")   # uma letra de unidade, maiuscula
 
 
 def valid_live(v):
-    return v in LIVE or (isinstance(v, str) and bool(DISK_LIVE_RE.match(v)))
+    return v in LIVE or (isinstance(v, str) and bool(DISK_LIVE_RE.fullmatch(v)))
 MAX_LIT = 130
 # botao aceso pelo estado do OBS
 LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,120})$")

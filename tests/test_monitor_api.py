@@ -6,7 +6,7 @@ import json
 import unittest
 
 import apoio
-from streamdeck import httpd, schema, security, state, storage
+from streamdeck import httpd, monitor, schema, security, state, storage
 from test_http import call
 
 
@@ -33,8 +33,77 @@ class MonitorApiTest(unittest.TestCase):
     def tearDown(self):
         self._q.__exit__(None, None, None)
 
-    def test_state_traz_pc_e_ia(self):
+    def test_state_ocioso_nao_ativa_monitor(self):
+        monitor._STATE["polled"] = 0.0
         st, _, r = call("GET", "/api/state")
+        self.assertEqual(st, 200)
+        self.assertNotIn("pc", r)
+        self.assertNotIn("ia", r)
+        self.assertFalse(monitor._active())
+
+    def test_state_pc_rapido_sem_prime(self):
+        import time
+        orig = (monitor._prime, monitor._refresh)
+        chamados = []
+        monitor._prime = lambda: chamados.append("prime")
+        monitor._refresh = lambda *a: chamados.append("refresh")
+        monitor._STATE["snap"] = None
+        try:
+            t0 = time.time()
+            st, _, r = call("GET", "/api/state?pc=1")
+            dt = time.time() - t0
+        finally:
+            monitor._prime, monitor._refresh = orig
+        self.assertEqual(st, 200)
+        self.assertIn("cpu", r["pc"])
+        self.assertEqual(chamados, [])
+        self.assertLess(dt, 1.0)
+        self.assertTrue(monitor._active())
+
+    def test_kill_pai_protegido(self):
+        import os
+        orig = monitor.SIM_PROCS
+        monitor.SIM_PROCS = orig + [{"pid": os.getppid() + 100000, "name": "x.exe", "cpu": 0, "mem": 0},
+                                    {"pid": os.getppid(), "name": "pai.exe", "cpu": 0, "mem": 0}]
+        try:
+            with self.assertRaises(ValueError):
+                monitor.kill(os.getppid())
+            for nome in ("dwm.exe", "svchost.exe", "Registry", "MsMpEng.exe", "fontdrvhost.exe",
+                         "sihost.exe", "ctfmon.exe"):
+                monitor.SIM_PROCS = orig + [{"pid": 777, "name": nome, "cpu": 0, "mem": 0}]
+                with self.assertRaises(ValueError):
+                    monitor.kill(777)
+        finally:
+            monitor.SIM_PROCS = orig
+
+    def test_kill_remoto_protegido_400(self):
+        storage.save_settings(dict(storage.load_settings(), allow_kill=True))
+        st, _, _ = remoto("POST", "/api/monitor/kill", {"pid": 4})
+        self.assertEqual(st, 400)
+
+    def test_kill_sem_cabecalho_403(self):
+        st, _, _ = apoio.fake_request("POST", "/api/monitor/kill", headers={"X-StreamDeck": None},
+                                      body=b'{"pid":1200}')
+        self.assertEqual(st, 403)
+
+    def test_kill_erro_inesperado_500(self):
+        orig = monitor.kill
+        def boom(pid):
+            raise RuntimeError("segredo interno")
+        monitor.kill = boom
+        try:
+            st, _, r = call("POST", "/api/monitor/kill", {"pid": 1200})
+        finally:
+            monitor.kill = orig
+        self.assertEqual(st, 500)
+        self.assertEqual(r["error"], "falha ao encerrar")
+
+    def test_settings_kill_remoto_nao_altera(self):
+        remoto("POST", "/api/local/settings_kill", {"allow": True})
+        self.assertIsNot(storage.load_settings().get("allow_kill"), True)
+
+    def test_state_traz_pc_e_ia(self):
+        st, _, r = call("GET", "/api/state?pc=1&ia=1")
         self.assertEqual(st, 200)
         for k in ("cpu", "mem_pct", "gpu", "temp_cpu", "down_bps", "up_bps"):
             self.assertIn(k, r["pc"])
@@ -46,8 +115,8 @@ class MonitorApiTest(unittest.TestCase):
         orig = ia.status
         ia.status = lambda *a, **k: n.append(1) or {"claude": None, "codex": None, "grok": None}
         try:
-            call("GET", "/api/state")
-            call("GET", "/api/state")
+            call("GET", "/api/state?ia=1")
+            call("GET", "/api/state?ia=1")
         finally:
             ia.status = orig
         self.assertEqual(len(n), 1)
@@ -117,7 +186,7 @@ class EsquemaMonitorTest(unittest.TestCase):
             schema.validate_config(self._cfg({"label": "x", "live": v}))
 
     def test_live_invalidos(self):
-        for v in ("pc:disk:CC", "pc:disk:c", "pc:disk:", "pc:disk:1", "pc:xyz", "ia:grok:5h"):
+        for v in ("pc:disk:C\n", "pc:disk:CC", "pc:disk:c", "pc:disk:", "pc:disk:1", "pc:xyz", "ia:grok:5h"):
             with self.assertRaises(ValueError):
                 schema.validate_config(self._cfg({"label": "x", "live": v}))
 

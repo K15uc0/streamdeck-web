@@ -136,15 +136,19 @@ _IA_CACHE = {"t": 0.0, "val": None}   # consumo das IAs: relido no maximo a cada
 IA_TTL = 10.0
 
 
+_IA_LOCK = threading.Lock()
+
+
 def _ia_status():
-    now = time.time()
-    if _IA_CACHE["val"] is None or now - _IA_CACHE["t"] >= IA_TTL or now < _IA_CACHE["t"]:
-        try:
-            _IA_CACHE["val"] = ia.status()
-        except Exception:  # noqa: BLE001
-            _IA_CACHE["val"] = {"claude": None, "codex": None, "grok": None}
-        _IA_CACHE["t"] = now
-    return _IA_CACHE["val"]
+    with _IA_LOCK:     # uma releitura so, mesmo com varios aparelhos juntos
+        now = time.time()
+        if _IA_CACHE["val"] is None or now - _IA_CACHE["t"] >= IA_TTL or now < _IA_CACHE["t"]:
+            try:
+                _IA_CACHE["val"] = ia.status()
+            except Exception:  # noqa: BLE001
+                _IA_CACHE["val"] = {"claude": None, "codex": None, "grok": None}
+            _IA_CACHE["t"] = now
+        return _IA_CACHE["val"]
 
 
 def _pc_summary(s):
@@ -521,12 +525,14 @@ class Handler(BaseHTTPRequestHandler):
             st["obs"] = ob
         tocando.touch()
         st["nowplaying"] = tocando.current()
-        try:
-            monitor.touch()
-            st["pc"] = _pc_summary(monitor.snapshot())   # do cache: barato
-        except Exception:  # noqa: BLE001
-            pass
-        st["ia"] = _ia_status()
+        if q.get("pc"):     # o celular so manda quando ha tile pc:* ou monitor visivel
+            try:
+                monitor.touch()
+                st["pc"] = _pc_summary(monitor.cached_snapshot())   # so le o cache
+            except Exception:  # noqa: BLE001
+                pass
+        if q.get("ia"):
+            st["ia"] = _ia_status()
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         return self._json(200, st)
@@ -535,7 +541,7 @@ class Handler(BaseHTTPRequestHandler):
         sort = (q.get("sort") or ["cpu"])[0]
         if sort not in ("cpu", "mem"):
             sort = "cpu"
-        monitor.touch()
+        monitor.touch(prime=True)
         return self._json(200, {"ok": True, "snapshot": monitor.snapshot(),
                                 "processes": monitor.processes(15, sort),
                                 "allow_kill": storage.load_settings().get("allow_kill") is True})
@@ -550,8 +556,11 @@ class Handler(BaseHTTPRequestHandler):
             monitor.kill(pid)
             print("* processo %s encerrado por %s" % (pid, self.client_address[0]))
             return self._json(200, {"ok": True})
-        except Exception as e:
+        except ValueError as e:
             return self._json(400, {"ok": False, "error": str(e)})
+        except Exception as e:  # noqa: BLE001
+            print("! erro ao encerrar processo: %s" % e)
+            return self._json(500, {"ok": False, "error": "falha ao encerrar"})
 
     def local_ia(self, q):
         st = _ia_status()

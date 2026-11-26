@@ -10,6 +10,7 @@ import copy
 import json
 import os
 import re
+import sys
 import threading
 import time
 import urllib.request
@@ -23,7 +24,9 @@ LHM_URL = "http://127.0.0.1:8085/data.json"
 LHM_TTL = 5.0
 
 PROTECTED_NAMES = ("csrss.exe", "wininit.exe", "winlogon.exe", "lsass.exe",
-                   "services.exe", "smss.exe", "explorer.exe")
+                   "services.exe", "smss.exe", "explorer.exe", "dwm.exe", "svchost.exe",
+                   "registry", "msmpeng.exe", "system", "fontdrvhost.exe", "sihost.exe",
+                   "ctfmon.exe")
 
 
 # ------------------------------------------------------------ funcoes puras ---
@@ -343,6 +346,21 @@ _PROC_LOCK = threading.Lock()
 PROC_MIN_GAP = 1.0
 
 
+_PPIDS = {}     # pid -> pid do pai (da ultima listagem)
+
+
+def _protected_pids():
+    """Este programa, o pai e os ancestrais (o launcher/console que o abriu)."""
+    out = {0, 4, os.getpid(), os.getppid()}
+    p = os.getppid()
+    for _ in range(16):
+        p = _PPIDS.get(p)
+        if not p or p in out:
+            break
+        out.add(p)
+    return out
+
+
 def _win_processes(update_baseline=True):
     with _PROC_LOCK:
         return _win_processes_locked(update_baseline)
@@ -365,6 +383,7 @@ def _win_processes_locked(update_baseline):
         ok = k32.Process32FirstW(snap, ct.byref(e))
         while ok:
             pid, name = int(e.th32ProcessID), e.szExeFile
+            _PPIDS[pid] = int(e.th32ParentProcessID)
             cpu, mem = 0.0, 0
             h = k32.OpenProcess(0x1000, False, pid) if pid else None   # QUERY_LIMITED_INFORMATION
             if h:
@@ -432,10 +451,23 @@ _STOP = threading.Event()
 _THREAD = [None]
 
 
-def touch():
-    """Chamado pelo servidor: algum aparelho esta olhando o monitor."""
+def touch(prime=False):
+    """Chamado pelo servidor: algum aparelho esta olhando o monitor.
+    prime=True tambem grava a baseline dos processos (so a tela do monitor)."""
     _STATE["polled"] = time.time()
-    _prime()
+    if prime:
+        _prime()
+
+
+def cached_snapshot():
+    """Ultima amostra guardada, sem coletar nem esperar (estrutura vazia se nao ha)."""
+    if not IS_WINDOWS:
+        s = _sim_snapshot()
+        s["ts"] = time.time()
+        return s
+    with _LOCK:
+        s = _STATE["snap"]
+    return copy.deepcopy(s) if s else dict(copy.deepcopy(_EMPTY), ts=0.0)
 
 
 def _active():
@@ -517,13 +549,14 @@ def kill(pid):
     """Encerra um processo. ValueError (pt-BR) para protegidos ou inexistentes."""
     if isinstance(pid, bool) or not isinstance(pid, int):
         raise ValueError("PID inválido.")
-    if pid in (0, 4) or pid == os.getpid():
+    if pid in _protected_pids():
         raise ValueError("Este processo é protegido e não pode ser encerrado.")
     lst = _win_processes(update_baseline=False) if IS_WINDOWS else SIM_PROCS
     name = next((p["name"] for p in lst if p["pid"] == pid), None)
     if name is None:
         raise ValueError("Processo não encontrado.")
-    if name.lower() in PROTECTED_NAMES:
+    own = os.path.basename(sys.executable or "").lower() if getattr(sys, "frozen", False) else ""
+    if name.lower() in PROTECTED_NAMES or (own and name.lower() == own):
         raise ValueError("Este processo é protegido e não pode ser encerrado.")
     if not IS_WINDOWS:
         return
