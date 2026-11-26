@@ -409,7 +409,7 @@ no celular, a troca de PC pelas abas usa `/#sync=` quando não há código guard
 - `/api/config`: cabeçalho `X-Device-Pages` (`*` = todas, `0,2`, ou vazio = nenhuma), para o celular
   já abrir só com as páginas liberadas; o config vem inteiro (índices e ações `page` não mudam).
 - `GET /api/local/devices` (só no PC): `{ok, devices: [{id, name, created, last_seen, last_ip, pages, full}],
-  pages: [{name, index}]}`, sem chaves.
+  pages: [{name, index, id}]}`, sem chaves; `devices[].pages` são ids.
 - `POST /api/local/devices` (só no PC) `{id, op, value}`: `op` = `rename` (1 a 40 letras), `pages`
   (`null` ou lista de ids), `full` (bool) ou `remove`. 400 valor inválido, 404 aparelho inexistente.
 
