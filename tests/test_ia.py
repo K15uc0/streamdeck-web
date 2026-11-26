@@ -1,0 +1,150 @@
+# -*- coding: utf-8 -*-
+"""Consumo das IAs (2.9): Claude (ponte) e Codex (logs)."""
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+
+import apoio  # noqa: F401
+from streamdeck import ia, paths
+
+FIX = apoio.FIXTURES
+NOW = 1738400000
+
+
+def _claude_json(ts):
+    with open(os.path.join(FIX, "claude_status.json"), "r", encoding="utf-8") as f:
+        d = json.load(f)
+    os.makedirs(os.path.join(paths.BASE, "ia"), exist_ok=True)
+    with open(os.path.join(paths.BASE, "ia", "claude.json"), "w", encoding="utf-8") as f:
+        json.dump({"rate_limits": d["rate_limits"], "ts": ts}, f)
+
+
+class IaTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="sd-ia-")
+        self.old = {k: os.environ.get(k) for k in ("CODEX_HOME", "CLAUDE_CONFIG_DIR")}
+        os.environ["CODEX_HOME"] = os.path.join(self.tmp, "codex")
+        os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self.tmp, "claude")
+        os.makedirs(os.path.join(self.tmp, "claude"))
+        cj = os.path.join(paths.BASE, "ia", "claude.json")
+        if os.path.exists(cj):
+            os.remove(cj)
+
+    def tearDown(self):
+        for k, v in self.old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        shutil.rmtree(self.tmp, True)
+
+    def _codex_file(self, src="codex_session.jsonl"):
+        d = os.path.join(self.tmp, "codex", "sessions", "2025", "02", "01")
+        os.makedirs(d)
+        shutil.copy(os.path.join(FIX, src), os.path.join(d, "rollout-1.jsonl"))
+        return os.path.join(d, "rollout-1.jsonl")
+
+    def test_claude_parse(self):
+        _claude_json(NOW)
+        c = ia.status(now=NOW)["claude"]
+        self.assertEqual(c["five_hour"], {"used": 23.5, "left": 76.5, "resets_at": 1738425600})
+        self.assertEqual(c["weekly"]["used"], 41.2)
+        self.assertEqual(c["source"], "statusline")
+        self.assertIsNone(ia.status(now=NOW)["grok"])
+
+    def test_claude_janela_passada(self):
+        _claude_json(NOW)
+        c = ia.status(now=1738425601)["claude"]
+        self.assertEqual((c["five_hour"]["used"], c["five_hour"]["left"]), (0.0, 100.0))
+        self.assertEqual(c["weekly"]["used"], 41.2)
+
+    def test_claude_velho(self):
+        _claude_json(NOW - 86400)
+        c = ia.status(now=NOW)["claude"]
+        self.assertEqual(c["five_hour"]["used"], 23.5)
+        self.assertEqual(c["updated"], NOW - 86400)
+
+    def test_claude_sem_arquivo(self):
+        self.assertIsNone(ia.status(now=NOW)["claude"])
+
+    def test_codex_parse(self):
+        self._codex_file()
+        c = ia.status(now=NOW)["codex"]
+        # ultima linha: primary 12.5 (resets_in 3600 desde 10:01:00Z), secondary 33
+        self.assertEqual(c["five_hour"]["used"], 12.5)
+        self.assertEqual(c["weekly"]["used"], 33.0)
+        self.assertEqual(c["weekly"]["resets_at"], 1738857600)
+        self.assertEqual(c["source"], "codex-log")
+
+    def test_codex_resets_in_relativo(self):
+        self._codex_file()
+        c = ia.status(now=1738400000)["codex"]
+        # 2025-02-01T10:01:00Z = 1738404060
+        self.assertEqual(c["five_hour"]["resets_at"], 1738404060 + 3600)
+
+    def test_codex_formato_desconhecido(self):
+        d = os.path.join(self.tmp, "codex", "sessions")
+        os.makedirs(d)
+        with open(os.path.join(d, "x.jsonl"), "w") as f:
+            f.write('{"a": 1}\nnao e json\n{"rate_limits": {"foo": 1}}\n')
+        self.assertIsNone(ia.status(now=NOW)["codex"])
+
+    def test_install_preserva_statusline(self):
+        sp = os.path.join(self.tmp, "claude", "settings.json")
+        prev = {"type": "command", "command": "echo OI", "padding": 2}
+        with open(sp, "w") as f:
+            json.dump({"model": "opus", "statusLine": prev}, f)
+        self.assertFalse(ia.bridge_installed())
+        self.assertTrue(ia.install_bridge()["ok"])
+        self.assertTrue(ia.bridge_installed())
+        with open(sp) as f:
+            cfg = json.load(f)
+        self.assertEqual(cfg["model"], "opus")
+        self.assertEqual(cfg["statusLine"]["padding"], 2)
+        self.assertIn("ponte_claude", cfg["statusLine"]["command"])
+        with open(os.path.join(paths.BASE, "ia", "statusline_anterior.json")) as f:
+            self.assertEqual(json.load(f)["statusLine"], prev)
+        ia.install_bridge()    # idempotente: nao sobrescreve o backup
+        ia.uninstall_bridge()
+        self.assertFalse(ia.bridge_installed())
+        with open(sp) as f:
+            self.assertEqual(json.load(f), {"model": "opus", "statusLine": prev})
+
+    def test_uninstall_sem_anterior(self):
+        ia.install_bridge()
+        ia.uninstall_bridge()
+        with open(os.path.join(self.tmp, "claude", "settings.json")) as f:
+            self.assertNotIn("statusLine", json.load(f))
+
+    def test_ponte_repassa(self):
+        os.makedirs(os.path.join(paths.BASE, "ia"), exist_ok=True)
+        with open(os.path.join(paths.BASE, "ia", "statusline_anterior.json"), "w") as f:
+            json.dump({"statusLine": {"type": "command", "command": "echo OI"}}, f)
+        script = os.path.join(paths.PKG_DIR, "ponte_claude.py")
+        with open(os.path.join(FIX, "claude_status.json"), "rb") as f:
+            entrada = f.read()
+        r = subprocess.run([sys.executable, script], input=entrada, stdout=subprocess.PIPE,
+                           env=dict(os.environ), timeout=10)
+        self.assertIn(b"OI", r.stdout)
+        with open(os.path.join(paths.BASE, "ia", "claude.json")) as f:
+            self.assertEqual(json.load(f)["rate_limits"]["five_hour"]["used_percentage"], 23.5)
+        os.remove(os.path.join(paths.BASE, "ia", "statusline_anterior.json"))
+        r = subprocess.run([sys.executable, script], input=entrada, stdout=subprocess.PIPE,
+                           env=dict(os.environ), timeout=10)
+        self.assertIn("5h 24%".encode(), r.stdout)
+
+    def test_ponte_lixo(self):
+        script = os.path.join(paths.PKG_DIR, "ponte_claude.py")
+        r = subprocess.run([sys.executable, script], input=b"\xff nao json", stdout=subprocess.PIPE,
+                           env=dict(os.environ), timeout=10)
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(r.stdout.strip())
+
+
+if __name__ == "__main__":
+    unittest.main()
