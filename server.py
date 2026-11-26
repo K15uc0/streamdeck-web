@@ -36,6 +36,10 @@ def _falha(texto):
 
 
 if __name__ == "__main__":
+    if "--ponte-claude" in sys.argv:      # status line do Claude Code (2.9): sai antes de tudo
+        from streamdeck import ponte_claude
+        ponte_claude.main()
+        sys.exit(0)
     try:
         from streamdeck.app import main
         main()

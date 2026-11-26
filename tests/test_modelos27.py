@@ -81,6 +81,13 @@ class ModelosTest(unittest.TestCase):
             self.assertTrue(t["name"] and t["desc"] and t["page"]["name"])
             self.assertLessEqual(len(t["page"]["buttons"]), 15)
 
+    def test_modelo_monitor_cabe_na_grade(self):
+        t = [x for x in templates.TEMPLATES if x["id"] == "monitor"][0]
+        bs = t["page"]["buttons"]
+        self.assertEqual(sum((b.get("w") or 1) * (b.get("h") or 1) for b in bs), 14)
+        self.assertTrue(any(b.get("kind") == "monitor" for b in bs))
+        self.assertTrue(any(b.get("live") == "ia:claude:5h" for b in bs))
+
     def test_modelo_vira_config_valida(self):
         cfg = apoio.base_config()
         for t in templates.templates():

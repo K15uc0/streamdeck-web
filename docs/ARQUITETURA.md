@@ -282,3 +282,57 @@ Chrome/Edge/Firefox/Opera/Brave, VLC, foobar2000, AIMP, Winamp, MusicBee, iTunes
 regras por app (Spotify Web no navegador não é detectado: o título da aba, "Música • Artista", não
 diz o site e se confunde com outros, como Instagram); atualizado a cada ~3 s em segundo plano. `live: "nowplaying"` mostra
 "Música — Artista" (rolando se não couber); `live: "nowplaying:title"` / `"nowplaying:artist"` só um.
+
+## 2.9: monitor do PC, consumo das IAs e ponte do Claude Code
+
+**Módulos novos**
+
+- `streamdeck/monitor.py`: CPU, memória, discos, rede, GPU (PDH "GPU Engine"), processos
+  (Toolhelp32, GetProcessTimes, GetProcessMemoryInfo) e temperaturas do LibreHardwareMonitor
+  (`http://127.0.0.1:8085/data.json`, cache de 5 s). Só coleta enquanto alguém olhou nos últimos
+  60 s (`touch()`); `start()`/`stop()` controlam a thread. Fora do Windows devolve valores
+  simulados (testes). `kill(pid)` recusa processos protegidos (`PROTECTED_NAMES`: csrss, winlogon,
+  explorer, svchost etc.) e o próprio programa.
+- `streamdeck/ia.py`: consumo das IAs. `status()` -> `{claude, codex, grok}`; `grok` é sempre `None`
+  por enquanto. Claude vem de `ia/claude.json` (gravado pela ponte); Codex vem dos logs de sessão em
+  `CODEX_HOME` ou `~/.codex/sessions` (nunca lê credenciais). Cada janela: `{used, left, resets_at}`;
+  `resets_at` no passado zera o uso. Também instala/remove a ponte (`install_bridge`,
+  `uninstall_bridge`, `bridge_installed`) e, na partida, reaponta a ponte se a versão ou o caminho mudou
+  (`refresh_bridge`, em thread).
+- `streamdeck/ponte_claude.py`: a status line do Claude Code chama a ponte com o JSON no stdin. Ela grava
+  `rate_limits` e `ts` em `ia/claude.json` e repassa o mesmo stdin para a status line anterior
+  (guardada em `ia/statusline_anterior.json`, com orçamento de 1,8 s). Erros viram uma linha de texto e
+  nunca derrubam o Claude Code. Só biblioteca padrão.
+- Exe da ponte: `ponte_entry.py` -> `StreamDeckPonte.exe` (PyInstaller `--console`, job "Gerar a ponte
+  da status line" em `.github/workflows/release.yml`), comprimido em `ponte.zip` e embutido no
+  `StreamDeck.exe`. Ao instalar, é extraído em `Documentos\StreamDeck\ia\ponte` (caminho estável entre
+  atualizações). A status line grava `"command"` apontando para esse exe (ou para `ponte_claude.py`
+  quando roda pelo código).
+- Arquivos em `Documentos\StreamDeck\ia\`: `claude.json`, `statusline_anterior.json`, `ponte\`.
+  O `settings.json` do Claude Code (`CLAUDE_CONFIG_DIR` ou `~/.claude`) recebe só a chave `statusLine`
+  (backup `settings.json.streamdeck.bak`, só do primeiro).
+
+**API**
+
+- `GET /api/state?pc=1`: acrescenta `pc` (lido do cache; quem pediu chama `monitor.touch()`):
+  `{cpu, mem_pct, mem_used, mem_total, gpu, temp_cpu, temp_gpu, down_bps, up_bps, disk:[...], ts}`.
+- `GET /api/state?ia=1`: acrescenta `ia` = `{claude, codex, grok}`. Cada um é `null` ou
+  `{five_hour, weekly, updated, source, tokens_today}`, onde as janelas são `{used, left, resets_at}`.
+  O resultado fica em cache por 10 s (`IA_TTL`).
+- `GET /api/monitor?sort=cpu|mem`: `{ok, snapshot, processes (até 15), allow_kill}`.
+- `POST /api/monitor/kill` `{pid}`: exige `allow_kill` true quando a chamada não é local (403 se desligado).
+  Protegido ou inexistente -> 400 com a mensagem.
+- `GET /api/local/ia` (só no PC): `{ok, bridge_installed, claude_updated, codex_found, allow_kill}`.
+- `POST /api/local/ia` (só no PC) `{install: true|false}`: instala ou remove a ponte; 400 se falhar.
+- `POST /api/local/settings_kill` (só no PC) `{allow: true|false}`: grava `allow_kill` em `settings.json`
+  de `paths.SETTINGS_PATH` (não no config de botões).
+
+**Botões**
+
+- Modelo de página "Monitor do PC" em `streamdeck/templates.py` (id `monitor`).
+- `kind: "monitor"` (ao lado de `button`, `fader`, `folder`): sem ação; o toque abre a tela de processos.
+  Pode ficar dentro de pasta (`FOLDER_KINDS`); pasta dentro de pasta continua não permitida.
+- Valores ao vivo (`live`, validados por `schema.LIVE`): `pc:cpu`, `pc:mem`, `pc:gpu`, `pc:temp_cpu`,
+  `pc:temp_gpu`, `pc:net`, `pc:disk:<letra A-Z>`, `ia:claude:5h`, `ia:claude:week`, `ia:codex:5h`,
+  `ia:codex:week`. No cliente, `SD.pc` e `SD.ia` guardam a última resposta (`applyPc`/`applyIa` repintam
+  os blocos com prefixo `pc:`/`ia:`).

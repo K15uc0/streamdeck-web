@@ -63,6 +63,19 @@ DICAS
   Fica em token.txt (apague para gerar outro; os aparelhos precisam ler o QR de novo).
 - Se a porta 8765 estiver ocupada, o programa usa a 8766 ou 8767.
 
+MONITOR DO PC E CONSUMO DAS IAS (2.9)
+- Monitor do PC: crie um botao "Monitor do PC" (modelo pronto no editor). Mostra
+  CPU, memoria, GPU, rede, disco e temperaturas. Tocar no bloco abre a tela de
+  processos.
+- Temperaturas: deixe o LibreHardwareMonitor aberto com
+  Options > Remote Web Server > Run. Sem ele, o resto do monitor funciona.
+- Encerrar programas: vem desligado. Ligue em Conectar > Monitor do PC. Programas
+  essenciais do Windows ficam protegidos.
+- Consumo das IAs (Conectar > Consumo das IAs): limite de 5 h e semanal do Claude
+  e do Codex. O Claude precisa da ponte na linha de status do Claude Code, instalada
+  por esse botao; ela atualiza so com o Claude Code aberto. O Codex e lido dos
+  registros dele. Grok: ainda indisponivel.
+
 RODAR PELO CODIGO-FONTE (opcional)
 Com Python 3.8+ instalado: de dois cliques em "Iniciar Stream Deck.bat".
 Nesse modo os dados ficam na propria pasta do programa e a atualizacao e manual.

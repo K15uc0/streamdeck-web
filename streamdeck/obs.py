@@ -586,17 +586,17 @@ def save_settings(body):
         raise ValueError("porta do OBS invalida")
     if not (1 <= port <= 65535):
         raise ValueError("porta do OBS invalida")
-    data = storage.load_settings()
-    old = data.get("obs") if isinstance(data.get("obs"), dict) else {}
-    new = {"host": host, "port": port, "password": old.get("password", "")}
+    pw = None
     if "password" in body and body["password"] is not None:
         pw = str(body["password"])
         if len(pw) > 200:
             raise ValueError("senha longa demais")
-        new["password"] = pw
-    data["obs"] = new
-    storage.save_settings(data)
-    return new
+
+    def _aplica(data):
+        old = data.get("obs") if isinstance(data.get("obs"), dict) else {}
+        data["obs"] = {"host": host, "port": port,
+                       "password": old.get("password", "") if pw is None else pw}
+    return storage.update_settings(_aplica)["obs"]
 
 
 def lit_inputs():

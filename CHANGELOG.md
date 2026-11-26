@@ -1,5 +1,15 @@
 # Novidades
 
+## 2.9.0
+
+- **Monitor do PC no celular**: botão "Monitor do PC" (modelo pronto no editor) e blocos ao vivo de CPU, memória, GPU, temperatura da CPU e da GPU, rede (baixar e enviar) e espaço de cada disco (escolha a letra). Tocar no bloco abre a tela de processos.
+- Temperaturas vêm do LibreHardwareMonitor: abra o programa e ative em Options > Remote Web Server > Run. Sem ele, o resto do monitor funciona normalmente.
+- **Encerrar programas** pela tela de processos (ordenada por CPU ou memória). Vem desligado: ligue em Conectar > Monitor do PC. Programas essenciais do Windows ficam protegidos e não podem ser encerrados.
+- **Consumo das IAs**: limite de 5 h e semanal do Claude, como no app, e do Codex (lidos dos registros do programa). Blocos "Claude 5 h", "Claude sem", "Codex 5 h" e "Codex sem" mostram o quanto já foi usado e quando reinicia.
+- O Claude precisa de uma ponte na linha de status do Claude Code: instale em Conectar > Consumo das IAs. Ela atualiza só com o Claude Code aberto. Para remover, use o mesmo lugar.
+- Grok: ainda indisponível.
+- Modelo de página "Monitor do PC" no editor (Nova página > A partir de um modelo).
+
 ## 2.8.1
 
 - Ao abrir o Stream Deck pelo atalho ou pelo .exe, a tela Conectar abre no navegador (desde a 2.5 o programa não tem janela e parecia que não tinha aberto). O ícone fica perto do relógio.

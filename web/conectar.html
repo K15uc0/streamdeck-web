@@ -142,6 +142,23 @@
   <p class="foot">No OBS: <b>Ferramentas &gt; Configurações do WebSocket &gt; Ativar</b>; copie a senha em
     <b>Mostrar informações de conexão</b>. Com o OBS conectado, os botões podem trocar de cena, transmitir, gravar e acender conforme o OBS.</p>
 
+  <div class="hdr">Consumo das IAs</div>
+  <div class="list" id="iaCard">
+    <div class="item"><span class="t"><span class="dot old" id="iaDot"></span><b>Claude</b> · <span id="iaClaude">Verificando…</span>
+      <span class="s">O limite é da sua conta Claude e só atualiza enquanto o Claude Code está aberto. A ponte coloca um programa pequeno na linha de status do Claude Code; se você já tem uma linha de status, ela continua funcionando.</span>
+      <span class="s err" id="iaErr" style="display:none"></span></span></div>
+    <div class="item btn"><button id="iaBtn" class="primary">Instalar a ponte</button></div>
+    <div class="item"><span class="t"><b>Codex</b> · <span id="iaCodex">Verificando…</span></span></div>
+    <div class="item"><span class="t"><b>Grok</b> · <span class="muted">indisponível por enquanto</span></span></div>
+  </div>
+  <p class="foot">Depois, escolha “Texto ao vivo” de <b>IAs</b> num bloco do editor. <b>Remover</b> restaura a linha de status que o Claude Code tinha antes.</p>
+
+  <div class="hdr">Monitor do PC</div>
+  <div class="list">
+    <label class="item" id="killWrap"><span class="t">Permitir encerrar programas pelo celular
+      <span class="s">Cuidado: quem tiver o código de acesso poderá fechar programas do PC pela tela de processos. Fica desligado até você ligar aqui.</span></span><input type="checkbox" id="allowKill"></label>
+  </div>
+
   <div class="hdr">Segurança</div>
   <div class="list">
     <div id="weak" class="warn" style="display:none">Seu código de acesso é curto (de uma versão antiga).
@@ -419,6 +436,42 @@ $("obsSave").onclick = function () {
 };
 document.addEventListener("visibilitychange", obsLoop);
 obsLoop();
+
+/* ------------------------------------------------------ IAs e monitor --- */
+var iaBridge = false;
+function showIa(d) {
+  if (!d || d.ok === false) {
+    $("iaClaude").textContent = "indisponível"; $("iaCodex").textContent = "indisponível"; $("iaBtn").style.display = "none";
+    $("allowKill").checked = false; $("allowKill").disabled = true;
+    return;
+  }
+  $("allowKill").disabled = false; $("iaBtn").style.display = "";
+  iaBridge = !!d.bridge_installed;
+  var txt = iaBridge ? (d.claude_updated ? "ponte instalada, recebendo dados" : "ponte instalada, aguardando o Claude Code abrir") : "ponte não instalada";
+  $("iaClaude").textContent = txt;
+  $("iaDot").className = "dot" + (iaBridge && d.claude_updated ? "" : " old");
+  $("iaBtn").textContent = iaBridge ? "Remover a ponte" : "Instalar a ponte";
+  $("iaBtn").className = iaBridge ? "danger" : "primary";
+  $("iaCodex").textContent = d.codex_found ? "encontrado" : "não encontrado";
+  $("allowKill").checked = d.allow_kill === true;
+}
+function loadIa() { api("/api/local/ia").then(showIa, function () { showIa(null); }); }
+$("iaBtn").onclick = function () {
+  var b = $("iaBtn"), er = $("iaErr");
+  b.disabled = true; er.style.display = "none";
+  api("/api/local/ia", { install: !iaBridge }).then(function (r) {
+    b.disabled = false;
+    if (!r.ok) { er.textContent = r.error || "Não deu certo."; er.style.display = ""; return; }
+    loadIa();
+  }, function () { b.disabled = false; er.textContent = "Sem resposta do Stream Deck."; er.style.display = ""; });
+};
+$("allowKill").onchange = function (e) {
+  var c = e.target;
+  api("/api/local/settings_kill", { allow: c.checked }).then(function (r) {
+    if (!r.ok) { c.checked = !c.checked; alert("Não salvou: " + (r.error || "")); }
+  }, function () { c.checked = !c.checked; alert("Sem resposta do Stream Deck."); });
+};
+loadIa();
 </script>
 </body>
 </html>

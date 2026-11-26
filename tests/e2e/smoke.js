@@ -24,7 +24,10 @@ var CONFIG = {
         { label: "Dentro", action: { type: "hotkey", keys: ["f5"] } }
       ] },
       { kind: "fader", label: "Efeitos", icon: "music", target: "effects" },
-      { label: "Ir 2", icon: "forward", action: { type: "page", to: 1 } }
+      { label: "Ir 2", icon: "forward", action: { type: "page", to: 1 } },
+      { label: "", icon: "cpu", live: "pc:cpu" },
+      { kind: "monitor", label: "Monitor" },
+      { kind: "monitor" }
     ] },
     { name: "Dois", buttons: [{ label: "Voltar", icon: "back", action: { type: "page", to: 0 } }] }
   ]
@@ -111,10 +114,49 @@ async function phone(browser, base, token, size, errors) {
   await page.locator("#fd-back").click();
   await page.locator("#folder").waitFor({ state: "hidden", timeout: 5000 });
 
+  /* monitor do PC (2.9): texto ao vivo pc:cpu e tela de processos */
+  await page.locator("#grid .cell", { hasText: "25%" }).waitFor({ state: "visible", timeout: 8000 });
+  await page.route("**/api/monitor?*", async function (route) {   /* servidor nao libera encerrar: simula ligado */
+    var r = await route.fetch(), j = await r.json();
+    j.allow_kill = true;
+    await route.fulfill({ response: r, json: j });
+  });
+  await page.locator("#grid .cell", { hasText: "Monitor" }).last().click();   /* o sem rotulo (kind monitor) tambem abre */
+  await page.locator("#sheetwrap.show").waitFor({ timeout: 5000 });
+  await page.locator(".prow", { hasText: "chrome.exe" }).waitFor({ state: "visible", timeout: 8000 });
+  assert.ok((await page.locator(".prow").count()) >= 3, name + ": lista de processos curta");
+  await page.locator(".prow .pr-main").first().click();      /* abre o Encerrar */
+  await page.locator(".prow.open .pr-kill").waitFor({ state: "visible", timeout: 3000 });
+  await page.locator(".prow.open .pr-kill").click();           /* pede confirmacao */
+  await page.locator("#alert.show").waitFor({ timeout: 3000 });
+  await page.locator("#alert .al-btn", { hasText: "Cancelar" }).click();
+  await page.locator("#alert").waitFor({ state: "hidden", timeout: 3000 });
+  await page.locator("#sheet .hb.r").click();                 /* OK fecha a folha */
+  await page.locator("#sheetwrap.show").waitFor({ state: "hidden", timeout: 5000 });
+
   /* folha de ajustes */
   await page.locator("[aria-label=Ajustes]").click();
   await page.locator("#sheetwrap.show").waitFor({ timeout: 5000 });
   await page.waitForTimeout(400);
+  await ctx.close();
+}
+
+/* resumo do PC velho (ts 0) mostra o traco, nunca 0% */
+async function stalePc(browser, base, token, errors) {
+  var ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  var page = await ctx.newPage();
+  watchConsole(page, errors, "pc velho");
+  await page.route("**/api/state*", async function (route) {
+    var r = await route.fetch(), j = await r.json();
+    if (j.pc) j.pc = { cpu: 0, mem_pct: 0, ts: 0 };
+    await route.fulfill({ response: r, json: j });
+  });
+  var seen = page.waitForResponse(function (r) { return r.url().indexOf("/api/state") >= 0 && r.url().indexOf("pc=1") >= 0; });
+  await page.goto(base + "/?k=" + token);
+  await seen;
+  await page.waitForTimeout(500);
+  var txt = await page.locator("#grid .key.live").first().innerText();
+  assert.ok(txt.indexOf("\u2014") >= 0 && txt.indexOf("0%") < 0, "pc velho deveria mostrar traco: " + txt);
   await ctx.close();
 }
 
@@ -154,6 +196,8 @@ async function main() {
     console.log("ok   celular 390x844");
     await phone(browser, base, token, { width: 1180, height: 820 }, errors);
     console.log("ok   tablet 1180x820");
+    await stalePc(browser, base, token, errors);
+    console.log("ok   pc velho");
     await editor(browser, base, errors);
     console.log("ok   editor 1440x900");
     assert.deepStrictEqual(errors, [], "erros no console:\n" + errors.join("\n"));

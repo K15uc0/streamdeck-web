@@ -14,13 +14,20 @@ MAX_LABEL = 60             # texto do botao
 MAX_NAME = 60              # nome da pagina
 MAX_TITLE = 80
 MAX_SHORT = 40             # icone, cor
-KINDS = ("button", "fader", "folder")
-FOLDER_KINDS = ("button", "fader")   # pasta dentro de pasta nao
+KINDS = ("button", "fader", "folder", "monitor")
+FOLDER_KINDS = ("button", "fader", "monitor")   # pasta dentro de pasta nao
 MAX_FOLDER = 60            # botoes dentro de uma pasta
 MAX_APPS = 20              # apps por pagina (troca automatica)
 LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer",
         "obs:stream", "obs:record", "obs:scene", "sound",
-        "nowplaying", "nowplaying:title", "nowplaying:artist")
+        "nowplaying", "nowplaying:title", "nowplaying:artist",
+        "pc:cpu", "pc:mem", "pc:gpu", "pc:temp_cpu", "pc:temp_gpu", "pc:net",
+        "ia:claude:5h", "ia:claude:week", "ia:codex:5h", "ia:codex:week")
+DISK_LIVE_RE = re.compile(r"pc:disk:[A-Z]")   # uma letra de unidade, maiuscula
+
+
+def valid_live(v):
+    return v in LIVE or (isinstance(v, str) and bool(DISK_LIVE_RE.fullmatch(v)))
 MAX_LIT = 130
 # botao aceso pelo estado do OBS
 LIT_RE = re.compile(r"^(obs:stream|obs:record|obs:(scene|mute)=[^\r\n]{1,120})$")
@@ -132,7 +139,7 @@ def validate_button(b, n_pages, where, kinds=KINDS):
                 raise ValueError("%s: campo desconhecido em on: %s" % (where, k))
         _looks(on, where + " (ligado)")
     live = b.get("live")
-    if live not in (None, "") and live not in LIVE:
+    if live not in (None, "") and not valid_live(live):
         raise ValueError("%s: texto ao vivo invalido" % where)
     if kind == "folder":
         inner = b.get("buttons")
@@ -142,6 +149,8 @@ def validate_button(b, n_pages, where, kinds=KINDS):
             raise ValueError("%s: pasta com botoes demais (maximo %d)" % (where, MAX_FOLDER))
         for i, x in enumerate(inner):
             validate_button(x, n_pages, "%s, item %d" % (where, i + 1), FOLDER_KINDS)
+    elif kind == "monitor":
+        pass    # sem acao: o toque abre a tela de processos
     elif kind == "fader":
         if b.get("target") not in FADER_TARGETS:
             raise ValueError("%s: o fader deve controlar %s" % (where, ", ".join(FADER_TARGETS)))
