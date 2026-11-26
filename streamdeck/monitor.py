@@ -6,6 +6,7 @@ GetIfTable2, PDH "GPU Engine", Toolhelp32 + GetProcessTimes + GetProcessMemoryIn
 Fora do Windows devolve valores simulados e deterministicos (para os testes).
 Temperaturas vem do LibreHardwareMonitor (http://127.0.0.1:8085/data.json), se
 estiver rodando. So coleta se alguem chamou touch() no ultimo minuto."""
+import copy
 import json
 import os
 import re
@@ -101,15 +102,28 @@ _LHM_CACHE = {}
 _LHM_LOCK = threading.Lock()
 
 
-def lhm_temps(url=LHM_URL, timeout=0.4):
+def lhm_cached(url=None):
+    """Ultimo valor conhecido das temperaturas, sem rede (nunca bloqueia)."""
+    with _LHM_LOCK:
+        c = _LHM_CACHE.get(url or LHM_URL)
+        return dict(c[1]) if c else {"cpu": None, "gpu": None}
+
+
+_OPENER = []
+
+
+def lhm_temps(url=None, timeout=0.4):
     """Temperaturas do LibreHardwareMonitor; None se nao estiver rodando. Cache de 5 s."""
+    url = url or LHM_URL
     now = time.time()
     with _LHM_LOCK:
         c = _LHM_CACHE.get(url)
         if c and now - c[0] < LHM_TTL:
             return dict(c[1])
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        if not _OPENER:    # sem proxy do sistema: e sempre local
+            _OPENER.append(urllib.request.build_opener(urllib.request.ProxyHandler({})))
+        with _OPENER[0].open(url, timeout=timeout) as r:
             res = parse_lhm(r.read(2_000_000).decode("utf-8", "replace"))
     except Exception:
         res = {"cpu": None, "gpu": None}
@@ -266,14 +280,21 @@ def _win_net_bytes():
         n = ct.c_ulong.from_address(ptr.value).value
         size = ct.sizeof(w["IFROW2"])
         base = ptr.value + 8       # NumEntries + alinhamento; linhas tem ULONG64
-        rx = tx = 0
+        hw = [0, 0, 0]       # interfaces fisicas (flag HardwareInterface)
+        anyif = [0, 0, 0]    # reserva: qualquer ativa que nao seja loopback/tunel
         for i in range(n):
             row = w["IFROW2"].from_address(base + i * size)
             if row.OperStatus != 1 or row.Type in (24, 131):   # up; nao loopback/tunel
                 continue
-            rx += row.InOctets
-            tx += row.OutOctets
-        return (rx, tx)
+            anyif[0] += row.InOctets
+            anyif[1] += row.OutOctets
+            anyif[2] += 1
+            if row.InterfaceAndOperStatusFlags & 1:
+                hw[0] += row.InOctets
+                hw[1] += row.OutOctets
+                hw[2] += 1
+        best = hw if hw[2] else anyif
+        return (best[0], best[1])
     finally:
         w["iph"].FreeMibTable(ptr)
 
@@ -307,7 +328,8 @@ def _win_gpu():
         if pdh.PdhGetFormattedCounterArrayW(_GPU["c"], 0x200, ct.byref(size), ct.byref(count), buf) != 0:
             return None
         items = (w["PDH_ITEM"] * count.value).from_buffer(buf)
-        tot = sum(it.value for it in items if it.CStatus in (0, 1))
+        tot = sum(it.value for it in items
+                  if it.CStatus in (0, 1) and "engtype_3d" in (it.szName or "").lower())
         return round(max(0.0, min(100.0, tot)), 1)
     except Exception:
         _GPU["failed"] = True
@@ -316,9 +338,17 @@ def _win_gpu():
 
 # ----------------------------------------------------------------- processos ---
 _PROC_PREV = {}     # pid -> (cpu_100ns, wall)
+_PROC_T = [0.0]     # quando a baseline foi gravada
+_PROC_LOCK = threading.Lock()
+PROC_MIN_GAP = 1.0
 
 
-def _win_processes():
+def _win_processes(update_baseline=True):
+    with _PROC_LOCK:
+        return _win_processes_locked(update_baseline)
+
+
+def _win_processes_locked(update_baseline):
     w = _win()
     ct = w["ctypes"]
     k32 = w["k32"]
@@ -356,9 +386,21 @@ def _win_processes():
             ok = k32.Process32NextW(snap, ct.byref(e))
     finally:
         k32.CloseHandle(snap)
-    _PROC_PREV.clear()
-    _PROC_PREV.update(seen)
+    # baseline so troca depois de 1 s (chamadas rapidas nao zeram o CPU%)
+    if update_baseline and (not _PROC_PREV or now - _PROC_T[0] >= PROC_MIN_GAP):
+        _PROC_PREV.clear()
+        _PROC_PREV.update(seen)
+        _PROC_T[0] = now
     return out
+
+
+def _prime():
+    """Grava a baseline de CPU dos processos se estiver velha."""
+    if IS_WINDOWS and time.time() - _PROC_T[0] > 10.0:
+        try:
+            _win_processes()
+        except Exception:
+            pass
 
 
 # --------------------------------------------------------------- simulado ---
@@ -384,7 +426,8 @@ def _sim_snapshot():
 
 # ------------------------------------------------------------------- coleta ---
 _LOCK = threading.Lock()
-_STATE = {"polled": 0.0, "snap": None, "cpu": None, "net": None}
+_STATE = {"polled": 0.0, "snap": None, "cpu": None, "net": None, "last": 0.0}
+_COLLECT_LOCK = threading.Lock()
 _STOP = threading.Event()
 _THREAD = [None]
 
@@ -392,18 +435,22 @@ _THREAD = [None]
 def touch():
     """Chamado pelo servidor: algum aparelho esta olhando o monitor."""
     _STATE["polled"] = time.time()
+    _prime()
 
 
 def _active():
     return time.time() - _STATE["polled"] < ACTIVE_FOR
 
 
-def _collect():
+def _collect(with_lhm=False):
     now = time.time()
     if not IS_WINDOWS:
         s = _sim_snapshot()
         s["ts"] = float(now)
         return s
+    if now - _STATE["last"] > 5.0:     # amostra velha: recomeca as taxas
+        _STATE["cpu"] = _STATE["net"] = None
+    _STATE["last"] = now
     t = _win_cpu_times()
     prev = _STATE["cpu"]
     cpu = cpu_pct(prev, t) if prev else 0.0
@@ -416,7 +463,7 @@ def _collect():
     else:
         down = up = 0.0
     _STATE["net"] = (now, rx, tx)
-    temps = lhm_temps()
+    temps = lhm_temps() if with_lhm else lhm_cached()
     gpu = _win_gpu()
     return {"cpu": float(cpu), "mem": _win_mem(), "disk": _win_disks(),
             "net": {"down_bps": float(down), "up_bps": float(up)},
@@ -424,20 +471,35 @@ def _collect():
             "temps": temps, "ts": float(now)}
 
 
+_EMPTY = {"cpu": 0.0, "mem": {"used": 0, "total": 0, "pct": 0.0}, "disk": [],
+          "net": {"down_bps": 0.0, "up_bps": 0.0}, "gpu": None,
+          "temps": {"cpu": None, "gpu": None}, "ts": 0.0}
+
+
+def _refresh(with_lhm):
+    """Coleta e guarda; serializada, e o LHM (rede) so entra pela thread."""
+    with _COLLECT_LOCK:
+        try:
+            s = _collect(with_lhm)
+        except Exception:
+            with _LOCK:
+                s = _STATE["snap"] or dict(copy.deepcopy(_EMPTY), ts=time.time())
+        with _LOCK:
+            _STATE["snap"] = s
+        return s
+
+
 def snapshot():
-    """Metricas do PC agora (reaproveita a leitura de ate 1 s atras)."""
+    """Metricas do PC agora. Devolve copia do cache quando a thread esta
+    mantendo-o fresco (nunca espera o LibreHardwareMonitor)."""
     with _LOCK:
         s = _STATE["snap"]
-        if s and time.time() - s["ts"] < 1.0:
-            return s
-        try:
-            s = _collect()
-        except Exception:
-            s = _STATE["snap"] or {"cpu": 0.0, "mem": {"used": 0, "total": 0, "pct": 0.0}, "disk": [],
-                                   "net": {"down_bps": 0.0, "up_bps": 0.0}, "gpu": None,
-                                   "temps": {"cpu": None, "gpu": None}, "ts": time.time()}
-        _STATE["snap"] = s
-        return s
+    if s:
+        age = time.time() - s["ts"]
+        th = _THREAD[0]
+        if age < 1.0 or not _active() or (th and th.is_alive() and age < 2 * INTERVAL):
+            return copy.deepcopy(s)
+    return copy.deepcopy(_refresh(False))
 
 
 def processes(limit=15, sort="cpu"):
@@ -457,7 +519,7 @@ def kill(pid):
         raise ValueError("PID inválido.")
     if pid in (0, 4) or pid == os.getpid():
         raise ValueError("Este processo é protegido e não pode ser encerrado.")
-    lst = _win_processes() if IS_WINDOWS else SIM_PROCS
+    lst = _win_processes(update_baseline=False) if IS_WINDOWS else SIM_PROCS
     name = next((p["name"] for p in lst if p["pid"] == pid), None)
     if name is None:
         raise ValueError("Processo não encontrado.")
@@ -481,7 +543,7 @@ def _loop():
     while not _STOP.is_set():
         if _active():
             try:
-                snapshot()
+                _refresh(True)
             except Exception:
                 pass
         _STOP.wait(INTERVAL)
@@ -491,6 +553,7 @@ def start():
     if not IS_WINDOWS or (_THREAD[0] and _THREAD[0].is_alive()):
         return
     _STOP.clear()
+    _prime()
     _THREAD[0] = threading.Thread(target=_loop, name="monitor", daemon=True)
     _THREAD[0].start()
 

@@ -2,6 +2,7 @@
 """Monitor do PC (2.9): coletor de metricas (simulado fora do Windows)."""
 import os
 import socket
+import sys
 import time
 import unittest
 
@@ -75,6 +76,40 @@ class MonitorTests(unittest.TestCase):
             self.assertEqual(set(ps[0]), {"pid", "name", "cpu", "mem"})
             vals = [p[sort] for p in ps]
             self.assertEqual(vals, sorted(vals, reverse=True))
+
+    def test_snapshot_nao_bloqueia_no_lhm(self):
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        old = monitor.LHM_URL
+        monitor.LHM_URL = "http://127.0.0.1:%d/data.json" % port
+        monitor._STATE["snap"] = None
+        try:
+            monitor.touch()
+            monitor.snapshot()                  # primeira leitura
+            t0 = time.time()
+            monitor.snapshot()
+            self.assertLess(time.time() - t0, 0.05)
+        finally:
+            monitor.LHM_URL = old
+
+    def test_snapshot_devolve_copia(self):
+        a = monitor.snapshot()
+        a["mem"]["used"] = -1
+        self.assertNotEqual(monitor.snapshot()["mem"]["used"], -1)
+
+
+@unittest.skipUnless(sys.platform.startswith("win"), "so no Windows")
+class MonitorWindowsTests(unittest.TestCase):
+    def test_if_row2_tamanho(self):
+        w = monitor._win()
+        self.assertEqual(w["ctypes"].sizeof(w["IFROW2"]), 1352)
+
+    def test_roda_sem_excecao(self):
+        monitor.touch()
+        self.assertIn("cpu", monitor.snapshot())
+        self.assertTrue(monitor.processes(limit=5))
 
 
 if __name__ == "__main__":
