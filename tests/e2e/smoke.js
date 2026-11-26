@@ -29,7 +29,11 @@ var CONFIG = {
       { kind: "monitor", label: "Monitor" },
       { kind: "monitor" }
     ] },
-    { name: "Dois", buttons: [{ label: "Voltar", icon: "back", action: { type: "page", to: 0 } }] }
+    { name: "Dois", buttons: [{ label: "Voltar", icon: "back", action: { type: "page", to: 0 } }] },
+    { name: "Tres", grid: { columns: 5, rows: 2, portrait: { columns: 2, rows: 5 } }, buttons: [
+      { label: "A", action: { type: "hotkey", keys: ["f1"] } },
+      { label: "B", action: { type: "hotkey", keys: ["f2"] } }
+    ] }
   ]
 };
 
@@ -141,6 +145,32 @@ async function phone(browser, base, token, size, errors) {
   await ctx.close();
 }
 
+/* pagina com grade propria (2.10): colunas/linhas da pagina, nao a geral */
+async function ownGrid(browser, base, token, size, cols, rows, errors) {
+  var name = "grade propria " + size.width + "x" + size.height;
+  var ctx = await browser.newContext({ viewport: size });
+  var page = await ctx.newPage();
+  watchConsole(page, errors, name);
+  await page.goto(base + "/?k=" + token);
+  await page.locator("#grid .cell").first().waitFor({ state: "visible", timeout: 10000 });
+  async function grid() {
+    return page.locator("#grid .cell").evaluateAll(function (els) {
+      var xs = {}, ys = {};
+      els.forEach(function (e) { var r = e.getBoundingClientRect(); xs[Math.round(r.left)] = 1; ys[Math.round(r.top)] = 1; });
+      return { n: els.length, c: Object.keys(xs).length, r: Object.keys(ys).length };
+    });
+  }
+  var g0 = await grid();
+  await page.evaluate(function () { window.SD.goPage(2); });
+  await page.locator("#grid .cell", { hasText: "B" }).waitFor({ state: "visible", timeout: 5000 });
+  var g = await grid();
+  assert.deepStrictEqual(g, { n: cols * rows, c: cols, r: rows }, name + ": " + JSON.stringify(g));
+  await page.evaluate(function () { window.SD.goPage(0); });
+  await page.locator("#grid .cell", { hasText: "Copiar" }).waitFor({ state: "visible", timeout: 5000 });
+  assert.deepStrictEqual(await grid(), g0, name + ": volta para a grade geral");
+  await ctx.close();
+}
+
 /* resumo do PC velho (ts 0) mostra o traco, nunca 0% */
 async function stalePc(browser, base, token, errors) {
   var ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -181,6 +211,40 @@ async function editor(browser, base, errors) {
   assert.strictEqual(cfg.pages[0].buttons[1].label, "Copiado E2E");
   assert.strictEqual(cfg.pages[0].buttons[1].action.type, "hotkey");
   await page.locator("#status", { hasText: "Salvo" }).waitFor({ timeout: 5000 });
+
+  /* grade por pagina (2.10): mudar a geral nao mexe na pagina com grade propria */
+  async function getCfg() { return (await ctx.request.get(base + "/api/config", { headers: { "X-StreamDeck": "1" } })).json(); }
+  function saveOk() {
+    return page.waitForResponse(function (r) { return r.url().indexOf("/api/config") >= 0 && r.request().method() === "POST"; });
+  }
+  await page.locator("#pages .pg").nth(2).click();
+  assert.strictEqual(await page.locator("#gridMode").inputValue(), "propria");
+  assert.strictEqual(await page.locator("#grid [data-i]").count(), 10, "previa 5x2 na pagina com grade propria");
+  await page.locator("#pages .pg").nth(0).click();
+  assert.strictEqual(await page.locator("#gridMode").inputValue(), "geral");
+  saved = saveOk();
+  await page.locator("#sizes select[title=Colunas]").selectOption("6");
+  await saved;
+  cfg = await getCfg();
+  assert.strictEqual(cfg.columns, 6);
+  assert.deepStrictEqual(cfg.pages[2].grid, { columns: 5, rows: 2, portrait: { columns: 2, rows: 5 } });
+  await page.locator("#pages .pg").nth(2).click();
+  saved = saveOk();
+  await page.locator("#sizes select[title=Colunas]").selectOption("3");
+  await saved;
+  cfg = await getCfg();
+  assert.strictEqual(cfg.columns, 6);
+  assert.strictEqual(cfg.pages[2].grid.columns, 3);
+  assert.ok(!cfg.pages[0].grid && !cfg.pages[1].grid, "outras paginas sem grade propria");
+  /* Propria -> Geral tira a grade da pagina; Geral -> Propria copia a geral */
+  saved = saveOk();
+  await page.locator("#gridMode").selectOption("geral");
+  await saved;
+  assert.ok(!(await getCfg()).pages[2].grid);
+  saved = saveOk();
+  await page.locator("#gridMode").selectOption("propria");
+  await saved;
+  assert.deepStrictEqual((await getCfg()).pages[2].grid, { columns: 6, rows: 3 });
   await ctx.close();
 }
 
@@ -196,6 +260,9 @@ async function main() {
     console.log("ok   celular 390x844");
     await phone(browser, base, token, { width: 1180, height: 820 }, errors);
     console.log("ok   tablet 1180x820");
+    await ownGrid(browser, base, token, { width: 1180, height: 820 }, 5, 2, errors);
+    await ownGrid(browser, base, token, { width: 390, height: 844 }, 2, 5, errors);
+    console.log("ok   grade propria por pagina");
     await stalePc(browser, base, token, errors);
     console.log("ok   pc velho");
     await editor(browser, base, errors);
