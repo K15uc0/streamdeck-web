@@ -360,7 +360,7 @@ Antes, todo aparelho entrava com o mesmo código (`token.txt`, cookie `sdk` ou `
 só **cadastra** aparelhos; cada aparelho entra com a chave dele.
 
 **Arquivo** `Documentos\StreamDeck\aparelhos.json` (`paths.DEVICES_PATH`), módulo `streamdeck/devices.py`:
-`{"devices": [{id, key, name, created, last_seen, last_ip, pages: null|[índices], full}], "legacy_full": bool}`.
+`{"devices": [{id, key, name, created, last_seen, last_ip, pages: null|[ids de página], full}], "legacy_full": bool}`.
 Gravação atômica (`storage.write_json`: `.tmp` + `os.replace`) sob `devices.LOCK`; relido se o mtime mudar.
 Arquivo ilegível: ninguém entra pela chave e nada é gravado por cima (`DevicesError`). Limite de 50 aparelhos.
 `key` = `secrets.token_hex(16)`, comparada com `hmac.compare_digest` contra todos (sem sair no primeiro).
@@ -388,7 +388,13 @@ no celular, a troca de PC pelas abas usa `/#sync=` quando não há código guard
 **Permissões** (servidor decide; o celular só esconde):
 
 - Páginas: `pages` `null` = todas. `GET /api/press` em página fora da lista -> 403 `{reason: "page"}`
-  (não conta tentativa). Índices de página: reordenar/apagar páginas no editor não ajusta a lista.
+  (não conta tentativa). A lista guarda **ids de página** (`page.id` no config, `^[0-9a-f]{4,16}$`, único;
+  `schema.add_page_ids` dá um id a toda página sem id na migração; o editor dá id novo a página nova,
+  duplicada ou de modelo e mantém o id ao mover). A cada pedido `httpd._dev_ctx` converte ids em posições
+  atuais (`devices.page_indices`), então `X-Device-Pages`, `device.pages` e `/api/press` usam índices
+  sempre certos: mover não muda o que o aparelho vê, página apagada some, página nova fica oculta para
+  aparelho com páginas escolhidas até marcar. Listas antigas de índices (2.11 inicial) viram ids uma vez,
+  com o config atual, ao ler o `aparelhos.json`.
 - Controle total (`full`): sem ele, 403 `{reason: "full"}` para ações sensíveis (`devices.sensitive`):
   `command` que desliga/reinicia/suspende/encerra a sessão (`devices.POWER_RE`) e `multi` com algum
   desses; e `POST /api/monitor/kill`. Abrir programas, sites e comandos comuns continua liberado
@@ -405,7 +411,7 @@ no celular, a troca de PC pelas abas usa `/#sync=` quando não há código guard
 - `GET /api/local/devices` (só no PC): `{ok, devices: [{id, name, created, last_seen, last_ip, pages, full}],
   pages: [{name, index}]}`, sem chaves.
 - `POST /api/local/devices` (só no PC) `{id, op, value}`: `op` = `rename` (1 a 40 letras), `pages`
-  (`null` ou lista), `full` (bool) ou `remove`. 400 valor inválido, 404 aparelho inexistente.
+  (`null` ou lista de ids), `full` (bool) ou `remove`. 400 valor inválido, 404 aparelho inexistente.
 
 **Celular** (`deck.js`, funções puras em `core.js`: `SD.pageOk`, `SD.allowedPages`, `SD.nextPage`,
 `SD.parseDevicePages`): `SD.device` (guardado em `sd_device`) esconde as páginas não liberadas nos pontos,
