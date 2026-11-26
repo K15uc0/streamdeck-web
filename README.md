@@ -44,6 +44,12 @@ O app avisa quando sai versão nova; toque em **Atualizar agora**:
 
 Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão no [CHANGELOG](CHANGELOG.md). Mais detalhes no [LEIA-ME](LEIA-ME.txt).
 
+## Monitor do PC e consumo das IAs (2.9)
+
+- **Monitor do PC**: no celular, veja CPU, memória, GPU, temperaturas, rede e disco. Crie um botão "Monitor do PC" (modelo pronto no editor). Para as temperaturas, deixe o [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) aberto com **Options → Remote Web Server → Run**.
+- **Encerrar programas**: vem desligado. Ligue em **Conectar → Monitor do PC**; programas essenciais do Windows ficam protegidos.
+- **Consumo das IAs**: limites de 5 h e semanal do Claude e do Codex. Para o Claude, instale a ponte em **Conectar → Consumo das IAs**; ela atualiza só com o Claude Code aberto. O Grok ainda não está disponível.
+
 ## Para desenvolvedores
 
 - Rodar pelo código: Python 3.8+, `python server.py` (sem dependências). O código do servidor fica no pacote `streamdeck/`; `server.py` só chama `streamdeck.app.main()`.
