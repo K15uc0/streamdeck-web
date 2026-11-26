@@ -212,39 +212,38 @@ async function editor(browser, base, errors) {
   assert.strictEqual(cfg.pages[0].buttons[1].action.type, "hotkey");
   await page.locator("#status", { hasText: "Salvo" }).waitFor({ timeout: 5000 });
 
-  /* grade por pagina (2.10): mudar a geral nao mexe na pagina com grade propria */
+  /* grade de cada pagina (2.10.1): toda pagina tem a sua; mudar uma nao mexe nas outras */
   async function getCfg() { return (await ctx.request.get(base + "/api/config", { headers: { "X-StreamDeck": "1" } })).json(); }
   function saveOk() {
     return page.waitForResponse(function (r) { return r.url().indexOf("/api/config") >= 0 && r.request().method() === "POST"; });
   }
+  assert.strictEqual(await page.locator("#gridMode").count(), 0, "sem seletor Geral/Propria");
+  cfg = await getCfg();
+  assert.deepStrictEqual(cfg.pages[0].grid, { columns: 4, rows: 3 }, "migracao deu grade a pagina 1");
+  assert.deepStrictEqual(cfg.pages[1].grid, { columns: 4, rows: 3 }, "migracao deu grade a pagina 2");
   await page.locator("#pages .pg").nth(2).click();
-  assert.strictEqual(await page.locator("#gridMode").inputValue(), "propria");
-  assert.strictEqual(await page.locator("#grid [data-i]").count(), 10, "previa 5x2 na pagina com grade propria");
+  assert.strictEqual(await page.locator("#grid [data-i]").count(), 10, "previa 5x2 na pagina 3");
   await page.locator("#pages .pg").nth(0).click();
-  assert.strictEqual(await page.locator("#gridMode").inputValue(), "geral");
   saved = saveOk();
   await page.locator("#sizes select[title=Colunas]").selectOption("6");
   await saved;
   cfg = await getCfg();
-  assert.strictEqual(cfg.columns, 6);
+  assert.deepStrictEqual(cfg.pages[0].grid, { columns: 6, rows: 3 });
+  assert.deepStrictEqual(cfg.pages[1].grid, { columns: 4, rows: 3 }, "pagina 2 nao muda");
   assert.deepStrictEqual(cfg.pages[2].grid, { columns: 5, rows: 2, portrait: { columns: 2, rows: 5 } });
+  assert.strictEqual(cfg.columns, 4, "geral nao muda");
+  await page.locator("#pages .pg").nth(1).click();
+  assert.strictEqual(await page.locator("#sizes select[title=Colunas]").inputValue(), "4");
+  /* pagina nova (em branco) copia a grade da pagina atual */
   await page.locator("#pages .pg").nth(2).click();
+  var n0 = cfg.pages.length;
   saved = saveOk();
-  await page.locator("#sizes select[title=Colunas]").selectOption("3");
+  await page.locator("#addPage").click();
+  await page.locator("#addBlank").click();
   await saved;
   cfg = await getCfg();
-  assert.strictEqual(cfg.columns, 6);
-  assert.strictEqual(cfg.pages[2].grid.columns, 3);
-  assert.ok(!cfg.pages[0].grid && !cfg.pages[1].grid, "outras paginas sem grade propria");
-  /* Propria -> Geral tira a grade da pagina; Geral -> Propria copia a geral */
-  saved = saveOk();
-  await page.locator("#gridMode").selectOption("geral");
-  await saved;
-  assert.ok(!(await getCfg()).pages[2].grid);
-  saved = saveOk();
-  await page.locator("#gridMode").selectOption("propria");
-  await saved;
-  assert.deepStrictEqual((await getCfg()).pages[2].grid, { columns: 6, rows: 3 });
+  assert.strictEqual(cfg.pages.length, n0 + 1);
+  assert.deepStrictEqual(cfg.pages[3].grid, { columns: 5, rows: 2, portrait: { columns: 2, rows: 5 } }, "pagina nova com grade");
   await ctx.close();
 }
 

@@ -99,8 +99,18 @@
     for (var i = 0; i < bs.length; i++) if (!edEmpty(bs[i])) n++;
     return n;
   }
-  /* dono da grade de uma pagina: a propria (pg.grid) ou a geral (cfg) */
+  /* grade de uma pagina (2.10.1: toda pagina tem a sua; cfg so de reserva) */
   function gridOf(pg) { return pg && pg.grid ? pg.grid : cfg; }
+  /* copia de uma grade {columns, rows, portrait?} */
+  function copyGrid(g) {
+    var o = { columns: g.columns, rows: g.rows };
+    if (g.portrait) o.portrait = { columns: g.portrait.columns, rows: g.portrait.rows };
+    return o;
+  }
+  /* pagina sem grade (servidor antigo) ganha uma copia da geral */
+  function ensureGrids() {
+    for (var i = 0; i < cfg.pages.length; i++) if (!cfg.pages[i].grid) cfg.pages[i].grid = copyGrid(cfg);
+  }
   /* grade da orientacao: {c, r, auto} (da pagina atual, ou de pg) */
   function dims(o, pg) {
     var g = gridOf(pg || curPage());
@@ -323,6 +333,7 @@
       /* recarga automatica nao atropela edicoes feitas enquanto ela vinha */
       if (!first && !msg && dirty) return;
       cfg = data;
+      ensureGrids();
       savedV = x.getResponseHeader("X-Config-Version");
       if (page >= cfg.pages.length) page = 0;
       fixView();
@@ -364,7 +375,6 @@
       el("span", "n", String(i + 1), row);
       var t = el("span", "t", esc(pageName(i)), row);
       if (pg.apps && pg.apps.length) el("span", "ap", "auto", row).title = "Troca sozinha: " + pg.apps.join(", ");
-      if (pg.grid) el("span", "ap", pg.grid.columns + "×" + pg.grid.rows, row).title = "Grade própria desta página";
       el("span", "c", String(count(pg)), row);
       var more = el("button", "more", "…", row);
       more.title = "Mais opções";
@@ -559,33 +569,19 @@
     });
     var s = $("sizes");
     s.innerHTML = "";
-    /* grade: geral (todas as paginas) ou propria (so desta pagina) */
-    var pg = curPage(), g = gridOf(pg);
-    el("span", null, "Grade:", s);
-    var gm = el("select", null, null, s);
-    gm.id = "gridMode";
-    gm.title = "Geral: a grade de todas as páginas. Própria: só desta página.";
-    opt(gm, "geral", "Geral", pg.grid ? "propria" : "geral");
-    opt(gm, "propria", "Própria", pg.grid ? "propria" : "geral");
-    gm.onchange = function () {
-      change(function () {
-        var p = curPage();
-        if (gm.value === "geral") delete p.grid;
-        else {
-          p.grid = { columns: cfg.columns, rows: cfg.rows };
-          if (cfg.portrait) p.grid.portrait = { columns: cfg.portrait.columns, rows: cfg.portrait.rows };
-        }
-      });
-    };
+    /* grade so desta pagina (cada pagina tem a sua) */
+    var pg = curPage();
+    if (!pg.grid) pg.grid = copyGrid(cfg);
+    var g = pg.grid;
     if (orient === "land") {
-      el("span", null, pg.grid ? "Horizontal desta página:" : "Horizontal:", s);
+      el("span", null, "Horizontal desta página:", s);
       numSelect(s, g.columns, 1, 10, function (v) { change(function () { g.columns = v; }); }).title = "Colunas";
       el("span", "x", "colunas ×", s);
       numSelect(s, g.rows, 1, 8, function (v) { change(function () { g.rows = v; }); }).title = "Linhas";
       el("span", "x", "linhas", s);
     } else {
       var d = dims("port");
-      el("span", null, pg.grid ? "Vertical desta página:" : "Vertical:", s);
+      el("span", null, "Vertical desta página:", s);
       var m = el("select", null, null, s);
       m.id = "portMode";
       opt(m, "auto", "Automática (invertida)", g.portrait ? "custom" : "auto");
@@ -2598,7 +2594,7 @@
   }
   function addBlankPage() {
     if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
-    change(function () { insertPage(page + 1, { name: freeName("Página " + (cfg.pages.length + 1)), buttons: [] }); selectOne(0); });
+    change(function () { insertPage(page + 1, { name: freeName("Página " + (cfg.pages.length + 1)), grid: copyGrid(gridOf(curPage())), buttons: [] }); selectOne(0); });
   }
   function duplicatePage(i) {
     if (cfg.pages.length >= 50) { SD.toast("No máximo 50 páginas", true); return; }
@@ -2607,6 +2603,7 @@
       cp.name = freeName(pageName(i), " (cópia)");
       /* troca automatica por app ficaria repetida: so a original troca sozinha */
       delete cp.apps;
+      if (!cp.grid) cp.grid = copyGrid(gridOf(cfg.pages[i]));
       insertPage(i + 1, cp, true);
     });
     SD.toast("Página duplicada");
@@ -2694,6 +2691,7 @@
     var pg = clone(tp.page || {});
     pg.name = freeName(SD.trim(pg.name || tp.name || "Página"));   /* freeName ja limita o tamanho */
     if (!pg.buttons) pg.buttons = [];
+    if (!pg.grid) pg.grid = copyGrid(gridOf(curPage()));
     change(function () { insertPage(page + 1, pg, false); });
     SD.toast("Página “" + pg.name + "” criada");
   }

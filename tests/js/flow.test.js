@@ -235,6 +235,13 @@ test("pageGrid: grade propria invalida cai na geral", function () {
   assert.strictEqual(SD.pageGrid(c, 0), c);
   assert.strictEqual(SD.pageGrid(c, 1), c);
 });
+/* mesmos casos de tests/test_grade2101.py (schema.flow, migracao 2.10.1) */
+test("flow: igual ao schema.flow do Python", function () {
+  function b(o) { return Object.assign({ label: "X" }, o || {}); }
+  var f = SD.flow([b({ w: 2, h: 2 }), b(), b({ w: 9 }), b({ h: 2 })], 4, 3).map(function (p) { return [p.i, p.x, p.y, p.w, p.h]; });
+  assert.deepStrictEqual(f, [[0, 0, 0, 2, 2], [1, 2, 0, 1, 1], [2, 0, 2, 4, 1], [3, 3, 0, 1, 2]]);
+  assert.strictEqual(SD.flow([b(), b(), b()], 1, 2).length, 2);
+});
 
 console.log("\n" + passed + " ok, " + failed + " com falha");
 process.exit(failed ? 1 : 0);
