@@ -174,9 +174,14 @@ class AparelhosHttpTest(unittest.TestCase):
         call("POST", "/api/local/devices", {"id": dev["id"], "op": "pages", "value": [0]})
         st, _, r = pedir("GET", "/api/state", key)
         self.assertEqual(r["device"]["pages"], [0])
+        st, h, _ = pedir("GET", "/api/config", key)
+        self.assertEqual(h["x-device-pages"], "0")
+        self.assertEqual(pedir("GET", "/api/config", self.novo(ip="192.168.0.82"), ip="192.168.0.82")[1]
+                         ["x-device-pages"], "*")
         st, _, r = pedir("GET", "/api/press?p=1&b=0", key)
         self.assertEqual(st, 403)
         self.assertIn("pagina", r["error"])
+        self.assertEqual(r["reason"], "page")
         st, _, r = pedir("GET", "/api/press?p=0&b=1", key)
         self.assertEqual(st, 200, r)
         # 403 de pagina nao conta como codigo errado
@@ -194,6 +199,7 @@ class AparelhosHttpTest(unittest.TestCase):
         st, _, r = pedir("GET", "/api/press?p=0&b=%d" % SHUTDOWN_B, key)
         self.assertEqual(st, 403)
         self.assertIn("Controle total", r["error"])
+        self.assertEqual(r["reason"], "full")
         # site (http) nao e sensivel
         self.assertEqual(pedir("GET", "/api/press?p=0&b=%d" % SITE_B, key)[0], 200)
 

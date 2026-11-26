@@ -243,5 +243,22 @@ test("flow: igual ao schema.flow do Python", function () {
   assert.strictEqual(SD.flow([b(), b(), b()], 1, 2).length, 2);
 });
 
+test("aparelho: paginas liberadas", function () {
+  assert.strictEqual(SD.pageOk(null, 5), true);
+  assert.strictEqual(SD.pageOk([0, 2], 2), true);
+  assert.strictEqual(SD.pageOk([0, 2], 1), false);
+  assert.strictEqual(SD.pageOk([], 0), false);
+  assert.strictEqual(JSON.stringify(SD.allowedPages([0, 2, 9], 4)), "[0,2]");
+  assert.strictEqual(JSON.stringify(SD.allowedPages(null, 3)), "[0,1,2]");
+  assert.strictEqual(SD.nextPage([0, 2, 3], 4, 0, 1), 2);
+  assert.strictEqual(SD.nextPage([0, 2, 3], 4, 2, -1), 0);
+  assert.strictEqual(SD.nextPage([0, 2], 4, 2, 1), -1);
+  assert.strictEqual(SD.nextPage(null, 4, 3, 1), -1);
+  assert.strictEqual(SD.parseDevicePages("*"), null);
+  assert.strictEqual(SD.parseDevicePages(null), null);
+  assert.strictEqual(JSON.stringify(SD.parseDevicePages("")), "[]");
+  assert.strictEqual(JSON.stringify(SD.parseDevicePages("0,2")), "[0,2]");
+});
+
 console.log("\n" + passed + " ok, " + failed + " com falha");
 process.exit(failed ? 1 : 0);

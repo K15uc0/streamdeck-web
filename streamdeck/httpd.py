@@ -623,8 +623,8 @@ class Handler(BaseHTTPRequestHandler):
     def post_monitor_kill(self, q):
         if not self._who()["full"]:
             print("! encerrar processo recusado de %s: aparelho sem Controle total" % self.client_address[0])
-            return self._json(403, {"ok": False, "error": "encerrar processos precisa de Controle total "
-                                                          "(ligue para este aparelho em Conectar no PC)"})
+            return self._json(403, {"ok": False, "reason": "full", "error": "encerrar processos precisa de "
+                                    "Controle total (ligue para este aparelho em Conectar no PC)"})
         try:
             body = self._body_json()
             pid = body.get("pid") if isinstance(body, dict) else None
@@ -698,7 +698,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_config(self, q):
         try:
-            return self._json(200, storage.load_config(), extra={"X-Config-Version": storage.config_version()})
+            pages = self._who()["pages"]
+            return self._json(200, storage.load_config(), extra={
+                "X-Config-Version": storage.config_version(),
+                "X-Device-Pages": "*" if pages is None else ",".join(str(p) for p in pages)})
         except Exception as e:
             return self._json(500, {"ok": False, "error": str(e)})
 
@@ -725,7 +728,7 @@ class Handler(BaseHTTPRequestHandler):
             cfg = storage.load_config()
             who = self._who()
             if not devices.page_allowed(who["pages"], p):
-                return self._json(403, {"ok": False, "error": DENY_PAGE})
+                return self._json(403, {"ok": False, "error": DENY_PAGE, "reason": "page"})
             btn = cfg["pages"][p]["buttons"][b]
             if f is not None:
                 if btn.get("kind") != "folder":
@@ -742,7 +745,7 @@ class Handler(BaseHTTPRequestHandler):
             if not who["full"] and devices.sensitive(a):
                 print("! %s recusado para %s: precisa de Controle total" % (
                     btn.get("label") or "?", self.client_address[0]))
-                return self._json(403, {"ok": False, "error": DENY_FULL})
+                return self._json(403, {"ok": False, "error": DENY_FULL, "reason": "full"})
             print("> %s%s" % (btn.get("label") or "?", "" if g == "tap" else " (%s)" % g))
             actions.run(a or {"type": "none"}, key=state.key(p, b, f))
             if btn.get("toggle") is True and g == "tap":

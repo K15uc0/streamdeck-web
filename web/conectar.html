@@ -85,6 +85,27 @@
   .obsf .full { grid-column: 1 / -1; }
   #obsDot { background: rgba(235,235,245,0.3); }
   #obsDot.on { background: #30d158; }
+  /* aparelhos */
+  .devs { display: flex; flex-direction: column; gap: 12px; }
+  .dev .name { display: flex; align-items: center; gap: 12px; padding: 12px 16px 10px; }
+  .dev .name .ic { flex: none; width: 36px; height: 36px; border-radius: 9px; background: #0a84ff;
+    display: flex; align-items: center; justify-content: center; }
+  .dev .name .nm { flex: 1; min-width: 0; }
+  .dev .name input { width: 100%; background: transparent; border: 0; border-radius: 8px; color: #fff; font: inherit;
+    font-size: 17px; font-weight: 600; padding: 4px 8px; margin-left: -8px; outline: none; }
+  .dev .name input:hover { background: #2c2c2e; }
+  .dev .name input:focus { background: #2c2c2e; box-shadow: 0 0 0 2px #0a84ff; }
+  .dev .name .s { font-size: 13px; color: rgba(235,235,245,0.6); margin-top: 1px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .chip { border-radius: 16px; padding: 6px 13px; font-size: 14px; background: #2c2c2e; color: rgba(235,235,245,0.75);
+    cursor: pointer; border: 0; text-align: center; }
+  .chip:hover { opacity: 1; background: #3a3a3c; }
+  .chip.on { background: rgba(10,132,255,0.22); color: #64b5ff; box-shadow: inset 0 0 0 1px rgba(10,132,255,0.6); }
+  .chip.all.on { background: #0a84ff; color: #fff; box-shadow: none; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 6px; padding: 2px 7px; margin-left: 6px;
+    vertical-align: 2px; background: rgba(255,159,10,0.18); color: #ff9f0a; }
+  .badge.lim { background: rgba(10,132,255,0.18); color: #64b5ff; }
+  .empty { padding: 18px 16px; color: rgba(235,235,245,0.6); font-size: 15px; line-height: 1.45; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 28px 16px 40px; } h1 { font-size: 28px; } }
 </style>
 </head>
@@ -117,6 +138,13 @@
     <span class="et"><b>Editar botões</b><span>Crie páginas, botões, faders e ações com o mouse e o teclado deste PC.</span></span>
     <span class="ego">Abrir editor</span>
   </a>
+
+  <div class="hdr">Aparelhos</div>
+  <div class="devs" id="devs"><div class="list"><div class="empty">Carregando…</div></div></div>
+  <p class="foot">Cada aparelho que leu o QR code tem a sua própria chave. <b>Remover</b> corta o acesso dele na hora;
+    para voltar, ele precisa ler o QR code de novo. <b>Controle total</b> libera, para aquele aparelho, botões que
+    rodam comandos ou abrem programas e arquivos (como desligar ou reiniciar o PC) e encerrar processos no monitor.
+    Neste PC tudo funciona sempre.</p>
 
   <div class="hdr">Opções</div>
   <div class="list">
@@ -153,21 +181,16 @@
   </div>
   <p class="foot">Depois, escolha “Texto ao vivo” de <b>IAs</b> num bloco do editor. <b>Remover</b> restaura a linha de status que o Claude Code tinha antes.</p>
 
-  <div class="hdr">Monitor do PC</div>
-  <div class="list">
-    <label class="item" id="killWrap"><span class="t">Permitir encerrar programas pelo celular
-      <span class="s">Cuidado: quem tiver o código de acesso poderá fechar programas do PC pela tela de processos. Fica desligado até você ligar aqui.</span></span><input type="checkbox" id="allowKill"></label>
-  </div>
-
   <div class="hdr">Segurança</div>
   <div class="list">
     <div id="weak" class="warn" style="display:none">Seu código de acesso é curto (de uma versão antiga).
-      Gere um novo para mais segurança. Depois, leia o QR code de novo em cada aparelho.</div>
+      Gere um novo para mais segurança. Os aparelhos já cadastrados continuam funcionando.</div>
     <div class="item btn"><span class="t"><button id="newcode" class="danger">Gerar novo código de acesso</button>
-      <span class="s">Desconecta todos os aparelhos. Use se achar que alguém pegou o código.</span></span></div>
+      <span class="s">O QR code antigo deixa de cadastrar aparelhos novos. Os aparelhos da lista acima continuam
+        funcionando; para tirar um deles, use Remover. Use se achar que alguém pegou o código.</span></span></div>
   </div>
   <p class="foot">Os botões só são criados e alterados aqui no PC; os aparelhos apenas usam.
-    O Stream Deck só aceita aparelhos da sua rede local, exige o código de acesso
+    O Stream Deck só aceita aparelhos da sua rede local, exige a chave de cada aparelho
     e bloqueia sites que tentem usar o seu navegador para acionar botões.</p>
 
   <div class="hdr">Atualizações</div>
@@ -238,7 +261,7 @@ async function load() {
 }
 
 $("newcode").onclick = async () => {
-  if (!confirm("Gerar um novo código? Todos os aparelhos precisarão ler o QR code de novo.")) return;
+  if (!confirm("Gerar um novo código? O QR code antigo deixa de valer para aparelhos novos. Os aparelhos já cadastrados continuam funcionando.")) return;
   const r = await api("/api/local/newcode", {});
   if (!r.ok) return alert(r.error);
   load();
@@ -442,10 +465,9 @@ var iaBridge = false;
 function showIa(d) {
   if (!d || d.ok === false) {
     $("iaClaude").textContent = "indisponível"; $("iaCodex").textContent = "indisponível"; $("iaBtn").style.display = "none";
-    $("allowKill").checked = false; $("allowKill").disabled = true;
     return;
   }
-  $("allowKill").disabled = false; $("iaBtn").style.display = "";
+  $("iaBtn").style.display = "";
   iaBridge = !!d.bridge_installed;
   var txt = iaBridge ? (d.claude_updated ? "ponte instalada, recebendo dados" : "ponte instalada, aguardando o Claude Code abrir") : "ponte não instalada";
   $("iaClaude").textContent = txt;
@@ -453,7 +475,6 @@ function showIa(d) {
   $("iaBtn").textContent = iaBridge ? "Remover a ponte" : "Instalar a ponte";
   $("iaBtn").className = iaBridge ? "danger" : "primary";
   $("iaCodex").textContent = d.codex_found ? "encontrado" : "não encontrado";
-  $("allowKill").checked = d.allow_kill === true;
 }
 function loadIa() { api("/api/local/ia").then(showIa, function () { showIa(null); }); }
 $("iaBtn").onclick = function () {
@@ -465,13 +486,96 @@ $("iaBtn").onclick = function () {
     loadIa();
   }, function () { b.disabled = false; er.textContent = "Sem resposta do Stream Deck."; er.style.display = ""; });
 };
-$("allowKill").onchange = function (e) {
-  var c = e.target;
-  api("/api/local/settings_kill", { allow: c.checked }).then(function (r) {
-    if (!r.ok) { c.checked = !c.checked; alert("Não salvou: " + (r.error || "")); }
-  }, function () { c.checked = !c.checked; alert("Sem resposta do Stream Deck."); });
-};
 loadIa();
+
+/* ---------------------------------------------------------- aparelhos --- */
+/* GET /api/local/devices -> {devices:[{id,name,created,last_seen,last_ip,pages,full}], pages:[{name,index}]}
+   (sem as chaves); POST {id, op: rename|pages|full|remove, value} */
+var devData = null, devTimer = null;
+var DEV_ICON = '<svg width="20" height="20" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.6" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="12" cy="18" r="1.1" fill="#fff"/></svg>';
+function devSave(id, op, value, after) {
+  api("/api/local/devices", { id: id, op: op, value: value }).then(function (r) {
+    if (!r.ok) alert("Não salvou: " + (r.error || ""));
+    loadDevs(true);
+    if (after) after(r);
+  }, function () { alert("Sem resposta do Stream Deck."); loadDevs(true); });
+}
+function pagesLabel(d, pages) {
+  if (d.pages == null) return "";
+  if (!d.pages.length) return '<span class="badge lim">nenhuma página</span>';
+  return '<span class="badge lim">' + d.pages.length + (d.pages.length === 1 ? " página" : " páginas") + "</span>";
+}
+function renderDevs() {
+  var box = $("devs"), d = devData;
+  if (document.activeElement && document.activeElement.className === "dname") return;   /* nao atrapalha quem digita */
+  if (!d) return;
+  if (!d.devices.length) {
+    box.innerHTML = '<div class="list"><div class="empty">Nenhum aparelho cadastrado ainda. Leia o QR code acima com o celular ou tablet.</div></div>';
+    return;
+  }
+  var now = Date.now() / 1000;
+  box.innerHTML = d.devices.map(function (v) {
+    var all = v.pages == null, chips = '<button class="chip all' + (all ? " on" : "") + '" data-all="1">Todas</button>';
+    d.pages.forEach(function (p) {
+      var on = all || v.pages.indexOf(p.index) >= 0;
+      chips += '<button class="chip' + (on ? " on" : "") + '" data-p="' + p.index + '">' + esc(p.name || "Página " + (p.index + 1)) + "</button>";
+    });
+    var age = now - v.last_seen;
+    return '<div class="list dev" data-id="' + esc(v.id) + '">' +
+      '<div class="name"><span class="ic">' + DEV_ICON + '</span><span class="nm">' +
+      '<input class="dname" maxlength="40" value="' + esc(v.name) + '" aria-label="Nome do aparelho" spellcheck="false">' +
+      '<div class="s"><span class="dot' + (age > 120 ? " old" : "") + '"></span>' + esc(age < 120 ? "conectado agora" : "último acesso " + ago(age)) +
+      (v.last_ip ? " · " + esc(v.last_ip) : "") + " · desde " + esc(hhmm(v.created).split(" ")[0]) +
+      (v.full ? '<span class="badge">Controle total</span>' : "") + pagesLabel(v, d.pages) + "</div></span></div>" +
+      '<div class="item"><span class="t">Páginas que aparecem<div class="chips">' + chips + "</div></span></div>" +
+      '<label class="item"><span class="t">Controle total<span class="s">Permite botões que rodam comandos ou abrem programas e arquivos (desligar, reiniciar…) e encerrar processos.</span></span>' +
+      '<input type="checkbox" class="dfull"' + (v.full ? " checked" : "") + "></label>" +
+      '<div class="item btn"><button class="danger drm">Remover aparelho</button></div></div>';
+  }).join("");
+  Array.prototype.forEach.call(box.querySelectorAll(".dev"), function (card) {
+    var id = card.getAttribute("data-id"), v = d.devices.filter(function (x) { return x.id === id; })[0];
+    var inp = card.querySelector(".dname");
+    inp.onkeydown = function (e) { if (e.key === "Enter") inp.blur(); if (e.key === "Escape") { inp.value = v.name; inp.blur(); } };
+    inp.onblur = function () {
+      var n = inp.value.replace(/^\s+|\s+$/g, "");
+      if (!n) { inp.value = v.name; return; }
+      if (n !== v.name) devSave(id, "rename", n);
+    };
+    card.querySelector(".dfull").onchange = function (e) {
+      var on = e.target.checked;
+      if (on && !confirm("Dar Controle total a “" + v.name + "”? Ele poderá usar botões que rodam comandos, abrem programas (inclusive desligar o PC) e encerrar processos.")) { e.target.checked = false; return; }
+      devSave(id, "full", on);
+    };
+    card.querySelector(".drm").onclick = function () {
+      if (!confirm("Remover “" + v.name + "”? Ele perde o acesso na hora. Para voltar, precisa ler o QR code de novo.")) return;
+      devSave(id, "remove");
+    };
+    Array.prototype.forEach.call(card.querySelectorAll(".chip"), function (c) {
+      c.onclick = function () {
+        if (c.getAttribute("data-all")) return devSave(id, "pages", null);
+        var p = parseInt(c.getAttribute("data-p"), 10), cur = v.pages == null ? d.pages.map(function (x) { return x.index; }) : v.pages.slice();
+        var i = cur.indexOf(p);
+        if (i >= 0) cur.splice(i, 1); else cur.push(p);
+        devSave(id, "pages", cur.length === d.pages.length ? null : cur);
+      };
+    });
+  });
+}
+function loadDevs(force) {
+  api("/api/local/devices").then(function (d) {
+    if (!d || !d.ok) return;
+    devData = d;
+    renderDevs();
+  }, function () {});
+}
+function devLoop() {
+  clearInterval(devTimer);
+  if (document.hidden) return;
+  loadDevs();
+  devTimer = setInterval(function () { if (!document.hidden) loadDevs(); }, 10000);
+}
+document.addEventListener("visibilitychange", devLoop);
+devLoop();
 </script>
 </body>
 </html>
