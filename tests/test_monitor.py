@@ -62,10 +62,16 @@ class MonitorTests(unittest.TestCase):
         for pid in (0, 4, os.getpid()):
             with self.assertRaises(ValueError):
                 monitor.kill(pid)
-        lsass = [p["pid"] for p in monitor.processes(limit=100) if p["name"] == "lsass.exe"]
-        self.assertTrue(lsass)
-        with self.assertRaises(ValueError):
-            monitor.kill(lsass[0])
+        # lista simulada (no Windows real o lsass nem aparece para o usuario comum)
+        velho = monitor.IS_WINDOWS
+        monitor.IS_WINDOWS = False
+        try:
+            lsass = [p["pid"] for p in monitor.processes(limit=100) if p["name"] == "lsass.exe"]
+            self.assertTrue(lsass)
+            with self.assertRaises(ValueError):
+                monitor.kill(lsass[0])
+        finally:
+            monitor.IS_WINDOWS = velho
         with self.assertRaises(ValueError):
             monitor.kill(999999)
 
