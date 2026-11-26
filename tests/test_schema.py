@@ -2,6 +2,7 @@
 """Validacao do config v2 e migracao v1 -> v2."""
 import copy
 import json
+import re
 import unittest
 
 import apoio
@@ -124,6 +125,26 @@ class ValidacaoTest(unittest.TestCase):
             self.assertFalse(schema.safe_image_name(bad), bad)
 
 
+class IdPaginaTest(unittest.TestCase):
+    def test_valida_id(self):
+        for bom in ("abcd", "0123456789abcdef"):
+            c = apoio.base_config()
+            c["pages"][0]["id"] = bom
+            schema.validate_config(c)
+        c = apoio.base_config()
+        del c["pages"][0]["id"]
+        schema.validate_config(c)                       # opcional
+        for ruim in ("abc", "ABCD", "a" * 17, "zzzz", 1234, None):
+            c = apoio.base_config()
+            c["pages"][0]["id"] = ruim
+            with self.assertRaises(ValueError):
+                schema.validate_config(c)
+        c = apoio.base_config()
+        c["pages"][1]["id"] = c["pages"][0]["id"]
+        with self.assertRaisesRegex(ValueError, "repetido"):
+            schema.validate_config(c)
+
+
 class MigracaoTest(unittest.TestCase):
     def setUp(self):
         self.v1 = apoio.fixture("config_v1.json")
@@ -203,6 +224,29 @@ class MigracaoTest(unittest.TestCase):
         self.assertEqual(b[0]["action"]["to"], 0)
         self.assertEqual(b[1]["action"]["steps"][0]["to"], len(new["pages"]) - 1)
         self.assertEqual(b[2]["action"]["to"], 0)
+
+    def test_ids_de_pagina(self):
+        c = apoio.base_config()
+        for p in c["pages"]:
+            del p["id"]
+        new, changed = schema.migrate(c)
+        self.assertTrue(changed)
+        ids = [p["id"] for p in new["pages"]]
+        self.assertTrue(all(re.match(r"^[0-9a-f]{8}$", i) for i in ids))
+        self.assertEqual(len(set(ids)), len(ids))
+        self.assertNotIn("id", c["pages"][0])              # original intacto
+        again, changed = schema.migrate(new)               # idempotente
+        self.assertFalse(changed)
+        self.assertIs(again, new)
+        schema.validate_config(new)
+
+    def test_id_repetido_ou_ruim_e_trocado_na_migracao(self):
+        c = apoio.base_config()
+        c["pages"][1]["id"] = "a1a1"
+        new, changed = schema.migrate(c)
+        self.assertTrue(changed)
+        self.assertEqual(new["pages"][0]["id"], "a1a1")
+        self.assertNotEqual(new["pages"][1]["id"], "a1a1")
 
     def test_v2_nao_muda(self):
         c = apoio.base_config()
