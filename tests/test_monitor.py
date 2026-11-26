@@ -106,6 +106,27 @@ class MonitorTests(unittest.TestCase):
         self.assertNotEqual(monitor.snapshot()["mem"]["used"], -1)
 
 
+class SemBaselineTests(unittest.TestCase):
+    def test_primeira_amostra_none(self):
+        from unittest import mock
+        st = dict(monitor._STATE)
+        try:
+            monitor._STATE.update(cpu=None, net=None, last=0.0)
+            with mock.patch.object(monitor, "IS_WINDOWS", True), \
+                    mock.patch.object(monitor, "_win_cpu_times", return_value=(1, 2, 3)), \
+                    mock.patch.object(monitor, "_win_net_bytes", return_value=(10, 20)), \
+                    mock.patch.object(monitor, "_win_mem", return_value={}), \
+                    mock.patch.object(monitor, "_win_disks", return_value=[]), \
+                    mock.patch.object(monitor, "_win_gpu", return_value=None), \
+                    mock.patch.object(monitor, "lhm_cached", return_value={}):
+                s = monitor._collect()
+        finally:
+            monitor._STATE.update(st)
+        self.assertIsNone(s["cpu"])
+        self.assertIsNone(s["net"]["down_bps"])
+        self.assertIsNone(s["net"]["up_bps"])
+
+
 @unittest.skipUnless(sys.platform.startswith("win"), "so no Windows")
 class MonitorWindowsTests(unittest.TestCase):
     def test_if_row2_tamanho(self):

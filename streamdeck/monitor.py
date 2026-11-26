@@ -485,7 +485,7 @@ def _collect(with_lhm=False):
     _STATE["last"] = now
     t = _win_cpu_times()
     prev = _STATE["cpu"]
-    cpu = cpu_pct(prev, t) if prev else 0.0
+    cpu = cpu_pct(prev, t) if prev else None      # sem baseline: desconhecido
     _STATE["cpu"] = t
     rx, tx = _win_net_bytes()
     pn = _STATE["net"]
@@ -493,18 +493,19 @@ def _collect(with_lhm=False):
         dt = now - pn[0]
         down, up = rate(pn[1], rx, dt), rate(pn[2], tx, dt)
     else:
-        down = up = 0.0
+        down = up = None
     _STATE["net"] = (now, rx, tx)
     temps = lhm_temps() if with_lhm else lhm_cached()
     gpu = _win_gpu()
-    return {"cpu": float(cpu), "mem": _win_mem(), "disk": _win_disks(),
-            "net": {"down_bps": float(down), "up_bps": float(up)},
+    f = lambda v: float(v) if v is not None else None   # noqa: E731
+    return {"cpu": f(cpu), "mem": _win_mem(), "disk": _win_disks(),
+            "net": {"down_bps": f(down), "up_bps": f(up)},
             "gpu": float(gpu) if gpu is not None else None,
             "temps": temps, "ts": float(now)}
 
 
-_EMPTY = {"cpu": 0.0, "mem": {"used": 0, "total": 0, "pct": 0.0}, "disk": [],
-          "net": {"down_bps": 0.0, "up_bps": 0.0}, "gpu": None,
+_EMPTY = {"cpu": None, "mem": {"used": 0, "total": 0, "pct": 0.0}, "disk": [],
+          "net": {"down_bps": None, "up_bps": None}, "gpu": None,
           "temps": {"cpu": None, "gpu": None}, "ts": 0.0}
 
 
@@ -534,13 +535,21 @@ def snapshot():
     return copy.deepcopy(_refresh(False))
 
 
+PROC_FRESH = 0.5     # baseline mais nova que isso: janela curta demais para CPU%
+
+
 def processes(limit=15, sort="cpu"):
     key = "mem" if sort == "mem" else "cpu"
+    fresco = IS_WINDOWS and time.time() - _PROC_T[0] < PROC_FRESH
     try:
         lst = _win_processes() if IS_WINDOWS else [dict(p) for p in SIM_PROCS]
     except Exception:
         lst = []
     lst = [p for p in lst if p["pid"] != 0]       # "System Idle Process" nao interessa
+    if fresco:      # baseline acabou de ser gravada: CPU desconhecido, ordena por memoria
+        for p in lst:
+            p["cpu"] = None
+        key = "mem"
     lst.sort(key=lambda p: (p[key], p["name"]), reverse=True)
     return lst[:max(0, int(limit))]
 

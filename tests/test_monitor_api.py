@@ -163,6 +163,44 @@ class MonitorApiTest(unittest.TestCase):
         st, _, _ = call("POST", "/api/local/settings_kill", {"allow": "sim"})
         self.assertEqual(st, 400)
 
+    def test_settings_kill_preserva_obs(self):
+        from streamdeck import obs, paths
+        obs.save_settings({"host": "1.2.3.4", "port": 4455, "password": "x"})
+        call("POST", "/api/local/settings_kill", {"allow": True})
+        call("POST", "/api/local/settings_kill", {"allow": False})
+        s = storage.load_settings()
+        self.assertEqual(s["obs"]["host"], "1.2.3.4")
+        self.assertIs(s["allow_kill"], False)
+        with open(paths.SETTINGS_PATH, "w") as f:
+            f.write("{quebrado")
+        try:
+            st, _, r = call("POST", "/api/local/settings_kill", {"allow": True})
+            self.assertEqual(st, 500)
+            self.assertFalse(r["ok"])
+            with self.assertRaises(storage.SettingsError):
+                obs.save_settings({"host": "5.6.7.8"})
+            with open(paths.SETTINGS_PATH) as f:
+                self.assertEqual(f.read(), "{quebrado")
+        finally:
+            storage.save_settings({})
+
+    def test_pc_sem_baseline_none(self):
+        self.assertIsNone(httpd._pc_summary({"cpu": None, "net": {"down_bps": None, "up_bps": None}})["cpu"])
+
+    def test_processos_baseline_recente(self):
+        import time
+        orig = (monitor.IS_WINDOWS, monitor._win_processes, monitor._PROC_T[0])
+        monitor.IS_WINDOWS = True
+        monitor._win_processes = lambda *a, **k: [
+            {"pid": 1, "name": "a", "cpu": 0.0, "mem": 10}, {"pid": 2, "name": "b", "cpu": 50.0, "mem": 99}]
+        monitor._PROC_T[0] = time.time()
+        try:
+            lst = monitor.processes(15, "cpu")
+        finally:
+            monitor.IS_WINDOWS, monitor._win_processes, monitor._PROC_T[0] = orig
+        self.assertEqual([p["pid"] for p in lst], [2, 1])
+        self.assertTrue(all(p["cpu"] is None for p in lst))
+
     def test_ia_local(self):
         st, _, r = call("GET", "/api/local/ia")
         self.assertEqual(st, 200)
