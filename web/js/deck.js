@@ -15,6 +15,7 @@
   SD.buildTile = function (b) {
     var t = { b: b, kind: b && b.kind === "fader" ? "fader" : "button" };
     t.folder = !!(b && b.kind === "folder");
+    t.monitor = !!(b && b.kind === "monitor");
     t.empty = SD.isEmpty(b);
     var e = t.el = el("div", "key");
     if (t.kind === "fader") {
@@ -76,6 +77,7 @@
       return fmtTimer((SD.now() + SD.skew) / 1000 - since);
     }
     if (live.indexOf("nowplaying") === 0) return npText(live);
+    if (isRichLive(live)) return richOf(live).text;
     return "";
   }
   /* musica tocando agora (2.8): "Musica — Artista", so o nome ou so o artista */
@@ -86,6 +88,107 @@
     if (live === "nowplaying:title") return ti || ar;
     if (live === "nowplaying:artist") return ar || "--";
     return ti && ar ? ti + " \u2014 " + ar : ti || ar;
+  }
+
+  /* ------------------------------------- monitor do PC e uso das IAs (2.9) --- */
+  SD.pc = null;        /* ultimo resumo do PC (/api/state?pc=1) + at (relogio local, ms) */
+  SD.ia = null;        /* ultimo {claude, codex, grok} (/api/state?ia=1) + at */
+  var GB = 1073741824, MB = 1048576;
+  var DOW = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  var CAPS = { "pc:cpu": "CPU", "pc:mem": "Memória", "pc:gpu": "GPU", "pc:temp_cpu": "Temp. CPU", "pc:temp_gpu": "Temp. GPU",
+    "pc:net": "Rede", "ia:claude:5h": "Claude 5 h", "ia:claude:week": "Claude semana",
+    "ia:codex:5h": "Codex 5 h", "ia:codex:week": "Codex semana" };
+  function isRichLive(live) { return live.indexOf("pc:") === 0 || live.indexOf("ia:") === 0; }
+  function num1(n) { return (Math.round(n * 10) / 10).toFixed(1).replace(".", ",").replace(/,0$/, ""); }
+  function fmtSize(b) {
+    if (b >= 1000 * GB) return num1(b / (1024 * GB)) + " TB";
+    if (b >= GB) return num1(b / GB) + " GB";
+    if (b >= MB) return Math.round(b / MB) + " MB";
+    return Math.round(b / 1024) + " KB";
+  }
+  SD.fmtSize = fmtSize;
+  function fmtRate(b) {
+    b = Math.max(0, b || 0);
+    if (b >= MB) return (b >= 100 * MB ? Math.round(b / MB) : num1(b / MB)) + " MB/s";
+    if (b >= 1024) return Math.round(b / 1024) + " KB/s";
+    return Math.round(b) + " B/s";
+  }
+  SD.fmtRate = fmtRate;
+  function pcNow() { return (SD.now() + SD.skew) / 1000; }
+  /* resumo do PC com dado novo? (ts 0 ou mais velho que 10 s = sem dado) */
+  function snapOk(p, at) {
+    return !!(p && p.ts > 0 && pcNow() - p.ts <= 10 && (at == null || SD.now() - at <= 10000));
+  }
+  SD.snapOk = snapOk;
+  function pcOk() { return snapOk(SD.pc, SD.pc && SD.pc.at); }
+  /* cor da barra: verde ate 70, amarelo ate 90, vermelho */
+  function barColor(p) { return p < 70 ? "#30d158" : p < 90 ? "#ffd60a" : "#ff453a"; }
+  function fmtReset(e) {
+    var d = new Date(e * 1000), hm = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    return e - pcNow() > 86400 ? DOW[d.getDay()] + " " + hm : hm;
+  }
+  function fmtAgo(s) {
+    if (s < 3600) return Math.max(1, Math.floor(s / 60)) + " min";
+    if (s < 86400) return Math.floor(s / 3600) + " h";
+    return Math.floor(s / 86400) + " d";
+  }
+  /* {main, subs[], text, bar (0..100|null), old} do texto ao vivo pc:* / ia:* */
+  function richOf(live) {
+    var none = { main: "—", subs: [], text: "—", bar: null, old: false };
+    var p = pcOk() ? SD.pc : null, r, m;
+    if (live.indexOf("pc:") === 0) {
+      if (!p) return none;
+      if (live === "pc:cpu" || live === "pc:gpu") {
+        var v = live === "pc:cpu" ? p.cpu : p.gpu;
+        if (v == null) return none;
+        r = Math.round(v) + "%";
+        return { main: r, subs: [], text: r, bar: v, old: false };
+      }
+      if (live === "pc:mem") {
+        if (p.mem_pct == null) return none;
+        r = Math.round(p.mem_pct) + "%";
+        var gb = p.mem_total > 0 ? num1(p.mem_used / GB) + "/" + num1(p.mem_total / GB) + " GB" : "";
+        return { main: r, subs: gb ? [gb] : [], text: gb ? r + " · " + gb : r, bar: p.mem_pct, old: false };
+      }
+      if (live === "pc:temp_cpu" || live === "pc:temp_gpu") {
+        var tv = live === "pc:temp_cpu" ? p.temp_cpu : p.temp_gpu;
+        if (tv == null) return none;
+        r = Math.round(tv) + " °C";
+        return { main: r, subs: [], text: r, bar: null, old: false };
+      }
+      if (live === "pc:net") {
+        var dn = "↓ " + fmtRate(p.down_bps), up = "↑ " + fmtRate(p.up_bps);
+        return { main: dn, subs: [up], text: dn + " " + up, bar: null, old: false };
+      }
+      m = /^pc:disk:([A-Z])$/.exec(live);
+      if (m) {
+        for (var i = 0; p.disk && i < p.disk.length; i++) {
+          if (String(p.disk[i].drive).charAt(0) === m[1]) {
+            var dk = p.disk[i], sz = m[1] + ": " + fmtSize(dk.used).replace(/ (GB|TB)$/, "") + "/" + fmtSize(dk.total);
+            r = Math.round(dk.pct) + "%";
+            return { main: r, subs: [sz], text: r + " · " + sz, bar: dk.pct, old: false };
+          }
+        }
+        return { main: "—", subs: [m[1] + ":"], text: m[1] + ": —", bar: null, old: false };
+      }
+      return none;
+    }
+    m = /^ia:(claude|codex):(5h|week)$/.exec(live);
+    if (!m || !SD.ia) return none;
+    var lim = SD.ia[m[1]], w = lim && lim[m[2] === "5h" ? "five_hour" : "weekly"];
+    if (!w || w.used == null) return { main: "—", subs: ["Sem dados"], text: "—", bar: null, old: false };
+    var used = Math.round(w.used), left = w.left != null ? Math.round(w.left) : 100 - used;
+    var s1 = "usado · faltam " + left + "%", out = { main: used + "%", subs: [s1], text: used + "% usado · faltam " + left + "%", bar: w.used, old: false };
+    if (w.resets_at) { var rs = "reinicia " + fmtReset(w.resets_at); out.subs.push(rs); out.text += " · " + rs; }
+    var age = lim.updated > 0 ? pcNow() - lim.updated : 0;
+    if (age > 1800) { out.old = true; out.subs.push("atualizado há " + fmtAgo(age)); out.text += " · atualizado há " + fmtAgo(age); }
+    return out;
+  }
+  function captionOf(t, live) {
+    var l = t.b && SD.trim(t.b.label);
+    if (l) return l;
+    var m = /^pc:disk:([A-Z])$/.exec(live);
+    return m ? "Disco " + m[1] + ":" : CAPS[live] || "";
   }
   SD.liveText = liveText;
 
@@ -157,12 +260,13 @@
     if (a.invert) { bg = "#fff"; fg = tc || (SD.isLight(color) ? "#1c1c1e" : color); }
     else { bg = color; fg = tc || (img ? "#fff" : SD.isLight(color) ? "rgba(0,0,0,0.78)" : "#fff"); }
     var live = b.live ? String(b.live) : "";
-    var lt = live ? liveText(t, live) : null;
+    var rich = live && isRichLive(live) ? richOf(live) : null;
+    var lt = rich ? rich.main : live ? liveText(t, live) : null;
     if (lt == null) live = "";
-    var label = live ? lt : SD.trim(a.label);
-    var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : "";
+    var label = live ? lt : SD.trim(a.label) || (t.monitor ? "Monitor" : "");
+    var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : t.monitor ? "monitor" : "";
     e.className = "key" + (t.lit || t.olit ? " lit" : "") + (a.on ? " onlook" : "") + (b.toggle ? " tg" : "") +
-      (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "") +
+      (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "") + (rich && rich.old ? " stale" : "") +
       (!img && SD.isLight(bg) ? " light" : "") + (m >= 140 ? " big" : "") +
       (t.conf ? " confirm" : "") + (t.holding ? " holding" + (t.holding === 2 ? " hgo" : "") : "") + (isDown ? " down" : "");
     st.backgroundColor = bg;
@@ -178,7 +282,9 @@
       t.mqLabel = null;
       lb.innerHTML = np ? '<span class="mqi"><b>' + esc(label) + "</b></span>" : esc(label);
     }
-    if (img) {
+    if (rich && !img) {
+      paintRich(t, w, h, m, pad, rich, fg, icon, live);
+    } else if (img) {
       /* imagem cobre o bloco; rotulo embaixo sobre um degrade */
       ic.innerHTML = "";
       var fi = Math.max(10, Math.min(live ? 34 : 17, Math.round(m * (live ? 0.2 : 0.118))));
@@ -212,7 +318,61 @@
     }
     if (keep) lb.className += " mq" + (t.mqRun ? " run" : "");
     else if (np) fitMarquee(t, label, w, h);
+    paintRichBar(t, rich, m);
+    if (!rich || img) clearRich(t);
   };
+
+  /* texto ao vivo do PC / IAs: legenda em cima, valor grande, linhas de apoio e barra no rodape */
+  function paintRich(t, w, h, m, pad, rich, fg, icon, live) {
+    var e = t.el, barH = m >= 140 ? 7 : 4, small = m < 66;
+    var capFs = Math.max(10, Math.min(15, Math.round(m * 0.13))), subFs = Math.max(10, Math.min(14, Math.round(m * 0.115)));
+    var isz = Math.max(14, Math.min(26, Math.round(m * 0.24))), hasIc = !!icon && !small;
+    var cap = small ? "" : captionOf(t, live), capH = hasIc ? isz : cap ? Math.round(capFs * 1.3) : 0;
+    var botPad = Math.max(6, Math.round(pad * 0.7)) + barH;
+    var ic = t.ic, lb = t.lb;
+    if (hasIc) {
+      ic.innerHTML = SD.iconHtml(icon, isz, fg);
+      ic.style.right = px(pad); ic.style.top = px(pad);
+    } else ic.innerHTML = "";
+    if (cap) {
+      if (!t.lcap) t.lcap = el("div", "lcap", null, t.el);
+      t.lcap.innerHTML = esc(cap);
+      t.lcap.style.color = fg;
+      t.lcap.style.fontSize = px(capFs);
+      t.lcap.style.left = px(pad);
+      t.lcap.style.right = px(pad + (hasIc ? isz + 6 : 0));
+      t.lcap.style.top = px(pad + Math.max(0, Math.round((capH - capFs * 1.2) / 2)));
+    } else if (t.lcap) { e.removeChild(t.lcap); t.lcap = null; }
+    var len = Math.max(3, rich.main.length), mainFs = Math.max(14, Math.min(44, Math.round(m * 0.27)));
+    mainFs = Math.max(11, Math.min(mainFs, Math.floor((w - pad * 1.7) / (len * 0.6))));
+    var lh = Math.round(subFs * 1.3), avail = h - (pad + capH) - botPad - Math.round(mainFs * 1.2) - 2;
+    var n = small ? 0 : Math.max(0, Math.min(rich.subs.length, Math.floor(avail / lh)));
+    if (n) {
+      if (!t.lsub) t.lsub = el("div", "lsub", null, t.el);
+      var hh = "";
+      for (var i = 0; i < n; i++) hh += '<div class="' + (rich.old && i === rich.subs.length - 1 ? "o" : "") + '">' + esc(rich.subs[i]) + "</div>";
+      t.lsub.innerHTML = hh;
+      t.lsub.style.color = fg;
+      t.lsub.style.fontSize = px(subFs); t.lsub.style.lineHeight = px(lh);
+      t.lsub.style.left = px(pad); t.lsub.style.right = px(pad * 0.7); t.lsub.style.bottom = px(botPad - 1);
+    } else if (t.lsub) { e.removeChild(t.lsub); t.lsub = null; }
+    lb.className = "lb bl";
+    lb.style.left = px(pad); lb.style.right = px(pad * 0.7);
+    lb.style.bottom = px(botPad + n * lh);
+    lb.style.fontSize = px(mainFs);
+    lb.style.color = fg;
+  }
+  function paintRichBar(t, rich, m) {
+    if (!rich || rich.bar == null) { if (t.lbar) { t.el.removeChild(t.lbar); t.lbar = null; } return; }
+    if (!t.lbar) t.lbar = el("div", "sbar lbar", "<i></i>", t.el);
+    var f = Math.max(0, Math.min(100, rich.bar)), i = t.lbar.firstChild;
+    i.style.width = f + "%";
+    i.style.backgroundColor = barColor(f);
+  }
+  function clearRich(t) {
+    if (t.lcap) { t.el.removeChild(t.lcap); t.lcap = null; }
+    if (t.lsub) { t.el.removeChild(t.lsub); t.lsub = null; }
+  }
 
   /* texto que nao cabe: rola (letreiro). Duas copias lado a lado; anima de 0 a -50%.
      So liga quando transborda; prefers-reduced-motion desliga no CSS. */
@@ -530,6 +690,23 @@
     return false;
   }
 
+  /* precisa do resumo do PC? (texto ao vivo pc:* ou bloco monitor na tela) */
+  function needPc() {
+    var v = visible();
+    for (var i = 0; i < v.length; i++) {
+      var b = v[i].b;
+      if (b && !v[i].empty && (b.kind === "monitor" || String(b.live || "").indexOf("pc:") === 0)) return true;
+    }
+    return false;
+  }
+  /* precisa do consumo das IAs? (texto ao vivo ia:* na tela) */
+  function needIa() {
+    var v = visible();
+    for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf("ia:") === 0) return true;
+    return false;
+  }
+  var IA_EVERY = 30000, iaAt = 0;
+
   /* vibrar (se ligado nos ajustes deste aparelho) */
   function buzz(p) {
     if (!SD.prefs.vibrate) return;
@@ -775,6 +952,7 @@
   function setupLive() {
     clearTimeout(liveT); clearInterval(secT); secT = null;
     var k = liveKinds();
+    if (pollT && SD.cfg && ((needPc() && !SD.pc) || (needIa() && SD.now() - iaAt > IA_EVERY - 1000))) pollSoon();
     if (k.clock) {
       liveT = setTimeout(function () {
         repaintLive(function (l) { return l === "clock" || l === "date"; });
@@ -784,6 +962,117 @@
     if (k.timer) secT = setInterval(function () {
       if (!document.hidden) repaintLive(function (l) { return l === "timer"; });
     }, 1000);
+  }
+
+  /* ================================================ tela do monitor (2.9) === */
+  var monSort = "cpu";
+  function openMonitor() {
+    var v = {
+      title: "Monitor do PC",
+      right: { text: "OK", bold: true, fn: function () { SD.sheet.close(); } },
+      render: monRender,
+      onLeave: function () { v.dead = true; clearInterval(v.tm); v.tm = null; }
+    };
+    SD.sheet.open(v);
+  }
+  function monRender(body, v) {
+    v.dead = false; v.seq = 0; v.touching = false; v.openPid = null;
+    clearInterval(v.tm);
+    var hd = el("div", "mon-head", null, body), cells = {}, defs = [["cpu", "CPU"], ["mem", "Memória"], ["gpu", "GPU"]];
+    for (var i = 0; i < defs.length; i++) {
+      var c = el("div", "mon-c", null, hd);
+      el("div", "mon-l", defs[i][1], c);
+      cells[defs[i][0]] = { v: el("div", "mon-v", "—", c), s: el("div", "mon-s", "&nbsp;", c), b: el("div", "mon-b", "<i></i>", c) };
+    }
+    var net = el("div", "mon-net", "&nbsp;", body);
+    var sw = el("div", "seg-wrap", null, body);
+    SD.ui.segmented(sw, [["cpu", "CPU"], ["mem", "Memória"]], monSort, function (val) { monSort = val; v.openPid = null; v.load(); });
+    var grp = SD.ui.group(body, "Processos"), list = el("div", "mon-list", null, grp);
+    var foot = null;
+
+    function setCell(id, text, sub, pct) {
+      var c = cells[id], i = c.b.firstChild;
+      c.v.innerHTML = esc(text); c.s.innerHTML = sub ? esc(sub) : "&nbsp;";
+      c.v.className = "mon-v" + (pct == null ? " none" : "");
+      i.style.width = (pct == null ? 0 : Math.max(0, Math.min(100, pct))) + "%";
+      i.style.backgroundColor = pct == null ? "" : barColor(pct);
+    }
+    function fillHead(sn) {
+      if (!snapOk(sn)) {
+        setCell("cpu", "—", "", null); setCell("mem", "—", "", null); setCell("gpu", "—", "", null);
+        net.innerHTML = "Sem dados do PC"; return;
+      }
+      setCell("cpu", Math.round(sn.cpu) + "%", "", sn.cpu);
+      var m = sn.mem || {};
+      setCell("mem", Math.round(m.pct || 0) + "%", m.total > 0 ? num1(m.used / GB) + "/" + num1(m.total / GB) + " GB" : "", m.pct || 0);
+      if (sn.gpu == null) setCell("gpu", "—", "", null); else setCell("gpu", Math.round(sn.gpu) + "%", "", sn.gpu);
+      var n = sn.net || {}, t = sn.temps || {}, parts = ["↓ " + fmtRate(n.down_bps) + "  ↑ " + fmtRate(n.up_bps)];
+      if (t.cpu != null) parts.push("CPU " + Math.round(t.cpu) + " °C");
+      if (t.gpu != null) parts.push("GPU " + Math.round(t.gpu) + " °C");
+      net.innerHTML = esc(parts.join(" · "));
+    }
+    function closeAll() {
+      var rs = list.childNodes;
+      for (var i = 0; i < rs.length; i++) SD.setClass(rs[i], "open", false);
+      v.openPid = null;
+    }
+    function row(p) {
+      var r = el("div", "prow" + (p.pid === v.openPid ? " open" : ""), null, list);
+      var kill = el("div", "pr-kill", "Encerrar", r);
+      var m = el("div", "pr-main", null, r);
+      el("span", "pr-n", esc(p.name), m);
+      el("span", "pr-c" + (monSort === "cpu" ? " on" : ""), num1(p.cpu) + "%", m);
+      el("span", "pr-m" + (monSort === "mem" ? " on" : ""), fmtSize(p.mem), m);
+      kill.onclick = function () { killProc(v, p); };
+      var sx = 0, sy = 0, moved = false;
+      function pt(e) { var t = e.touches[0]; return SD.toLocal ? SD.toLocal(t.clientX, t.clientY) : { x: t.clientX, y: t.clientY }; }
+      m.addEventListener("touchstart", function (e) { var q = pt(e); sx = q.x; sy = q.y; moved = false; v.touching = true; }, false);
+      m.addEventListener("touchmove", function (e) {
+        var q = pt(e), dx = q.x - sx, dy = q.y - sy;
+        if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return;
+        moved = true;
+        if (dx < -24 && !SD.hasClass(r, "open")) { closeAll(); SD.setClass(r, "open", true); v.openPid = p.pid; }
+        else if (dx > 24 && SD.hasClass(r, "open")) { SD.setClass(r, "open", false); v.openPid = null; }
+      }, false);
+      var endT = function () { setTimeout(function () { v.touching = false; }, 300); };
+      m.addEventListener("touchend", endT, false);
+      m.addEventListener("touchcancel", endT, false);
+      m.onclick = function () {
+        if (moved) { moved = false; return; }
+        var was = SD.hasClass(r, "open");
+        closeAll();
+        if (!was) { SD.setClass(r, "open", true); v.openPid = p.pid; }
+      };
+    }
+    function fillList(data) {
+      list.innerHTML = "";
+      var ps = data.processes || [];
+      if (!ps.length) el("div", "mon-empty", "Sem dados", list);
+      for (var i = 0; i < ps.length; i++) row(ps[i]);
+      if (foot) { foot.parentNode.removeChild(foot); foot = null; }
+      if (!data.allow_kill) foot = grp.foot("Para encerrar processos pelo celular, ative em Conectar no PC.");
+    }
+    v.load = function () {
+      var seq = ++v.seq;
+      SD.req("GET", "/api/monitor?sort=" + monSort, null, function (ok, data) {
+        if (v.dead || seq !== v.seq) return;
+        if (!ok || !data) { net.innerHTML = "Sem conexão com o PC"; return; }
+        fillHead(data.snapshot);
+        if (!v.touching) fillList(data);
+      });
+    };
+    v.tm = setInterval(function () { if (!document.hidden && !SD.alertOpen()) v.load(); }, 2000);
+    v.load();
+  }
+  function killProc(v, p) {
+    SD.confirm("Encerrar processo?", p.name + " (PID " + p.pid + "). Dados não salvos podem ser perdidos.", "Encerrar", true, function () {
+      SD.req("POST", "/api/monitor/kill", JSON.stringify({ pid: p.pid }), function (ok, data, status) {
+        if (ok) { v.openPid = null; SD.toast("Processo encerrado"); if (v.load) v.load(); return; }
+        if (status === 403) SD.toast("Ative em Conectar no PC", true);
+        else if (status === 400) SD.toast((data && data.error) || "Processo protegido", true);
+        else SD.toast(SD.errText(data, status, "Falha ao encerrar"), true);
+      });
+    });
   }
 
   /* ====================================================== apertar ===== */
@@ -834,6 +1123,7 @@
     g = g || "tap";
     var b = k.b, a = b && (g === "tap" ? b.action : gestureAction(b, g));
     if (k.folder) { if (g === "tap") { buzz(10); openFolder(k); } return; }
+    if (k.monitor) { if (g === "tap") { buzz(10); openMonitor(); } return; }
     var toggles = g === "tap" && b && b.toggle;
     /* liga/desliga sem acao (ex.: ON AIR) ainda alterna o estado no PC */
     if (!b || ((!a || a.type === "none") && !toggles)) return;
@@ -894,7 +1184,7 @@
 
   /* toque simples terminado (sem segurar nem arrastar) */
   function tap(k) {
-    if (k.folder || k.empty) { press(k, false, "tap"); return; }
+    if (k.folder || k.empty || k.monitor) { press(k, false, "tap"); return; }
     /* bloco esperando confirmacao: este toque confirma o gesto pendente */
     if (conf && conf.k === k) {
       var g = conf.g;
@@ -1035,7 +1325,7 @@
       return true;
     }
     if (!k.empty) SD.setClass(k.el, "down", true);
-    if (!k.empty && !k.folder && gestureAction(k.b, "hold")) {
+    if (!k.empty && !k.folder && !k.monitor && gestureAction(k.b, "hold")) {
       /* segurar: progresso no bloco e dispara em HOLD_MS (vence a repeticao) */
       k.holding = 1; repaint(k);
       k.el.offsetWidth;   /* aplica o estado inicial antes da transicao */
@@ -1216,6 +1506,16 @@
 
   /* lista do PC -> mapa por chave, com a hora local para interpolar */
   var soundT = null;
+  /* resumo do PC / consumo das IAs chegou: guarda e redesenha os blocos pc:* / ia:* */
+  function repaintPrefix(pre) {
+    var v = visible();
+    for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf(pre) === 0) repaint(v[i]);
+  }
+  SD.applyPc = function (pc) { pc.at = SD.now(); SD.pc = pc; repaintPrefix("pc:"); };
+  SD.applyIa = function (ia) { ia.at = SD.now(); SD.ia = ia; repaintPrefix("ia:"); };
+  /* dado velho some sozinho (10 s sem resumo novo): repinta os blocos que mostravam valor */
+  setInterval(function () { if (SD.pc && !document.hidden && !pcOk() && SD.pc.shown !== false) { SD.pc.shown = false; repaintPrefix("pc:"); } }, 2000);
+
   SD.applySounds = function (list) {
     var map = {}, t = SD.now();
     if (list && list.length) {
@@ -1332,10 +1632,12 @@
   /* consulta leve: mudancas feitas no PC, estados liga/desliga, volumes, app em foco e versoes novas */
   function poll() {
     clearTimeout(pollT);
-    var lv = needLevels();
-    pollT = setTimeout(poll, needFast() ? 1000 : lv ? 2000 : needNp() ? 3000 : 5000);
+    var lv = needLevels(), pc = needPc(), ia = needIa() && SD.now() - iaAt > IA_EVERY - 1000;
+    pollT = setTimeout(poll, needFast() ? 1000 : lv || pc ? 2000 : needNp() ? 3000 : 5000);
     if (SD.denied || !SD.cfg || document.hidden) return;
-    SD.req("GET", "/api/state" + (lv ? "?levels=1" : ""), null, function (ok, st, status, x) {
+    var qs = (lv ? "&levels=1" : "") + (pc ? "&pc=1" : "") + (ia ? "&ia=1" : "");
+    if (ia) iaAt = SD.now();
+    SD.req("GET", "/api/state" + (qs ? "?" + qs.substring(1) : ""), null, function (ok, st, status, x) {
       if (!ok) { if (status === 403) SD.load(); return; }
       if (offlineToast) { offlineToast = false; SD.toast("Conectado"); }
       readSkew(x);
@@ -1344,6 +1646,8 @@
       SD.applySounds(st.sounds);
       SD.applyObs(st.obs);
       if (st.nowplaying !== undefined) SD.applyNowPlaying(st.nowplaying);
+      if (st.pc) SD.applyPc(st.pc);
+      if (st.ia) SD.applyIa(st.ia);
       if (SD.cfgV != null && st.v != null && String(st.v) !== String(SD.cfgV) && !G) SD.load();
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
       if (st.app !== undefined) onApp(st.app);

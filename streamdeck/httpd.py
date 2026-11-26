@@ -154,8 +154,11 @@ def _ia_status():
 def _pc_summary(s):
     t = s.get("temps") or {}
     n = s.get("net") or {}
-    return {"cpu": s.get("cpu"), "mem_pct": (s.get("mem") or {}).get("pct"), "gpu": s.get("gpu"),
-            "temp_cpu": t.get("cpu"), "down_bps": n.get("down_bps"), "up_bps": n.get("up_bps")}
+    m = s.get("mem") or {}
+    return {"cpu": s.get("cpu"), "mem_pct": m.get("pct"), "gpu": s.get("gpu"),
+            "temp_cpu": t.get("cpu"), "down_bps": n.get("down_bps"), "up_bps": n.get("up_bps"),
+            "mem_used": m.get("used"), "mem_total": m.get("total"), "temp_gpu": t.get("gpu"),
+            "disk": s.get("disk") or [], "ts": s.get("ts") or 0}
 
 
 _DIAG_CACHE = {"plat": None, "addr": None, "addr_t": 0.0}

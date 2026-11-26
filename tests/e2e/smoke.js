@@ -24,7 +24,9 @@ var CONFIG = {
         { label: "Dentro", action: { type: "hotkey", keys: ["f5"] } }
       ] },
       { kind: "fader", label: "Efeitos", icon: "music", target: "effects" },
-      { label: "Ir 2", icon: "forward", action: { type: "page", to: 1 } }
+      { label: "Ir 2", icon: "forward", action: { type: "page", to: 1 } },
+      { label: "", icon: "cpu", live: "pc:cpu" },
+      { kind: "monitor", label: "Monitor" }
     ] },
     { name: "Dois", buttons: [{ label: "Voltar", icon: "back", action: { type: "page", to: 0 } }] }
   ]
@@ -110,6 +112,17 @@ async function phone(browser, base, token, size, errors) {
   assert.strictEqual((await (await fp).json()).ok, true);
   await page.locator("#fd-back").click();
   await page.locator("#folder").waitFor({ state: "hidden", timeout: 5000 });
+
+  /* monitor do PC (2.9): texto ao vivo pc:cpu e tela de processos */
+  await page.locator("#grid .cell", { hasText: "25%" }).waitFor({ state: "visible", timeout: 8000 });
+  await page.locator("#grid .cell", { hasText: "Monitor" }).click();
+  await page.locator("#sheetwrap.show").waitFor({ timeout: 5000 });
+  await page.locator(".prow", { hasText: "chrome.exe" }).waitFor({ state: "visible", timeout: 8000 });
+  assert.ok((await page.locator(".prow").count()) >= 3, name + ": lista de processos curta");
+  await page.locator(".prow .pr-main").first().click();      /* abre o Encerrar */
+  await page.locator(".prow.open .pr-kill").waitFor({ state: "visible", timeout: 3000 });
+  await page.locator("#sheet .hb.r").click();                 /* OK fecha a folha */
+  await page.locator("#sheetwrap.show").waitFor({ state: "hidden", timeout: 5000 });
 
   /* folha de ajustes */
   await page.locator("[aria-label=Ajustes]").click();
