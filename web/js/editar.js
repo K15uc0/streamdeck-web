@@ -15,6 +15,27 @@
     ["timer", "Cronômetro (desde que ligou)"], ["obs:stream", "OBS: transmissão"], ["obs:record", "OBS: gravação"],
     ["obs:scene", "OBS: cena atual"], ["sound", "Progresso do som"],
     ["nowplaying", "Música tocando agora"], ["nowplaying:title", "Só o nome da música"], ["nowplaying:artist", "Só o artista"]];
+  /* grupos novos do 2.9: o PC e o consumo das IAs (discos: C, D, E; outra letra ja salva entra sozinha) */
+  var LIVE_PC = [["pc:cpu", "CPU (uso)"], ["pc:mem", "Memória (uso)"], ["pc:gpu", "GPU (uso)"],
+    ["pc:temp_cpu", "Temperatura da CPU"], ["pc:temp_gpu", "Temperatura da GPU"], ["pc:net", "Rede (baixar e enviar)"],
+    ["pc:disk:C", "Disco C:"], ["pc:disk:D", "Disco D:"], ["pc:disk:E", "Disco E:"]];
+  var LIVE_IA = [["ia:claude:5h", "Claude: janela de 5 h"], ["ia:claude:week", "Claude: semana"],
+    ["ia:codex:5h", "Codex: janela de 5 h"], ["ia:codex:week", "Codex: semana"]];
+  /* exemplo (so para a previa): {principal, linhas pequenas, barra 0..100, legenda} */
+  var RICH_SAMPLE = {
+    "pc:cpu": ["23%", [], 23, "CPU"], "pc:mem": ["58%", ["9,3/16 GB"], 58, "Memória"], "pc:gpu": ["41%", [], 41, "GPU"],
+    "pc:temp_cpu": ["54 °C", [], null, "CPU °C"], "pc:temp_gpu": ["49 °C", [], null, "GPU °C"],
+    "pc:net": ["\u2193 2,4 MB/s", ["\u2191 180 KB/s"], null, "Rede"],
+    "ia:claude:5h": ["37%", ["usado · faltam 63%", "reinicia 18:40"], 37, "Claude 5 h"],
+    "ia:claude:week": ["62%", ["usado · faltam 38%", "reinicia sex 09:00"], 62, "Claude sem"],
+    "ia:codex:5h": ["12%", ["usado · faltam 88%", "reinicia 17:10"], 12, "Codex 5 h"],
+    "ia:codex:week": ["29%", ["usado · faltam 71%", "reinicia seg 08:00"], 29, "Codex sem"] };
+  function richSample(live) {
+    var m = /^pc:disk:([A-Z])$/.exec(live || "");
+    if (m) return [ "68%", [m[1] + ": 312/460 GB"], 68, "Disco " + m[1] + ":" ];
+    return RICH_SAMPLE[live] || null;
+  }
+  function barColor(p) { return p < 70 ? "#30d158" : p < 90 ? "#ffd60a" : "#ff453a"; }
   var LIVE_SAMPLE = { clock: "", date: "", "volume:master": "75%", "volume:effects": "100%", "volume:mic": "80%", timer: "00:00",
     "obs:stream": "AO VIVO", "obs:record": "REC", "obs:scene": "Cena", sound: "0:12",
     nowplaying: "Música \u2014 Artista", "nowplaying:title": "Música", "nowplaying:artist": "Artista" };
@@ -209,7 +230,7 @@
         continue;
       }
       if (b.on && blank(b.on)) delete b.on;
-      if (b.kind === "fader") { delete b.hold; delete b.double; delete b.confirm; delete b.lit; continue; }
+      if (b.kind === "fader" || b.kind === "monitor") { delete b.hold; delete b.double; delete b.confirm; delete b.lit; delete b.action; delete b.on; delete b.toggle; continue; }
       if (!b.confirm) delete b.confirm;
       if (!b.lit || /=$/.test(b.lit)) delete b.lit;
       for (var g = 0; g < GESTURES.length; g++) {
@@ -595,6 +616,42 @@
     if (live === "date") return two(d.getDate()) + "/" + two(d.getMonth() + 1);
     return LIVE_SAMPLE[live] || "";
   }
+  /* bloco de texto ao vivo pc:* / ia:* com valor de exemplo, como no celular:
+     legenda e icone em cima, valor grande, linhas pequenas e barra colorida embaixo */
+  function paintRichTile(t, W, H, size, pad, rs, fgc, light, icon, b) {
+    SD.setClass(t, "rich", true);
+    var fs = Math.max(9, Math.min(15, Math.round(size * 0.1)));
+    var cap = SD.trim(b.label) || rs[3];
+    var hasIc = !!icon && size >= 56, isz = Math.max(14, Math.round(size * 0.2));
+    if (hasIc) {
+      var ic = el("div", "ic", SD.iconHtml(icon, isz, fgc), t);
+      ic.style.right = pad + "px"; ic.style.top = pad + "px";
+    }
+    var c = el("div", "lcap", esc(cap), t);
+    c.style.left = pad + "px"; c.style.top = pad + "px"; c.style.right = pad + (hasIc ? isz + 6 : 0) + "px";
+    c.style.fontSize = fs + "px"; c.style.color = fgc;
+    var barH = rs[2] != null ? Math.max(4, Math.round(size * 0.05)) : 0;
+    var botPad = Math.max(6, Math.round(pad * 0.7)) + barH;
+    var subFs = Math.max(9, Math.round(fs * 0.85)), lh = Math.round(subFs * 1.3);
+    var mainFs = Math.max(14, Math.min(44, Math.round(size * 0.27)));
+    mainFs = Math.max(11, Math.min(mainFs, Math.floor((W - pad * 1.7) / (Math.max(3, rs[0].length) * 0.6))));
+    var avail = H - (pad + Math.round(fs * 1.4)) - botPad - Math.round(mainFs * 1.2) - 2;
+    var n = size < 70 ? 0 : Math.max(0, Math.min(rs[1].length, Math.floor(avail / lh)));
+    if (n) {
+      var sb = el("div", "lsub", rs[1].slice(0, n).map(function (x) { return "<div>" + esc(x) + "</div>"; }).join(""), t);
+      sb.style.left = pad + "px"; sb.style.right = pad * 0.7 + "px"; sb.style.bottom = botPad - 1 + "px";
+      sb.style.fontSize = subFs + "px"; sb.style.lineHeight = lh + "px"; sb.style.color = fgc;
+    }
+    var lb = el("div", "lb", esc(rs[0]), t);
+    lb.style.left = pad + "px"; lb.style.right = pad * 0.7 + "px"; lb.style.bottom = botPad + n * lh + "px";
+    lb.style.fontSize = mainFs + "px"; lb.style.color = fgc;
+    if (barH) {
+      var br = el("div", "sbar", "<i></i>", t);
+      br.style.height = barH + "px";
+      br.firstChild.style.width = rs[2] + "%"; br.firstChild.style.backgroundColor = barColor(rs[2]);
+    }
+    return t;
+  }
   /* desenha um bloco como no celular (estilo Atalhos do iOS). W x H em px */
   function paintTile(b, W, H, opts) {
     opts = opts || {};
@@ -648,7 +705,10 @@
       icon = "";
       if (!SD.validColor(L.textColor)) fgc = "#fff";
     }
-    if (b.live) label = liveText(b.live) || label;
+    var rs = b.live && size >= 40 ? richSample(b.live) : null;
+    if (rs && !L.image) return paintRichTile(t, W, H, size, pad, rs, fgc, light, icon, b);
+    if (b.live) label = (richSample(b.live) ? richSample(b.live)[0] : liveText(b.live)) || label;
+    if (b.kind === "monitor") { if (!icon) icon = "monitor"; if (!label) label = "Monitor"; }
     if (!icon && !label && b.kind === "folder") icon = "folder";
     if (L.image && label) el("div", "shade", null, t);
     if (icon && (!label || size < 66)) {
@@ -1200,11 +1260,12 @@
     renderPreview();
 
     /* tipo */
-    var kind = b.kind === "fader" ? "fader" : b.kind === "folder" ? "folder" : (b.toggle ? "toggle" : "button");
+    var kind = b.kind === "fader" ? "fader" : b.kind === "folder" ? "folder" : b.kind === "monitor" ? "monitor" : (b.toggle ? "toggle" : "button");
     var tf = field(box, "Tipo");
     var seg = el("div", "seg", null, tf);
     seg.id = "kind";
     var kinds = [["button", "Botão"], ["toggle", "Liga-desliga"], ["fader", "Fader"]];
+    kinds.push(["monitor", "Monitor"]);
     if (folder < 0) kinds.push(["folder", "Pasta"]);
     kinds.forEach(function (x) {
       var bt = el("button", kind === x[0] ? "on" : "", x[1], seg);
@@ -1230,11 +1291,23 @@
     li.id = "label"; li.maxLength = 60; li.value = b.label || ""; li.placeholder = "Texto do bloco";
     li.oninput = function () { edit(function (x) { x.label = li.value; }, "label", true); };
 
+    if (kind === "monitor") {
+      var mo = el("div", "folderbox", null, box);
+      el("div", null, "No celular mostra CPU, memória, GPU e rede ao vivo. <b>Tocar abre a tela de processos</b>, onde dá para ver o que mais consome.", mo);
+    }
+
     if (kind === "button" || kind === "toggle") {
       var lvf = field(box, "Texto ao vivo", b.live === "timer" && kind !== "toggle" ? "O cronômetro conta desde que um botão liga-desliga foi ligado." : null);
       var lv = el("select", "in", null, lvf);
       lv.id = "live";
-      LIVE.forEach(function (x) { opt(lv, x[0], x[1], b.live || ""); });
+      var known = {};
+      LIVE.forEach(function (x) { known[x[0]] = 1; opt(lv, x[0], x[1], b.live || ""); });
+      [["PC", LIVE_PC], ["IAs", LIVE_IA]].forEach(function (g) {
+        var og = el("optgroup", null, null, lv);
+        og.label = g[0];
+        g[1].forEach(function (x) { known[x[0]] = 1; opt(og, x[0], x[1], b.live || ""); });
+        if (g[0] === "PC" && b.live && !known[b.live] && /^pc:disk:[A-Z]$/.test(b.live)) { known[b.live] = 1; opt(og, b.live, "Disco " + b.live.slice(-1) + ":", b.live); }
+      });
       lv.onchange = function () { edit(function (x) { if (lv.value) x.live = lv.value; else delete x.live; }); };
     }
 
@@ -1260,7 +1333,7 @@
       fs.id = "faderTarget";
       FADERS.forEach(function (x) { opt(fs, x[0], x[1] + " (0–" + FADER_MAX[x[0]] + "%)", b.target || "master"); });
       fs.onchange = function () { edit(function (x) { x.target = fs.value; }); };
-    } else if (kind !== "folder") {
+    } else if (kind !== "folder" && kind !== "monitor") {
       renderAction(box, b);
       renderConfirm(box, b);
       renderGestures(box, b);
@@ -1271,7 +1344,7 @@
     var acts = el("div", "acts", null, box);
     var test = el("button", "test", "Testar", acts);
     test.id = "test";
-    test.disabled = kind === "fader" || kind === "folder" || !b.action || b.action.type === "none" || b.action.type === "page";
+    test.disabled = kind === "fader" || kind === "folder" || kind === "monitor" || !b.action || b.action.type === "none" || b.action.type === "page";
     test.title = "Executa a ação agora neste PC, sem salvar";
     test.onclick = function () { testAction(curBtn().action); };
     var clr = el("button", "clear", "Limpar", acts);
@@ -1519,6 +1592,11 @@
         for (p in x) if (x.hasOwnProperty(p)) delete x[p];
         for (p in keep) x[p] = keep[p];
         x.kind = "fader";
+      } else if (k === "monitor") {
+        for (p in x) if (x.hasOwnProperty(p)) delete x[p];
+        for (p in keep) x[p] = keep[p];
+        x.kind = "monitor";
+        if (!x.icon) x.icon = "monitor";
       } else if (k === "folder") {
         if (x.image) keep.image = x.image;
         keep.buttons = x.buttons || [];
