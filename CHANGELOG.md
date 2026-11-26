@@ -1,5 +1,11 @@
 # Novidades
 
+## 2.10.1
+
+- **Cada página agora tem sempre a sua própria grade**, independente das outras. No editor, as colunas e linhas da barra da página (e a grade vertical) mudam só a página aberta; a escolha "Grade: Geral | Própria" saiu.
+- As páginas que você já tinha ganham uma grade automaticamente, igual à grade que usavam. Se os botões de uma página não cabiam nela, a grade cresce até todos caberem.
+- Página nova em branco começa com a grade da página aberta; página duplicada mantém a grade da original; página de modelo usa a grade do modelo.
+
 ## 2.10.0
 
 - **Grade por página**: cada página pode ter a sua própria quantidade de colunas e linhas. No editor, na barra da página, escolha "Grade: Própria" e ajuste colunas e linhas (e a grade vertical) só daquela página. "Geral" volta a usar a grade de todas as páginas.

@@ -221,15 +221,125 @@ def migrate(cfg):
         return cfg, False
     ver = cfg.get("version")
     if isinstance(ver, int) and not isinstance(ver, bool) and ver >= CONFIG_VERSION:
-        if ver != CONFIG_VERSION or not _has_bad_icon(cfg.get("pages")):
+        if ver != CONFIG_VERSION:
+            return cfg, False
+        bad_icon = _has_bad_icon(cfg.get("pages"))
+        if not bad_icon and not _needs_grid(cfg):
             return cfg, False
         out = copy.deepcopy(cfg)
         for page in out["pages"]:
             for btn in page.get("buttons", []) if isinstance(page, dict) else []:
                 if isinstance(btn, dict):
                     fix_icon(btn)
+        add_page_grids(out)
         return out, True
-    return migrate_v1(cfg), True
+    out = migrate_v1(cfg)
+    add_page_grids(out)
+    return out, True
+
+
+# ------------------------------------------------- grade de cada pagina ---
+def _int_in(v, lo, hi, default):
+    if isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi:
+        return v
+    return default
+
+
+def flow(buttons, cols, rows):
+    """Mesma regra de SD.flow (web/js/core.js): cada botao ocupa w x h (1..4,
+    limitado a grade) na primeira posicao livre, linha a linha. Devolve
+    [(i, x, y, w, h)] dos que couberam."""
+    used = [False] * (cols * rows)
+    out = []
+
+    def free(x0, y0, w0, h0):
+        if x0 + w0 > cols or y0 + h0 > rows:
+            return False
+        for yy in range(y0, y0 + h0):
+            for xx in range(x0, x0 + w0):
+                if used[yy * cols + xx]:
+                    return False
+        return True
+
+    def size(v, lim):
+        try:
+            n = int(v) if not isinstance(v, bool) else 1
+        except (TypeError, ValueError, OverflowError):
+            n = 1
+        return max(1, min(lim, n or 1))
+
+    for i, b in enumerate(buttons or []):
+        b = b if isinstance(b, dict) else {}
+        w, h = size(b.get("w"), cols), size(b.get("h"), rows)
+        done = False
+        for y in range(rows):
+            for x in range(cols):
+                if free(x, y, w, h):
+                    for yy in range(y, y + h):
+                        for xx in range(x, x + w):
+                            used[yy * cols + xx] = True
+                    out.append((i, x, y, w, h))
+                    done = True
+                    break
+            if done:
+                break
+    return out
+
+
+def _real(b):
+    """Botao que conta para caber (botoes vazios no fim da lista nao contam)."""
+    return isinstance(b, dict) and (b.get("kind") in ("folder", "monitor") or _used(b)
+                                    or bool(b.get("icon")) or bool(b.get("image")))
+
+
+def fit_grid(buttons, cols, rows):
+    """Menor grade >= cols x rows (ate 10 x 8) onde todos os botoes cabem.
+    Empate: proporcao mais perto da original, depois menos linhas (cresce
+    primeiro em colunas). Se nada couber em tudo, a que cabe mais."""
+    bs = list(buttons or [])
+    while bs and not _real(bs[-1]):
+        bs.pop()
+    if len(flow(bs, cols, rows)) == len(bs):
+        return cols, rows
+    ratio = float(cols) / rows
+    best = None
+    for c in range(cols, 11):
+        for r in range(rows, 9):
+            n = len(flow(bs, c, r))
+            key = (-n, c * r, abs(float(c) / r - ratio), r)
+            if best is None or key < best[0]:
+                best = (key, c, r)
+    return best[1], best[2]
+
+
+def _needs_grid(cfg):
+    pages = cfg.get("pages")
+    return isinstance(pages, list) and any(isinstance(p, dict) and not isinstance(p.get("grid"), dict)
+                                           for p in pages)
+
+
+def add_page_grids(cfg):
+    """2.10.1: toda pagina tem a sua grade. Pagina sem "grid" ganha uma copia
+    da geral (columns/rows/portrait), crescida se os botoes nao couberem.
+    Devolve True se mudou algo."""
+    pages = cfg.get("pages") if isinstance(cfg, dict) else None
+    if not isinstance(pages, list):
+        return False
+    cols = _int_in(cfg.get("columns"), 1, 10, 5)
+    rows = _int_in(cfg.get("rows"), 1, 8, 3)
+    por = cfg.get("portrait")
+    changed = False
+    for pg in pages:
+        if not isinstance(pg, dict) or isinstance(pg.get("grid"), dict):
+            continue
+        c, r = fit_grid(pg.get("buttons") if isinstance(pg.get("buttons"), list) else [], cols, rows)
+        g = {"columns": c, "rows": r}
+        if isinstance(por, dict):
+            g["portrait"] = {"columns": _int_in(por.get("columns"), 1, 10, r),
+                             "rows": _int_in(por.get("rows"), 1, 8, c)}
+        pg["grid"] = g
+        changed = True
+    return changed
 
 
 def fix_icon(btn):

@@ -45,7 +45,7 @@ def base_config():
         "columns": 4,
         "rows": 2,
         "pages": [
-            {"name": "Um", "buttons": [
+            {"name": "Um", "grid": {"columns": 4, "rows": 2}, "buttons": [
                 {"label": "ON AIR", "icon": "onair", "color": "#ff453a", "toggle": True,
                  "action": {"type": "none"}},
                 {"label": "Copiar", "icon": "copy", "color": "#0a84ff",
@@ -58,7 +58,7 @@ def base_config():
                 {"kind": "fader", "label": "Master", "icon": "sound", "target": "master"},
                 {"label": "Ir 2", "action": {"type": "page", "to": 1}},
             ]},
-            {"name": "Dois", "buttons": [
+            {"name": "Dois", "grid": {"columns": 4, "rows": 2}, "buttons": [
                 {"label": "Voltar", "action": {"type": "page", "to": 0}},
             ]},
         ],
