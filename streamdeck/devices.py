@@ -73,11 +73,41 @@ def _load():
                               and isinstance(d.get("key"), str) and KEY_RE.match(d["key"])
                               and isinstance(d.get("id"), str)]
             data = raw
+            if _ids_from_indices(data):
+                try:
+                    storage.write_json(paths.DEVICES_PATH, data)
+                    mt = _mtime()
+                except OSError as e:
+                    print("  aviso: aparelhos.json nao regravado (%s)" % e)
         except (OSError, ValueError):
             broken = True
             print("! aparelhos.json ilegivel: nenhum aparelho entra ate corrigir ou apagar o arquivo")
     _CACHE.update(data=data, mtime=mt, broken=broken)
     return data
+
+
+def _ids_from_indices(data):
+    """2.11 inicial guardava posicoes de pagina; agora guarda ids. Converte
+    uma vez com o config atual. Devolve True se mudou algo."""
+    if not any(isinstance(d.get("pages"), list) and any(not isinstance(p, str) for p in d["pages"])
+               for d in data["devices"]):
+        return False
+    try:
+        ids = schema.page_ids(storage.load_config())
+    except Exception:  # noqa: BLE001 - sem config: indices nao valem como ids (nada aparece)
+        return False
+    for d in data["devices"]:
+        pages = d.get("pages")
+        if not isinstance(pages, list):
+            continue
+        out = []
+        for p in pages:
+            if isinstance(p, str):
+                out.append(p)
+            elif isinstance(p, int) and not isinstance(p, bool) and 0 <= p < len(ids) and ids[p]:
+                out.append(ids[p])
+        d["pages"] = sorted(set(out))
+    return True
 
 
 def _save(data):
@@ -250,10 +280,11 @@ def rename(dev_id, name):
 
 
 def set_pages(dev_id, pages):
-    """None = todas; lista de indices (0 a MAX_PAGES-1)."""
+    """None = todas; lista de ids de pagina (pagina nova fica de fora ate
+    alguem marcar; pagina apagada simplesmente some)."""
     if pages is not None:
-        if not isinstance(pages, list) or any(
-                not isinstance(p, int) or isinstance(p, bool) or p < 0 or p >= schema.MAX_PAGES for p in pages):
+        if not isinstance(pages, list) or len(pages) > schema.MAX_PAGES or any(
+                not isinstance(p, str) or not schema.PAGE_ID_RE.match(p) for p in pages):
             raise ValueError("paginas invalidas")
         pages = sorted(set(pages))
     _change(dev_id, lambda d: d.__setitem__("pages", pages))
@@ -281,7 +312,16 @@ def remove(dev_id):
 
 
 # ---------------------------------------------------------- permissoes ---
+def page_indices(pages, cfg):
+    """ids guardados -> posicoes atuais no config (None = todas)."""
+    if pages is None:
+        return None
+    want = set(pages)
+    return [i for i, pid in enumerate(schema.page_ids(cfg)) if pid is not None and pid in want]
+
+
 def page_allowed(pages, p):
+    """pages: posicoes atuais (ja convertidas por page_indices) ou None."""
     return pages is None or p in pages
 
 

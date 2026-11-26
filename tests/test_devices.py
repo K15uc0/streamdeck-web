@@ -76,13 +76,13 @@ class DevicesTest(unittest.TestCase):
 
     def test_paginas(self):
         d = devices.create()
-        devices.set_pages(d["id"], [2, 0, 2])
-        self.assertEqual(devices.find(d["key"])["pages"], [0, 2])
+        devices.set_pages(d["id"], ["cccc", "aaaa", "cccc"])
+        self.assertEqual(devices.find(d["key"])["pages"], ["aaaa", "cccc"])
         devices.set_pages(d["id"], None)
         self.assertIsNone(devices.find(d["key"])["pages"])
         devices.set_pages(d["id"], [])
         self.assertEqual(devices.find(d["key"])["pages"], [])
-        for ruim in ([-1], [50], ["1"], [True], "0", {"a": 1}):
+        for ruim in ([-1], [0], ["1"], ["ABCD"], ["a" * 17], [True], "0", {"a": 1}):
             with self.assertRaises(ValueError):
                 devices.set_pages(d["id"], ruim)
 

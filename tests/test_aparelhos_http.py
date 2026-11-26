@@ -171,7 +171,7 @@ class AparelhosHttpTest(unittest.TestCase):
     def test_pagina_nao_liberada_403(self):
         key = self.novo()
         dev = devices.list_public()[0]
-        call("POST", "/api/local/devices", {"id": dev["id"], "op": "pages", "value": [0]})
+        call("POST", "/api/local/devices", {"id": dev["id"], "op": "pages", "value": ["a1a1"]})
         st, _, r = pedir("GET", "/api/state", key)
         self.assertEqual(r["device"]["pages"], [0])
         st, h, _ = pedir("GET", "/api/config", key)
@@ -190,8 +190,68 @@ class AparelhosHttpTest(unittest.TestCase):
     def test_pagina_limitada_pasta(self):
         key = self.novo()
         dev = devices.list_public()[0]
-        call("POST", "/api/local/devices", {"id": dev["id"], "op": "pages", "value": [1]})
+        call("POST", "/api/local/devices", {"id": dev["id"], "op": "pages", "value": ["b2b2"]})
         self.assertEqual(pedir("GET", "/api/press?p=0&b=3&f=1", key)[0], 403)
+
+    # ----------------------------------------------- ids fixos das paginas ---
+    def _tres(self):
+        cfg = config_teste()
+        cfg["pages"].append({"name": "Tres", "id": "c3c3", "grid": {"columns": 4, "rows": 2},
+                             "buttons": [{"label": "T", "action": {"type": "none"}}]})
+        storage.save_config(cfg)
+        key = self.novo()
+        dev = devices.list_public()[0]
+        call("POST", "/api/local/devices", {"id": dev["id"], "op": "pages", "value": ["a1a1", "c3c3"]})
+        return key, cfg
+
+    def _ve(self, key):
+        r = pedir("GET", "/api/state", key)[2]["device"]["pages"]
+        self.assertEqual(pedir("GET", "/api/config", key)[1]["x-device-pages"], ",".join(map(str, r)))
+        return r
+
+    def test_reordenar_mantem_paginas_do_aparelho(self):
+        key, cfg = self._tres()
+        self.assertEqual(self._ve(key), [0, 2])
+        cfg["pages"] = [cfg["pages"][2], cfg["pages"][1], cfg["pages"][0]]   # Tres, Dois, Um
+        storage.save_config(cfg)
+        self.assertEqual(self._ve(key), [0, 2])
+        self.assertEqual(pedir("GET", "/api/press?p=1&b=0", key)[0], 403)   # Dois continua fora
+        self.assertEqual(pedir("GET", "/api/press?p=0&b=0", key)[0], 200)   # Tres
+        cfg["pages"] = [cfg["pages"][1], cfg["pages"][0], cfg["pages"][2]]   # Dois, Tres, Um
+        storage.save_config(cfg)
+        self.assertEqual(self._ve(key), [1, 2])
+        self.assertEqual(pedir("GET", "/api/press?p=0&b=0", key)[0], 403)
+
+    def test_apagar_pagina(self):
+        key, cfg = self._tres()
+        del cfg["pages"][0]                       # some "Um": Dois, Tres
+        storage.save_config(cfg)
+        self.assertEqual(self._ve(key), [1])
+        self.assertEqual(pedir("GET", "/api/press?p=0&b=0", key)[0], 403)
+
+    def test_pagina_nova_fica_oculta(self):
+        key, cfg = self._tres()
+        cfg["pages"].insert(0, {"name": "Nova", "grid": {"columns": 4, "rows": 2},
+                                "buttons": [{"label": "N", "action": {"type": "none"}}]})
+        storage.save_config(cfg)
+        self.assertRegex(storage.load_config()["pages"][0]["id"], r"^[0-9a-f]{8}$")
+        self.assertEqual(self._ve(key), [1, 3])
+        self.assertEqual(pedir("GET", "/api/press?p=0&b=0", key)[0], 403)
+
+    def test_lista_do_conectar_tem_ids(self):
+        r = call("GET", "/api/local/devices")[2]
+        self.assertEqual([(p["index"], p["id"]) for p in r["pages"]], [(0, "a1a1"), (1, "b2b2")])
+
+    def test_migra_indices_antigos_para_ids(self):
+        self._tres()
+        data = json.load(open(paths.DEVICES_PATH, encoding="utf-8"))
+        data["devices"][0]["pages"] = [2, 0, 9]
+        with open(paths.DEVICES_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        devices.reset()
+        self.assertEqual(devices.list_public()[0]["pages"], ["a1a1", "c3c3"])
+        data = json.load(open(paths.DEVICES_PATH, encoding="utf-8"))
+        self.assertEqual(data["devices"][0]["pages"], ["a1a1", "c3c3"])   # gravado (uma vez so)
 
     # -------------------------------------------------------- controle total ---
     def test_acao_sensivel_sem_controle_total_403(self):

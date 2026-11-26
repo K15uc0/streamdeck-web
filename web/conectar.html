@@ -489,7 +489,8 @@ $("iaBtn").onclick = function () {
 loadIa();
 
 /* ---------------------------------------------------------- aparelhos --- */
-/* GET /api/local/devices -> {devices:[{id,name,created,last_seen,last_ip,pages,full}], pages:[{name,index}]}
+/* GET /api/local/devices -> {devices:[{id,name,created,last_seen,last_ip,pages,full}], pages:[{name,index,id}]}
+   pages dos aparelhos = ids das paginas (null = todas)
    (sem as chaves); POST {id, op: rename|pages|full|remove, value} */
 var devData = null, devTimer = null;
 var DEV_ICON = '<svg width="20" height="20" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.6" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="12" cy="18" r="1.1" fill="#fff"/></svg>';
@@ -502,8 +503,9 @@ function devSave(id, op, value, after) {
 }
 function pagesLabel(d, pages) {
   if (d.pages == null) return "";
-  if (!d.pages.length) return '<span class="badge lim">nenhuma página</span>';
-  return '<span class="badge lim">' + d.pages.length + (d.pages.length === 1 ? " página" : " páginas") + "</span>";
+  var n = d.pages.filter(function (x) { return pages.some(function (y) { return y.id === x; }); }).length;
+  if (!n) return '<span class="badge lim">nenhuma página</span>';
+  return '<span class="badge lim">' + n + (n === 1 ? " página" : " páginas") + "</span>";
 }
 function renderDevs() {
   var box = $("devs"), d = devData;
@@ -517,8 +519,8 @@ function renderDevs() {
   box.innerHTML = d.devices.map(function (v) {
     var all = v.pages == null, chips = '<button class="chip all' + (all ? " on" : "") + '" data-all="1">Todas</button>';
     d.pages.forEach(function (p) {
-      var on = all || v.pages.indexOf(p.index) >= 0;
-      chips += '<button class="chip' + (on ? " on" : "") + '" data-p="' + p.index + '">' + esc(p.name || "Página " + (p.index + 1)) + "</button>";
+      var on = all || v.pages.indexOf(p.id) >= 0;
+      chips += '<button class="chip' + (on ? " on" : "") + '" data-p="' + esc(p.id || "") + '">' + esc(p.name || "Página " + (p.index + 1)) + "</button>";
     });
     var age = now - v.last_seen;
     return '<div class="list dev" data-id="' + esc(v.id) + '">' +
@@ -527,7 +529,8 @@ function renderDevs() {
       '<div class="s"><span class="dot' + (age > 120 ? " old" : "") + '"></span>' + esc(age < 120 ? "conectado agora" : "último acesso " + ago(age)) +
       (v.last_ip ? " · " + esc(v.last_ip) : "") + " · desde " + esc(hhmm(v.created).split(" ")[0]) +
       (v.full ? '<span class="badge">Controle total</span>' : "") + pagesLabel(v, d.pages) + "</div></span></div>" +
-      '<div class="item"><span class="t">Páginas que aparecem<div class="chips">' + chips + "</div></span></div>" +
+      '<div class="item"><span class="t">Páginas que aparecem<div class="chips">' + chips + "</div>" +
+        (all ? "" : '<span class="s">Páginas novas não aparecem nos aparelhos com páginas escolhidas até você marcar.</span>') + "</span></div>" +
       '<label class="item"><span class="t">Controle total<span class="s">Permite botões que desligam, reiniciam ou suspendem o PC e encerrar processos.</span></span>' +
       '<input type="checkbox" class="dfull"' + (v.full ? " checked" : "") + "></label>" +
       '<div class="item btn"><button class="danger drm">Remover aparelho</button></div></div>';
@@ -553,7 +556,10 @@ function renderDevs() {
     Array.prototype.forEach.call(card.querySelectorAll(".chip"), function (c) {
       c.onclick = function () {
         if (c.getAttribute("data-all")) return devSave(id, "pages", null);
-        var p = parseInt(c.getAttribute("data-p"), 10), cur = v.pages == null ? d.pages.map(function (x) { return x.index; }) : v.pages.slice();
+        var p = c.getAttribute("data-p"), cur = v.pages == null ? d.pages.map(function (x) { return x.id; }) : v.pages.filter(function (x) {
+          return d.pages.some(function (y) { return y.id === x; });   /* ids de paginas apagadas saem */
+        });
+        if (!p) return;
         var i = cur.indexOf(p);
         if (i >= 0) cur.splice(i, 1); else cur.push(p);
         devSave(id, "pages", cur.length === d.pages.length ? null : cur);

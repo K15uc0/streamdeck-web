@@ -144,7 +144,15 @@ DENY_FULL = "este botao precisa de Controle total (ligue para este aparelho em C
 
 
 def _dev_ctx(dev):
-    return {"id": dev["id"], "name": dev["name"], "pages": dev["pages"], "full": dev["full"] is True}
+    """pages vira as posicoes ATUAIS das paginas liberadas (o aparelho guarda
+    ids; calcular a cada pedido mantem certo depois de mover/apagar paginas)."""
+    pages = dev["pages"]
+    if pages is not None:
+        try:
+            pages = devices.page_indices(pages, storage.load_config())
+        except Exception:  # noqa: BLE001 - sem config, nada liberado
+            pages = []
+    return {"id": dev["id"], "name": dev["name"], "pages": pages, "full": dev["full"] is True}
 
 
 def _int(q, name):
@@ -657,7 +665,7 @@ class Handler(BaseHTTPRequestHandler):
     def local_devices(self, q):
         """Aparelhos para a tela Conectar (sem as chaves)."""
         try:
-            pages = [{"name": p.get("name") or "", "index": i}
+            pages = [{"name": p.get("name") or "", "index": i, "id": p.get("id")}
                      for i, p in enumerate(storage.load_config().get("pages") or [])]
         except Exception:  # noqa: BLE001
             pages = []
