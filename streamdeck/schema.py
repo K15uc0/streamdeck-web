@@ -264,7 +264,7 @@ def flow(buttons, cols, rows):
     def size(v, lim):
         try:
             n = int(v) if not isinstance(v, bool) else 1
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             n = 1
         return max(1, min(lim, n or 1))
 

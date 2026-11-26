@@ -83,3 +83,9 @@ class GradeDeCadaPagina(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InfinitoTests(unittest.TestCase):
+    def test_tamanho_infinito_nao_quebra(self):
+        from streamdeck import schema
+        self.assertEqual(len(schema.flow([{"w": float("inf"), "h": float("nan")}], 4, 3)), 1)
