@@ -47,8 +47,12 @@ Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão
 ## Monitor do PC e consumo das IAs (2.9)
 
 - **Monitor do PC**: no celular, veja CPU, memória, GPU, temperaturas, rede e disco. Crie um botão "Monitor do PC" (modelo pronto no editor). Para as temperaturas, deixe o [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) aberto com **Options → Remote Web Server → Run**.
-- **Encerrar programas**: vem desligado. Ligue em **Conectar → Monitor do PC**; programas essenciais do Windows ficam protegidos.
+- **Encerrar programas**: só no PC ou em aparelhos com **Controle total** (Conectar → Aparelhos); programas essenciais do Windows ficam protegidos.
 - **Consumo das IAs**: limites de 5 h e semanal do Claude e do Codex. Para o Claude, instale a ponte em **Conectar → Consumo das IAs**; ela atualiza só com o Claude Code aberto. O Grok ainda não está disponível.
+
+## Aparelhos (2.11)
+
+Cada celular ou tablet que lê o QR code ganha a sua própria chave (guardada no navegador dele). Em **Conectar → Aparelhos**, no PC, você pode dar um nome a cada um, escolher as páginas que ele vê, ligar o **Controle total** (botões que rodam comandos ou abrem programas e arquivos, como desligar o PC, e encerrar processos) e **Remover** o aparelho, que perde o acesso na hora. Aparelhos que já estavam conectados ganham a chave sozinhos, sem ler o QR code de novo.
 
 ## Para desenvolvedores
 
