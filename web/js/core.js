@@ -571,7 +571,7 @@
   /* grade de uma pagina: a propria (page.grid, 2.10) ou a geral do config */
   SD.pageGrid = function (cfg, pi) {
     var pg = cfg && cfg.pages && cfg.pages[pi], g = pg && pg.grid;
-    function ok(n, max) { return typeof n === "number" && n >= 1 && n <= max; }
+    function ok(n, max) { return typeof n === "number" && n % 1 === 0 && n >= 1 && n <= max; }
     return g && ok(g.columns, 10) && ok(g.rows, 8) ? g : cfg;
   };
 
