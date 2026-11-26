@@ -523,7 +523,7 @@ function renderDevs() {
     var age = now - v.last_seen;
     return '<div class="list dev" data-id="' + esc(v.id) + '">' +
       '<div class="name"><span class="ic">' + DEV_ICON + '</span><span class="nm">' +
-      '<input class="dname" maxlength="40" value="' + esc(v.name) + '" aria-label="Nome do aparelho" spellcheck="false">' +
+      '<input class="dname" maxlength="40" value="' + esc(v.name) + '" aria-label="Nome do aparelho" title="Clique para renomear" spellcheck="false">' +
       '<div class="s"><span class="dot' + (age > 120 ? " old" : "") + '"></span>' + esc(age < 120 ? "conectado agora" : "último acesso " + ago(age)) +
       (v.last_ip ? " · " + esc(v.last_ip) : "") + " · desde " + esc(hhmm(v.created).split(" ")[0]) +
       (v.full ? '<span class="badge">Controle total</span>' : "") + pagesLabel(v, d.pages) + "</div></span></div>" +
