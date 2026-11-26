@@ -6,6 +6,7 @@
   "pages": [
     {
       "name": "Principal",
+      "grid": {"columns": 5, "rows": 3},
       "buttons": [
         {
           "label": "Play/Pausa",
@@ -169,6 +170,7 @@
     },
     {
       "name": "Atalhos",
+      "grid": {"columns": 5, "rows": 3},
       "buttons": [
         {
           "label": "Copiar",
@@ -348,6 +350,7 @@
     },
     {
       "name": "OBS",
+      "grid": {"columns": 5, "rows": 3},
       "buttons": [
         {
           "label": "Transmissão",
@@ -494,6 +497,7 @@
     },
     {
       "name": "Rádio",
+      "grid": {"columns": 5, "rows": 3},
       "buttons": [
         {
           "kind": "fader",
@@ -649,6 +653,7 @@
     },
     {
       "name": "Rádio · Sons",
+      "grid": {"columns": 5, "rows": 3},
       "buttons": [
         {
           "label": "Parar sons",
@@ -671,6 +676,7 @@
     },
     {
       "name": "Rádio · Chat",
+      "grid": {"columns": 5, "rows": 3},
       "buttons": [
         {
           "label": "Bom dia, ouvintes!",
