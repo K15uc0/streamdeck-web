@@ -9,7 +9,7 @@ import time
 import urllib.request
 import webbrowser
 
-from . import VERSION, agenda, diag, obs, paths, state, storage, tocando, updates, winapi
+from . import VERSION, agenda, diag, monitor, obs, paths, state, storage, tocando, updates, winapi
 from .httpd import Handler, Server
 from .security import lan_ip
 
@@ -180,6 +180,7 @@ def main():
     threading.Thread(target=updates.cleanup_old_exe, daemon=True).start()
     agenda.start()   # agendamentos (confere a cada ~10 s)
     tocando.start()  # musica tocando agora (so no Windows)
+    monitor.start()  # metricas do PC (so coleta enquanto algum aparelho olha)
     obs.start()   # conexao com o OBS em segundo plano (tenta a cada 5 s)
     minimized = "--minimizado" in sys.argv
     tray_on = False

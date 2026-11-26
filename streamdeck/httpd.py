@@ -21,7 +21,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, agenda, audio, diag, library, media, obs, paths, schema, security, state, storage, updates, \
+from . import VERSION, actions, agenda, audio, diag, ia, library, media, monitor, obs, paths, schema, security, state, storage, updates, \
     tocando, templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
@@ -80,6 +80,11 @@ ROUTES = {
     ("POST", "/api/update/apply"): "post_update_apply",
     ("POST", "/api/config"): "post_config",
     ("POST", "/api/tabs"): "post_tabs",
+    ("GET", "/api/monitor"): "get_monitor",
+    ("POST", "/api/monitor/kill"): "post_monitor_kill",
+    ("GET", "/api/local/ia"): "local_ia",
+    ("POST", "/api/local/ia"): "local_ia_save",
+    ("POST", "/api/local/settings_kill"): "local_settings_kill",
 }
 # gesto do /api/press -> campo do botao com a acao
 PRESS_KINDS = {"tap": "action", "hold": "hold", "double": "double"}
@@ -125,6 +130,28 @@ NO_CODE = {("GET", "/api/local/info")}       # ja restritas ao proprio PC
 
 def _int(q, name):
     return int(q[name][0])
+
+
+_IA_CACHE = {"t": 0.0, "val": None}   # consumo das IAs: relido no maximo a cada 10 s
+IA_TTL = 10.0
+
+
+def _ia_status():
+    now = time.time()
+    if _IA_CACHE["val"] is None or now - _IA_CACHE["t"] >= IA_TTL or now < _IA_CACHE["t"]:
+        try:
+            _IA_CACHE["val"] = ia.status()
+        except Exception:  # noqa: BLE001
+            _IA_CACHE["val"] = {"claude": None, "codex": None, "grok": None}
+        _IA_CACHE["t"] = now
+    return _IA_CACHE["val"]
+
+
+def _pc_summary(s):
+    t = s.get("temps") or {}
+    n = s.get("net") or {}
+    return {"cpu": s.get("cpu"), "mem_pct": (s.get("mem") or {}).get("pct"), "gpu": s.get("gpu"),
+            "temp_cpu": t.get("cpu"), "down_bps": n.get("down_bps"), "up_bps": n.get("up_bps")}
 
 
 _DIAG_CACHE = {"plat": None, "addr": None, "addr_t": 0.0}
@@ -494,9 +521,64 @@ class Handler(BaseHTTPRequestHandler):
             st["obs"] = ob
         tocando.touch()
         st["nowplaying"] = tocando.current()
+        try:
+            monitor.touch()
+            st["pc"] = _pc_summary(monitor.snapshot())   # do cache: barato
+        except Exception:  # noqa: BLE001
+            pass
+        st["ia"] = _ia_status()
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         return self._json(200, st)
+
+    def get_monitor(self, q):
+        sort = (q.get("sort") or ["cpu"])[0]
+        if sort not in ("cpu", "mem"):
+            sort = "cpu"
+        monitor.touch()
+        return self._json(200, {"ok": True, "snapshot": monitor.snapshot(),
+                                "processes": monitor.processes(15, sort),
+                                "allow_kill": storage.load_settings().get("allow_kill") is True})
+
+    def post_monitor_kill(self, q):
+        if not self._local() and storage.load_settings().get("allow_kill") is not True:
+            print("! encerrar processo recusado de %s: desligado nos ajustes" % self.client_address[0])
+            return self._json(403, {"ok": False, "error": "encerrar processos esta desligado (ligue no PC)"})
+        try:
+            body = self._body_json()
+            pid = body.get("pid") if isinstance(body, dict) else None
+            monitor.kill(pid)
+            print("* processo %s encerrado por %s" % (pid, self.client_address[0]))
+            return self._json(200, {"ok": True})
+        except Exception as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+
+    def local_ia(self, q):
+        st = _ia_status()
+        c = st.get("claude")
+        return self._json(200, {"ok": True, "bridge_installed": ia.bridge_installed(),
+                                "claude_updated": (c or {}).get("updated"),
+                                "codex_found": st.get("codex") is not None,
+                                "allow_kill": storage.load_settings().get("allow_kill") is True})
+
+    def local_ia_save(self, body):
+        want = body.get("install") if isinstance(body, dict) else None
+        if not isinstance(want, bool):
+            return self._json(400, {"ok": False, "error": "install deve ser true ou false"})
+        r = ia.install_bridge() if want else ia.uninstall_bridge()
+        _IA_CACHE["val"] = None
+        if not r.get("ok"):
+            return self._json(400, r)
+        return self._json(200, {"ok": True, "bridge_installed": ia.bridge_installed()})
+
+    def local_settings_kill(self, body):
+        allow = body.get("allow") if isinstance(body, dict) else None
+        if not isinstance(allow, bool):
+            return self._json(400, {"ok": False, "error": "allow deve ser true ou false"})
+        s = storage.load_settings()
+        s["allow_kill"] = allow
+        storage.save_settings(s)
+        return self._json(200, {"ok": True, "allow_kill": allow})
 
     def get_volume(self, q):
         try:
