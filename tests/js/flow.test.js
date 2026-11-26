@@ -239,7 +239,7 @@ test("pageGrid: grade propria invalida cai na geral", function () {
 test("flow: igual ao schema.flow do Python", function () {
   function b(o) { return Object.assign({ label: "X" }, o || {}); }
   var f = SD.flow([b({ w: 2, h: 2 }), b(), b({ w: 9 }), b({ h: 2 })], 4, 3).map(function (p) { return [p.i, p.x, p.y, p.w, p.h]; });
-  assert.deepStrictEqual(f, [[0, 0, 0, 2, 2], [1, 2, 0, 1, 1], [2, 0, 2, 4, 1], [3, 3, 0, 1, 2]]);
+  assert.strictEqual(JSON.stringify(f), JSON.stringify([[0, 0, 0, 2, 2], [1, 2, 0, 1, 1], [2, 0, 2, 4, 1], [3, 3, 0, 1, 2]]));
   assert.strictEqual(SD.flow([b(), b(), b()], 1, 2).length, 2);
 });
 

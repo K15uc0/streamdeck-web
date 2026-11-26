@@ -165,7 +165,18 @@ atual tiver menos posições que a lista, os excedentes não aparecem (o editor 
 `"grid": {"columns": 5, "rows": 4, "portrait": {"columns": 4, "rows": 5}}` (mesmos
 limites; `portrait` opcional, com a mesma regra de transpor). Sem `grid`, a página usa
 a grade geral. `SD.pageGrid(cfg, i)` (core.js) devolve a grade válida da página; o
-celular e o editor usam a da página atual. No editor, "Grade: Geral | Própria".
+celular e o editor usam a da página atual.
+
+**Grade de cada página (2.10.1).** Toda página tem `grid`. A migração
+(`schema.add_page_grids`, chamada por `schema.migrate` ao carregar o config, em
+backups e no import) dá a cada página sem `grid` uma cópia da geral (`columns`,
+`rows` e `portrait` se houver). Se os botões não couberem (mesma regra de
+`SD.flow`, portada em `schema.flow`; botões vazios no fim da lista não contam), a
+grade cresce para a menor que caiba (`schema.fit_grid`: até 10 × 8, primeiro em
+colunas, proporção perto da geral). É idempotente. O `columns`/`rows` geral
+continua obrigatório: serve de reserva para clientes antigos. No editor, Colunas e
+Linhas (e a vertical) mudam só a página atual; página nova copia a grade da atual,
+duplicada copia a da original, modelo usa a dele ou a da atual.
 
 **Celular (só uso).** Sem modo edição. Ajustes por aparelho em localStorage
 (`sd_prefs`): `orientation` = `auto|portrait|landscape`, `autoFullscreen` bool.
