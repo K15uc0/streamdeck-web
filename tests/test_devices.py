@@ -188,12 +188,14 @@ class DevicesTest(unittest.TestCase):
         self.assertFalse(devices.page_allowed([], 0))
         sens = devices.sensitive
         self.assertTrue(sens({"type": "command", "command": "shutdown /s /t 0"}))
-        self.assertTrue(sens({"type": "open", "target": "C:\\x.exe"}))
+        self.assertFalse(sens({"type": "open", "target": "C:\\x.exe"}))
+        self.assertTrue(sens({"type": "command", "command": "rundll32.exe powrprof.dll,SetSuspendState 0,1,0"}))
+        self.assertFalse(sens({"type": "command", "command": "rundll32.exe user32.dll,LockWorkStation"}))
         self.assertFalse(sens({"type": "open", "target": "https://exemplo.com"}))
-        self.assertTrue(sens({"type": "app", "target": "obs64.exe"}))
+        self.assertFalse(sens({"type": "app", "target": "obs64.exe"}))
         self.assertFalse(sens({"type": "hotkey", "keys": ["f5"]}))
         self.assertFalse(sens(None))
-        self.assertTrue(sens({"type": "multi", "steps": [{"type": "hotkey"}, {"type": "command", "command": "x"}]}))
+        self.assertTrue(sens({"type": "multi", "steps": [{"type": "hotkey"}, {"type": "command", "command": "shutdown /r /t 0"}]}))
         self.assertFalse(sens({"type": "multi", "steps": [{"type": "hotkey"}]}))
 
 

@@ -53,7 +53,7 @@ SEGURANCA
   botoes). Os aparelhos so usam.
 - Cada aparelho que le o QR code ganha a sua propria chave (2.11). Em
   Conectar > Aparelhos: nome, paginas que ele ve, "Controle total" (botoes que
-  rodam comandos ou abrem programas, como desligar o PC, e encerrar processos)
+  desligam, reiniciam ou suspendem o PC, e encerrar processos)
   e Remover (o aparelho perde o acesso na hora).
 - Achou que alguem pegou o codigo? Conectar > "Gerar novo codigo de acesso"
   (vale para aparelhos novos; os da lista continuam: use Remover para tirar um).

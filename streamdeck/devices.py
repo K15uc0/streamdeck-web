@@ -285,15 +285,22 @@ def page_allowed(pages, p):
     return pages is None or p in pages
 
 
-SENSITIVE = ("command", "open", "app")   # rodam programa/comando qualquer no PC
+# comandos que desligam, reiniciam, suspendem ou encerram a sessao do PC
+POWER_RE = re.compile(r"\bshutdown(\.exe)?\b|setsuspendstate|\blogoff\b|\btsdiscon\b", re.I)
 
 
 def sensitive(a):
-    """A acao exige Controle total quando vem de um aparelho? command (tambem
-    desligar/reiniciar/suspender da biblioteca), open de arquivo/programa (site
-    http/https nao), app (abre programa) e sequencias com algum desses."""
+    """A acao exige Controle total quando vem de um aparelho? Os botoes sao
+    montados no proprio PC, entao abrir programa/site/comando comum segue
+    liberado; so desligar/reiniciar/suspender/sair (e sequencias com isso)."""
     if not isinstance(a, dict):
         return False
+    t = a.get("type")
+    if t == "command":
+        return bool(POWER_RE.search(str(a.get("command") or "")))
+    if t == "multi":
+        return any(sensitive(s) for s in (a.get("steps") or []) if isinstance(s, dict))
+    return False
     t = a.get("type")
     if t == "open":
         return not str(a.get("target") or "").startswith(("http://", "https://"))

@@ -143,7 +143,7 @@
   <div class="devs" id="devs"><div class="list"><div class="empty">Carregando…</div></div></div>
   <p class="foot">Cada aparelho que leu o QR code tem a sua própria chave. <b>Remover</b> corta o acesso dele na hora;
     para voltar, ele precisa ler o QR code de novo. <b>Controle total</b> libera, para aquele aparelho, botões que
-    rodam comandos ou abrem programas e arquivos (como desligar ou reiniciar o PC) e encerrar processos no monitor.
+    desligam, reiniciam, suspendem ou encerram a sessão do PC, e encerrar processos no monitor.
     Neste PC tudo funciona sempre.</p>
 
   <div class="hdr">Opções</div>
@@ -528,7 +528,7 @@ function renderDevs() {
       (v.last_ip ? " · " + esc(v.last_ip) : "") + " · desde " + esc(hhmm(v.created).split(" ")[0]) +
       (v.full ? '<span class="badge">Controle total</span>' : "") + pagesLabel(v, d.pages) + "</div></span></div>" +
       '<div class="item"><span class="t">Páginas que aparecem<div class="chips">' + chips + "</div></span></div>" +
-      '<label class="item"><span class="t">Controle total<span class="s">Permite botões que rodam comandos ou abrem programas e arquivos (desligar, reiniciar…) e encerrar processos.</span></span>' +
+      '<label class="item"><span class="t">Controle total<span class="s">Permite botões que desligam, reiniciam ou suspendem o PC e encerrar processos.</span></span>' +
       '<input type="checkbox" class="dfull"' + (v.full ? " checked" : "") + "></label>" +
       '<div class="item btn"><button class="danger drm">Remover aparelho</button></div></div>';
   }).join("");
@@ -543,7 +543,7 @@ function renderDevs() {
     };
     card.querySelector(".dfull").onchange = function (e) {
       var on = e.target.checked;
-      if (on && !confirm("Dar Controle total a “" + v.name + "”? Ele poderá usar botões que rodam comandos, abrem programas (inclusive desligar o PC) e encerrar processos.")) { e.target.checked = false; return; }
+      if (on && !confirm("Dar Controle total a “" + v.name + "”? Ele poderá desligar, reiniciar ou suspender o PC e encerrar processos.")) { e.target.checked = false; return; }
       devSave(id, "full", on);
     };
     card.querySelector(".drm").onclick = function () {

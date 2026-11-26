@@ -6,7 +6,7 @@
 - **Dê um nome** a cada aparelho (ex.: "Tablet da sala") clicando no nome dele.
 - **Escolha as páginas** que cada aparelho vê. As outras somem do aparelho (pontos, deslizar e troca automática pelo app em foco) e o PC recusa os botões delas.
 - **Remover** um aparelho corta o acesso dele na hora, sem atrapalhar os outros. Para voltar, ele precisa ler o QR code de novo.
-- **Controle total** (por aparelho) substitui a chave "Permitir encerrar programas pelo celular". Sem ele, o aparelho não usa botões que rodam comandos ou abrem programas e arquivos (como desligar, reiniciar ou suspender o PC) nem encerra processos no monitor. Abrir sites, atalhos, sons, OBS e o resto continuam funcionando normalmente. No próprio PC tudo funciona sempre.
+- **Controle total** (por aparelho) substitui a chave "Permitir encerrar programas pelo celular". Sem ele, o aparelho não usa botões que desligam, reiniciam, suspendem ou encerram a sessão do PC, nem encerra processos no monitor. Abrir programas, sites, comandos comuns, atalhos, sons, OBS e o resto continuam funcionando normalmente. No próprio PC tudo funciona sempre.
 - **Quem já estava conectado continua funcionando**, sem ler o QR code de novo: no primeiro acesso depois da atualização, cada aparelho ganha a sua chave automaticamente e aparece na lista. Se "Permitir encerrar programas" estava ligado, esses aparelhos já vêm com Controle total.
 - **Gerar novo código de acesso** agora só troca o QR code para aparelhos novos; os aparelhos da lista continuam funcionando (para tirar um deles, use Remover).
 

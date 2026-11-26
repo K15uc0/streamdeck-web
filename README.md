@@ -52,7 +52,7 @@ Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão
 
 ## Aparelhos (2.11)
 
-Cada celular ou tablet que lê o QR code ganha a sua própria chave (guardada no navegador dele). Em **Conectar → Aparelhos**, no PC, você pode dar um nome a cada um, escolher as páginas que ele vê, ligar o **Controle total** (botões que rodam comandos ou abrem programas e arquivos, como desligar o PC, e encerrar processos) e **Remover** o aparelho, que perde o acesso na hora. Aparelhos que já estavam conectados ganham a chave sozinhos, sem ler o QR code de novo.
+Cada celular ou tablet que lê o QR code ganha a sua própria chave (guardada no navegador dele). Em **Conectar → Aparelhos**, no PC, você pode dar um nome a cada um, escolher as páginas que ele vê, ligar o **Controle total** (botões que desligam, reiniciam ou suspendem o PC, e encerrar processos) e **Remover** o aparelho, que perde o acesso na hora. Aparelhos que já estavam conectados ganham a chave sozinhos, sem ler o QR code de novo.
 
 ## Para desenvolvedores
 

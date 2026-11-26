@@ -390,8 +390,9 @@ no celular, a troca de PC pelas abas usa `/#sync=` quando não há código guard
 - Páginas: `pages` `null` = todas. `GET /api/press` em página fora da lista -> 403 `{reason: "page"}`
   (não conta tentativa). Índices de página: reordenar/apagar páginas no editor não ajusta a lista.
 - Controle total (`full`): sem ele, 403 `{reason: "full"}` para ações sensíveis (`devices.sensitive`):
-  `command` (inclui desligar/reiniciar/suspender da biblioteca), `open` com caminho de arquivo/programa
-  (`http(s)://` não), `app` (abre programa) e `multi` com algum desses; e `POST /api/monitor/kill`.
+  `command` que desliga/reinicia/suspende/encerra a sessão (`devices.POWER_RE`) e `multi` com algum
+  desses; e `POST /api/monitor/kill`. Abrir programas, sites e comandos comuns continua liberado
+  (os botões são montados no próprio PC).
 - Migração do `allow_kill` (uma vez, quando `aparelhos.json` ainda não existe): grava `legacy_full` =
   `allow_kill` e tira `allow_kill` dos ajustes. Aparelhos criados pelo cookie antigo (os que já existiam)
   nascem com `full = legacy_full`; aparelhos novos pelo QR nascem sem.
