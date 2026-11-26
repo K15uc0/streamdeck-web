@@ -18,7 +18,7 @@
   /* grupos novos do 2.9: o PC e o consumo das IAs (discos: C, D, E; outra letra ja salva entra sozinha) */
   var LIVE_PC = [["pc:cpu", "CPU (uso)"], ["pc:mem", "Memória (uso)"], ["pc:gpu", "GPU (uso)"],
     ["pc:temp_cpu", "Temperatura da CPU"], ["pc:temp_gpu", "Temperatura da GPU"], ["pc:net", "Rede (baixar e enviar)"],
-    ["pc:disk:C", "Disco C:"], ["pc:disk:D", "Disco D:"], ["pc:disk:E", "Disco E:"]];
+    ["pc:disk:C", "Disco (escolha a letra)"]];
   var LIVE_IA = [["ia:claude:5h", "Claude: janela de 5 h"], ["ia:claude:week", "Claude: semana"],
     ["ia:codex:5h", "Codex: janela de 5 h"], ["ia:codex:week", "Codex: semana"]];
   /* exemplo (so para a previa): {principal, linhas pequenas, barra 0..100, legenda} */
@@ -616,6 +616,27 @@
     if (live === "date") return two(d.getDate()) + "/" + two(d.getMonth() + 1);
     return LIVE_SAMPLE[live] || "";
   }
+  /* ponto do liga-desliga e selos de gesto/confirmacao/acender (comum a todos os blocos) */
+  function decorate(t, b, size, pad, opts) {
+    if (b.toggle) {
+      var ds = Math.max(6, Math.round(size * 0.08));
+      var dot = el("div", "dot" + (opts.on ? " lit" : ""), null, t);
+      dot.style.width = ds + "px"; dot.style.height = ds + "px";
+      dot.style.right = pad + "px"; dot.style.top = pad + "px";
+    }
+    var gb = [];
+    if (b.hold && b.hold.type && b.hold.type !== "none") gb.push(["●", "Ao segurar"]);
+    if (b.double && b.double.type && b.double.type !== "none") gb.push(["●●", "Toque duplo"]);
+    if (b.confirm) gb.push(["!", "Pede confirmação"]);
+    if (b.lit) gb.push(["\u26a1\ufe0e", "Acende conforme o OBS"]);
+    if (gb.length && b.kind !== "folder" && size >= 40) {
+      var gw = el("div", "gbadges", null, t);
+      gw.style.right = (b.toggle ? pad + Math.max(6, Math.round(size * 0.08)) + 4 : Math.round(pad * 0.6)) + "px";
+      gw.style.top = Math.round(pad * 0.6) + "px";
+      gb.forEach(function (x) { var s0 = el("span", null, x[0], gw); s0.title = x[1]; });
+      gw.title = gb.map(function (x) { return x[1]; }).join(" · ");
+    }
+  }
   /* bloco de texto ao vivo pc:* / ia:* com valor de exemplo, como no celular:
      legenda e icone em cima, valor grande, linhas pequenas e barra colorida embaixo */
   function paintRichTile(t, W, H, size, pad, rs, fgc, light, icon, b) {
@@ -706,7 +727,7 @@
       if (!SD.validColor(L.textColor)) fgc = "#fff";
     }
     var rs = b.live && size >= 40 ? richSample(b.live) : null;
-    if (rs && !L.image) return paintRichTile(t, W, H, size, pad, rs, fgc, light, icon, b);
+    if (rs && !L.image) { paintRichTile(t, W, H, size, pad, rs, fgc, light, icon, b); decorate(t, b, size, pad, opts); return t; }
     if (b.live) label = (richSample(b.live) ? richSample(b.live)[0] : liveText(b.live)) || label;
     if (b.kind === "monitor") { if (!icon) icon = "monitor"; if (!label) label = "Monitor"; }
     if (!icon && !label && b.kind === "folder") icon = "folder";
@@ -729,24 +750,7 @@
       else { lb.style.top = "50%"; lb.style.transform = "translateY(-50%)"; }
       lb.style.fontSize = Math.round(fs * (b.live ? 1.5 : 1.1)) + "px"; lb.style.color = fgc;
     }
-    if (b.toggle) {
-      var ds = Math.max(6, Math.round(size * 0.08));
-      var dot = el("div", "dot" + (opts.on ? " lit" : ""), null, t);
-      dot.style.width = ds + "px"; dot.style.height = ds + "px";
-      dot.style.right = pad + "px"; dot.style.top = pad + "px";
-    }
-    var gb = [];
-    if (b.hold && b.hold.type && b.hold.type !== "none") gb.push(["●", "Ao segurar"]);
-    if (b.double && b.double.type && b.double.type !== "none") gb.push(["●●", "Toque duplo"]);
-    if (b.confirm) gb.push(["!", "Pede confirmação"]);
-    if (b.lit) gb.push(["\u26a1\ufe0e", "Acende conforme o OBS"]);
-    if (gb.length && b.kind !== "folder" && size >= 40) {
-      var gw = el("div", "gbadges", null, t);
-      gw.style.right = (b.toggle ? pad + Math.max(6, Math.round(size * 0.08)) + 4 : Math.round(pad * 0.6)) + "px";
-      gw.style.top = Math.round(pad * 0.6) + "px";
-      gb.forEach(function (x) { var s0 = el("span", null, x[0], gw); s0.title = x[1]; });
-      gw.title = gb.map(function (x) { return x[1]; }).join(" · ");
-    }
+    decorate(t, b, size, pad, opts);
     if (b.kind === "folder") {
       var fb = el("div", "fbadge", SD.svg("folder", 12, "#fff") + (b.buttons ? "<span>" + count(b) + "</span>" : ""), t);
       fb.title = "Pasta";
@@ -1305,9 +1309,17 @@
       [["PC", LIVE_PC], ["IAs", LIVE_IA]].forEach(function (g) {
         var og = el("optgroup", null, null, lv);
         og.label = g[0];
-        g[1].forEach(function (x) { known[x[0]] = 1; opt(og, x[0], x[1], b.live || ""); });
-        if (g[0] === "PC" && b.live && !known[b.live] && /^pc:disk:[A-Z]$/.test(b.live)) { known[b.live] = 1; opt(og, b.live, "Disco " + b.live.slice(-1) + ":", b.live); }
+        g[1].forEach(function (x) { known[x[0]] = 1; opt(og, x[0], x[1], /^pc:disk:/.test(b.live || "") && x[0] === "pc:disk:C" ? "pc:disk:C" : b.live || ""); });
       });
+      /* disco: o select mostra "Disco" e uma segunda lista escolhe a letra C-Z */
+      var dm = /^pc:disk:([A-Z])$/.exec(b.live || "");
+      if (dm) {
+        lv.value = "pc:disk:C";
+        var dl = el("select", "in", null, lvf);
+        dl.id = "diskLetter"; dl.style.marginTop = "8px";
+        for (var ci = 67; ci <= 90; ci++) opt(dl, String.fromCharCode(ci), "Unidade " + String.fromCharCode(ci) + ":", dm[1]);
+        dl.onchange = function () { edit(function (x) { x.live = "pc:disk:" + dl.value; }); };
+      }
       lv.onchange = function () { edit(function (x) { if (lv.value) x.live = lv.value; else delete x.live; }); };
     }
 

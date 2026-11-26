@@ -440,7 +440,12 @@ obsLoop();
 /* ------------------------------------------------------ IAs e monitor --- */
 var iaBridge = false;
 function showIa(d) {
-  if (!d) { $("iaClaude").textContent = "indisponível nesta versão"; $("iaBtn").style.display = "none"; return; }
+  if (!d || d.ok === false) {
+    $("iaClaude").textContent = "indisponível"; $("iaCodex").textContent = "indisponível"; $("iaBtn").style.display = "none";
+    $("allowKill").checked = false; $("allowKill").disabled = true;
+    return;
+  }
+  $("allowKill").disabled = false; $("iaBtn").style.display = "";
   iaBridge = !!d.bridge_installed;
   var txt = iaBridge ? (d.claude_updated ? "ponte instalada, recebendo dados" : "ponte instalada, aguardando o Claude Code abrir") : "ponte não instalada";
   $("iaClaude").textContent = txt;

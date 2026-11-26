@@ -550,5 +550,6 @@ html.light .acts .dup { background: #fff; color: #007aff; box-shadow: 0 0 0 0.5p
 .tile.light .sbar { background: rgba(0,0,0,0.12); }
 html.light .tile:not(.light) .sbar { background: rgba(0,0,0,0.10); }
 /* 5 tipos (com Monitor): quebram em duas linhas em vez de estourar o painel */
-#kind { display: flex; flex-wrap: wrap; max-width: 100%; }
-#kind button { flex: 1 1 auto; padding: 6px 10px; white-space: nowrap; }
+#kind { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 100%; }
+#kind button { grid-column: span 2; padding: 6px 4px; white-space: nowrap; text-align: center; }
+#kind button:nth-child(n+4) { grid-column: span 3; }
