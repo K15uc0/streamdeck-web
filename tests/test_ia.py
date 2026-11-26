@@ -64,6 +64,7 @@ class IaTests(unittest.TestCase):
         _claude_json(NOW)
         c = ia.status(now=1738425601)["claude"]
         self.assertEqual((c["five_hour"]["used"], c["five_hour"]["left"]), (0.0, 100.0))
+        self.assertIsNone(c["five_hour"]["resets_at"])       # ja passou: celular esconde "reinicia"
         self.assertEqual(c["weekly"]["used"], 41.2)
 
     def test_claude_velho(self):
@@ -185,23 +186,59 @@ class IaTests(unittest.TestCase):
             self.assertEqual(json.load(f)["model"], "original")
 
     def test_frozen_extrai_e_reaponta(self):
+        from streamdeck import VERSION
         zp = os.path.join(self.tmp, "ponte.zip")
         with zipfile.ZipFile(zp, "w") as z:
             z.writestr("StreamDeckPonte.exe", "x")
-        shutil.rmtree(os.path.join(paths.BASE, "ia", "ponte"), True)
+        ia_dir = os.path.join(paths.BASE, "ia")
+        shutil.rmtree(ia_dir, True)
+        velha = os.path.join(ia_dir, "ponte-0.0.1")
+        legado = os.path.join(ia_dir, "ponte")
+        for d in (velha, legado):
+            os.makedirs(d)
+        pasta = os.path.join(ia_dir, "ponte-" + VERSION)
         with mock.patch.object(paths, "FROZEN", True), mock.patch.object(ia, "_ponte_zip", return_value=zp):
             self.assertTrue(ia.install_bridge()["ok"])
             with open(os.path.join(self.tmp, "claude", "settings.json")) as f:
                 cmd = json.load(f)["statusLine"]["command"]
             self.assertTrue(cmd.startswith('"') and "\\" not in cmd and cmd.endswith('StreamDeckPonte.exe"'))
-            exe = os.path.join(paths.BASE, "ia", "ponte", "StreamDeckPonte.exe")
+            self.assertIn("ponte-" + VERSION + "/", cmd)
+            exe = os.path.join(pasta, "StreamDeckPonte.exe")
             self.assertTrue(os.path.exists(exe))
+            self.assertFalse(os.path.exists(velha))      # versoes velhas apagadas
+            self.assertFalse(os.path.exists(legado))
             self.assertFalse(ia.refresh_bridge())      # em dia
-            with open(os.path.join(paths.BASE, "ia", "ponte", "version.txt"), "w") as f:
+            # pasta da versao atual ja existe com version.txt certo: reaproveita
+            with open(exe, "w") as f:
+                f.write("mexido")
+            os.makedirs(velha)
+            with open(os.path.join(self.tmp, "claude", "settings.json"), "w") as f:
+                json.dump({"statusLine": {"type": "command", "command": '"%s"' % os.path.join(
+                    velha, "StreamDeckPonte.exe").replace("\\", "/")}}, f)
+            self.assertTrue(ia.refresh_bridge())       # apontava para versao velha
+            with open(exe) as f:
+                self.assertEqual(f.read(), "mexido")
+            self.assertFalse(os.path.exists(velha))
+            with open(os.path.join(pasta, "version.txt"), "w") as f:
                 f.write("0.0.1")
             os.remove(exe)
-            self.assertTrue(ia.refresh_bridge())       # versao diferente: extrai de novo
+            self.assertTrue(ia.refresh_bridge())       # version.txt errado: extrai de novo
             self.assertTrue(os.path.exists(exe))
+
+    def test_ponte_shell_windows(self):
+        from streamdeck import ponte_claude as pc
+        with mock.patch.object(pc.sys, "platform", "win32"):
+            with mock.patch.object(pc, "_acha_bash", return_value="C:/Git/bin/bash.exe"):
+                self.assertEqual(pc._argv("echo a"), ["C:/Git/bin/bash.exe", "-c", "echo a"])
+            with mock.patch.object(pc, "_acha_bash", return_value=None):
+                self.assertEqual(pc._argv("echo a"), "echo a")      # cai no cmd (shell=True)
+            with mock.patch.dict(os.environ, {"CLAUDE_CODE_GIT_BASH_PATH": __file__}):
+                self.assertEqual(pc._acha_bash(), __file__)
+            with mock.patch.dict(os.environ, {"CLAUDE_CODE_GIT_BASH_PATH": ""}), \
+                    mock.patch.object(pc.os.path, "isfile", return_value=False), \
+                    mock.patch.object(pc.shutil, "which", return_value="D:/bash.exe"):
+                self.assertEqual(pc._acha_bash(), "D:/bash.exe")
+        self.assertEqual(pc._argv("echo a"), ["/bin/sh", "-c", "echo a"])
 
     def test_ponte_lixo(self):
         script = os.path.join(paths.PKG_DIR, "ponte_claude.py")

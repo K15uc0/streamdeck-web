@@ -339,6 +339,36 @@ def load_settings():
 SETTINGS_HOOKS = []    # funcoes (data) chamadas depois de salvar os ajustes
 
 
+SETTINGS_LOCK = threading.RLock()   # ler-alterar-gravar dos ajustes
+
+
+class SettingsError(Exception):
+    """Arquivo de ajustes existe mas nao pode ser lido: nao sobrescreve."""
+
+
+def _read_settings_strict():
+    if not os.path.exists(paths.SETTINGS_PATH):
+        return {}
+    try:
+        with open(paths.SETTINGS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        raise SettingsError("nao foi possivel ler os ajustes (%s); nada foi gravado" % e)
+    if not isinstance(data, dict):
+        raise SettingsError("ajustes com formato invalido; nada foi gravado")
+    return data
+
+
+def update_settings(fn):
+    """Le, aplica fn(data) (altera no lugar) e grava sob trava; SettingsError
+    se o arquivo existe mas esta ilegivel. Devolve os dados gravados."""
+    with SETTINGS_LOCK:
+        data = _read_settings_strict()
+        fn(data)
+        save_settings(data)
+    return data
+
+
 def save_settings(data):
     with FILE_LOCK:
         write_json(paths.SETTINGS_PATH, data)

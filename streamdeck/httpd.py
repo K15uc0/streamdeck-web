@@ -587,9 +587,10 @@ class Handler(BaseHTTPRequestHandler):
         allow = body.get("allow") if isinstance(body, dict) else None
         if not isinstance(allow, bool):
             return self._json(400, {"ok": False, "error": "allow deve ser true ou false"})
-        s = storage.load_settings()
-        s["allow_kill"] = allow
-        storage.save_settings(s)
+        try:
+            storage.update_settings(lambda s: s.__setitem__("allow_kill", allow))
+        except storage.SettingsError as e:
+            return self._json(500, {"ok": False, "error": str(e)})
         return self._json(200, {"ok": True, "allow_kill": allow})
 
     def get_volume(self, q):
@@ -793,7 +794,10 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, obs.status())
 
     def local_obs_save(self, body):
-        obs.save_settings(body)
+        try:
+            obs.save_settings(body)
+        except storage.SettingsError as e:
+            return self._json(500, {"ok": False, "error": str(e)})
         obs.CLIENT.reconnect()
         print("* ajustes do OBS salvos")
         return self._json(200, obs.status())

@@ -6,6 +6,7 @@ stdin para a status line que o usuario ja tinha. Rapido, so biblioteca padrao,
 e nunca derruba o Claude Code: qualquer erro vira uma linha de texto."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -117,13 +118,36 @@ def _anterior(pasta):
     return None
 
 
+GIT_BASH_PADRAO = "C:\\Program Files\\Git\\bin\\bash.exe"
+
+
+def _acha_bash():
+    """bash.exe como o Claude Code no Windows: CLAUDE_CODE_GIT_BASH_PATH,
+    o Git for Windows padrao, depois o PATH. None se nao achar."""
+    env = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
+    if env and os.path.isfile(env):
+        return env
+    if os.path.isfile(GIT_BASH_PADRAO):
+        return GIT_BASH_PADRAO
+    return shutil.which("bash")
+
+
+def _argv(cmd):
+    """Lista para Popen (bash -c / sh -c) ou o texto (cmd, shell=True)."""
+    if sys.platform.startswith("win"):
+        bash = _acha_bash()
+        return [bash, "-c", cmd] if bash else cmd
+    return ["/bin/sh", "-c", cmd]
+
+
 def _executa(cmd, texto, limite):
     """Roda a status line anterior com o mesmo stdin; None se falhar/estourar."""
     kw = {}
     if sys.platform.startswith("win"):
         kw["creationflags"] = 0x08000000      # CREATE_NO_WINDOW
-    p = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, **kw)
+    argv = _argv(cmd)
+    p = subprocess.Popen(argv, shell=isinstance(argv, str), stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **kw)
     try:
         out, _ = p.communicate(texto.encode("utf-8"), timeout=limite)
     except subprocess.TimeoutExpired:

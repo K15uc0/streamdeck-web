@@ -35,7 +35,7 @@ def _janela(used, resets_at, now):
         return None
     used = max(0.0, min(100.0, used))
     if resets_at <= now:        # janela ja virou: comecou outra
-        used = 0.0
+        return {"used": 0.0, "left": 100.0, "resets_at": None}
     return {"used": round(used, 1), "left": round(100.0 - used, 1), "resets_at": int(resets_at)}
 
 
@@ -226,7 +226,8 @@ def _settings_path():
 
 
 def _ponte_dir():
-    return os.path.join(_ia_dir(), "ponte")
+    """Pasta versionada da ponte (ia/ponte-<versao>): sem troca no lugar."""
+    return os.path.join(_ia_dir(), "ponte-" + VERSION)
 
 
 def _fwd(p):
@@ -297,15 +298,30 @@ def _ponte_version():
         return None
 
 
+def _limpa_pontes_velhas(atual):
+    """Apaga (best-effort) ia/ponte-* de outras versoes e a ia/ponte antiga."""
+    base = _ia_dir()
+    try:
+        nomes = os.listdir(base)
+    except OSError:
+        return
+    for n in nomes:
+        d = os.path.join(base, n)
+        if (n == "ponte" or n.startswith("ponte-")) and os.path.normcase(d) != os.path.normcase(atual) \
+                and os.path.isdir(d):
+            shutil.rmtree(d, True)       # em uso (exe aberto no Windows): fica para a proxima
+
+
 def _extract_ponte():
-    """Extrai ponte.zip em ia/ponte (caminho estavel entre atualizacoes):
-    extrai numa pasta temporaria e troca; erro devolve (False, msg)."""
+    """Extrai ponte.zip em ia/ponte-<versao>; se ja existe com o version.txt
+    certo, reaproveita. Erro devolve (False, msg)."""
     z = _ponte_zip()
     if not z:
         return False, "ponte.zip nao encontrado no programa"
     dest = _ponte_dir()
-    tag = os.getpid()
-    novo, velho = "%s.novo%d" % (dest, tag), "%s.velho%d" % (dest, tag)
+    if _ponte_version() == VERSION and os.path.isfile(os.path.join(dest, "StreamDeckPonte.exe")):
+        return True, None
+    novo = "%s.novo%d" % (dest, os.getpid())
     try:
         shutil.rmtree(novo, True)
         os.makedirs(novo)
@@ -318,15 +334,8 @@ def _extract_ponte():
             zf.extractall(novo)
         with open(os.path.join(novo, "version.txt"), "w", encoding="utf-8") as f:
             f.write(VERSION)
-        if os.path.exists(dest):
-            os.rename(dest, velho)
-        try:
-            os.rename(novo, dest)
-        except OSError:
-            if os.path.exists(velho):
-                os.rename(velho, dest)
-            raise
-        shutil.rmtree(velho, True)
+        shutil.rmtree(dest, True)        # sobra incompleta da mesma versao
+        os.rename(novo, dest)
         return True, None
     except Exception as e:
         shutil.rmtree(novo, True)
@@ -362,6 +371,8 @@ def install_bridge():
         new.update({"type": "command", "command": bridge_command()})
         cfg["statusLine"] = new
         _write_settings(cfg)
+        if paths.FROZEN:
+            _limpa_pontes_velhas(_ponte_dir())
     except Exception as e:
         return {"ok": False, "error": "nao foi possivel gravar %s: %s" % (p, e)}
     return {"ok": True, "installed": True, "settings": p}

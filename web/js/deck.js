@@ -108,6 +108,7 @@
   }
   SD.fmtSize = fmtSize;
   function fmtRate(b) {
+    if (b == null) return "—";
     b = Math.max(0, b || 0);
     if (b >= MB) return (b >= 100 * MB ? Math.round(b / MB) : num1(b / MB)) + " MB/s";
     if (b >= 1024) return Math.round(b / 1024) + " KB/s";
@@ -164,7 +165,8 @@
       if (m) {
         for (var i = 0; p.disk && i < p.disk.length; i++) {
           if (String(p.disk[i].drive).charAt(0) === m[1]) {
-            var dk = p.disk[i], sz = m[1] + ": " + fmtSize(dk.used).replace(/ (GB|TB)$/, "") + "/" + fmtSize(dk.total);
+            var dk = p.disk[i], un = dk.total >= 1000 * GB ? 1024 * GB : GB, ut = un === GB ? " GB" : " TB",
+                sz = m[1] + ": " + num1(dk.used / un) + "/" + num1(dk.total / un) + ut;
             r = Math.round(dk.pct) + "%";
             return { main: r, subs: [sz], text: r + " · " + sz, bar: dk.pct, old: false };
           }
@@ -177,7 +179,7 @@
     if (!m || !SD.ia) return none;
     var lim = SD.ia[m[1]], w = lim && lim[m[2] === "5h" ? "five_hour" : "weekly"];
     if (!w || w.used == null) return { main: "—", subs: ["Sem dados"], text: "—", bar: null, old: false };
-    var used = Math.round(w.used), left = w.left != null ? Math.round(w.left) : 100 - used;
+    var used = Math.round(w.used), left = 100 - used;
     var s1 = "usado · faltam " + left + "%", out = { main: used + "%", subs: [s1], text: used + "% usado · faltam " + left + "%", bar: w.used, old: false };
     if (w.resets_at) { var rs = "reinicia " + fmtReset(w.resets_at); out.subs.push(rs); out.text += " · " + rs; }
     var age = lim.updated > 0 ? pcNow() - lim.updated : 0;
@@ -692,12 +694,12 @@
     return false;
   }
 
-  /* precisa do resumo do PC? (texto ao vivo pc:* ou bloco monitor na tela) */
+  /* precisa do resumo do PC? (texto ao vivo pc:* na tela; o bloco monitor nao mostra dados) */
   function needPc() {
     var v = visible();
     for (var i = 0; i < v.length; i++) {
       var b = v[i].b;
-      if (b && !v[i].empty && (b.kind === "monitor" || String(b.live || "").indexOf("pc:") === 0)) return true;
+      if (b && !v[i].empty && String(b.live || "").indexOf("pc:") === 0) return true;
     }
     return false;
   }
@@ -1004,7 +1006,7 @@
         setCell("cpu", "—", "", null); setCell("mem", "—", "", null); setCell("gpu", "—", "", null);
         net.innerHTML = "Sem dados do PC"; return;
       }
-      setCell("cpu", Math.round(sn.cpu) + "%", "", sn.cpu);
+      if (sn.cpu == null) setCell("cpu", "—", "", null); else setCell("cpu", Math.round(sn.cpu) + "%", "", sn.cpu);
       var m = sn.mem || {};
       setCell("mem", Math.round(m.pct || 0) + "%", m.total > 0 ? num1(m.used / GB) + "/" + num1(m.total / GB) + " GB" : "", m.pct || 0);
       if (sn.gpu == null) setCell("gpu", "—", "", null); else setCell("gpu", Math.round(sn.gpu) + "%", "", sn.gpu);
@@ -1023,7 +1025,7 @@
       var kill = canKill ? el("div", "pr-kill", "Encerrar", r) : null;
       var m = el("div", "pr-main", null, r);
       el("span", "pr-n", esc(p.name), m);
-      el("span", "pr-c" + (monSort === "cpu" ? " on" : ""), num1(p.cpu) + "%", m);
+      el("span", "pr-c" + (monSort === "cpu" ? " on" : ""), p.cpu == null ? "—" : num1(p.cpu) + "%", m);
       el("span", "pr-m" + (monSort === "mem" ? " on" : ""), fmtSize(p.mem), m);
       if (!canKill) { m.style.cursor = "default"; return; }
       kill.onclick = function () { killProc(v, p); };

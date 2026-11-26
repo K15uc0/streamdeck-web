@@ -1297,7 +1297,7 @@
 
     if (kind === "monitor") {
       var mo = el("div", "folderbox", null, box);
-      el("div", null, "No celular mostra CPU, memória, GPU e rede ao vivo. <b>Tocar abre a tela de processos</b>, onde dá para ver o que mais consome.", mo);
+      el("div", null, "Tocar abre a <b>tela de processos</b> no celular, com CPU, memória e GPU ao vivo e o que mais consome.", mo);
     }
 
     if (kind === "button" || kind === "toggle") {
