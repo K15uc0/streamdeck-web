@@ -10,6 +10,8 @@ import subprocess
 import sys
 import time
 
+ORCAMENTO = 1.8     # segundos para a status line anterior
+
 
 def _ia_dir():
     base = os.environ.get("STREAMDECK_DATA")
@@ -26,10 +28,66 @@ def _ia_dir():
 
 
 def _grava(caminho, dados):
-    tmp = caminho + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(dados, f)
-    os.replace(tmp, caminho)
+    tmp = "%s.%d.tmp" % (caminho, os.getpid())
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(dados, f)
+        os.replace(tmp, caminho)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _ler_stdin():
+    """Le o stdin sem usar sys.stdin (no .exe sem console ele pode ser None)."""
+    partes = []
+    try:
+        while True:
+            b = os.read(0, 65536)
+            if not b:
+                break
+            partes.append(b)
+    except Exception:
+        if not partes and sys.platform.startswith("win"):
+            try:
+                import ctypes
+                from ctypes import wintypes
+                k = ctypes.windll.kernel32
+                k.GetStdHandle.restype = wintypes.HANDLE
+                h = k.GetStdHandle(-10)
+                buf = ctypes.create_string_buffer(65536)
+                n = wintypes.DWORD(0)
+                while k.ReadFile(h, buf, 65536, ctypes.byref(n), None) and n.value:
+                    partes.append(buf.raw[:n.value])
+            except Exception:
+                pass
+    return b"".join(partes).decode("utf-8-sig", "replace")
+
+
+def _escrever(texto):
+    """Escreve no stdout pelo descritor 1 (sem sys.stdout)."""
+    dados = (texto + "\n").encode("utf-8", "replace")
+    try:
+        while dados:
+            n = os.write(1, dados)
+            dados = dados[n:]
+        return
+    except Exception:
+        pass
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            from ctypes import wintypes
+            k = ctypes.windll.kernel32
+            k.GetStdHandle.restype = wintypes.HANDLE
+            h = k.GetStdHandle(-11)
+            n = wintypes.DWORD(0)
+            k.WriteFile(h, dados, len(dados), ctypes.byref(n), None)
+        except Exception:
+            pass
 
 
 def _padrao(dados):
@@ -41,29 +99,54 @@ def _padrao(dados):
             j = rl.get(chave)
             if isinstance(j, dict) and j.get("used_percentage") is not None:
                 partes.append("%s %d%%" % (nome, round(float(j["used_percentage"]))))
-        return " · ".join(partes) or "Claude"
+        return " \u00b7 ".join(partes) or "Claude"
     except Exception:
         return "Claude"
 
 
 def _anterior(pasta):
     try:
-        with open(os.path.join(pasta, "statusline_anterior.json"), "r", encoding="utf-8") as f:
+        with open(os.path.join(pasta, "statusline_anterior.json"), "r", encoding="utf-8-sig") as f:
             sl = json.load(f).get("statusLine")
         cmd = sl.get("command") if isinstance(sl, dict) else None
-        if cmd and "ponte_claude" not in cmd and "--ponte-claude" not in cmd:
+        if cmd and "ponte_claude" not in cmd and "--ponte-claude" not in cmd \
+                and "StreamDeckPonte" not in cmd:
             return cmd
     except Exception:
         pass
     return None
 
 
+def _executa(cmd, texto, limite):
+    """Roda a status line anterior com o mesmo stdin; None se falhar/estourar."""
+    kw = {}
+    if sys.platform.startswith("win"):
+        kw["creationflags"] = 0x08000000      # CREATE_NO_WINDOW
+    p = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, **kw)
+    try:
+        out, _ = p.communicate(texto.encode("utf-8"), timeout=limite)
+    except subprocess.TimeoutExpired:
+        if sys.platform.startswith("win"):
+            try:
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], creationflags=0x08000000,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+            except Exception:
+                pass
+        try:
+            p.kill()
+        except Exception:
+            pass
+        return None
+    return out.decode("utf-8", "replace").rstrip("\r\n")
+
+
 def main(texto=None):
+    t0 = time.time()
     saida = "Claude"
     try:
         if texto is None:
-            raw = sys.stdin.buffer.read()
-            texto = raw.decode("utf-8", "replace")
+            texto = _ler_stdin()
         dados = {}
         try:
             dados = json.loads(texto)
@@ -83,20 +166,14 @@ def main(texto=None):
         cmd = _anterior(pasta)
         if cmd:
             try:
-                r = subprocess.run(cmd, shell=True, input=texto.encode("utf-8"),
-                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=2)
-                out = r.stdout.decode("utf-8", "replace").rstrip("\r\n")
+                out = _executa(cmd, texto, max(0.2, min(1.5, ORCAMENTO - (time.time() - t0))))
                 if out:
                     saida = out
             except Exception:
                 pass
     except BaseException:
         pass
-    try:
-        sys.stdout.write(saida + "\n")
-        sys.stdout.flush()
-    except Exception:
-        pass
+    _escrever(saida)
 
 
 if __name__ == "__main__":

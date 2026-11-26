@@ -7,7 +7,7 @@
 # da saida do console, so da API e do streamdeck.log.
 # Uso: pwsh tests/exe_smoke.ps1 [-Exe dist/StreamDeck.exe]
 #      pwsh tests/exe_smoke.ps1 -Exe dist/onedir/StreamDeck/StreamDeck.exe
-param([string]$Exe = "dist/StreamDeck.exe", [int]$Timeout = 60)
+param([string]$Exe = "dist/StreamDeck.exe", [int]$Timeout = 60, [string]$Ponte = "dist/ponte/StreamDeckPonte/StreamDeckPonte.exe")
 $ErrorActionPreference = "Stop"
 
 $exePath = (Resolve-Path $Exe).Path
@@ -17,6 +17,19 @@ New-Item -ItemType Directory -Path $data | Out-Null
 Copy-Item config.padrao.json (Join-Path $data "config.json")
 $env:STREAMDECK_DATA = $data
 $env:STREAMDECK_UPDATE_URL = "http://127.0.0.1:9/sem-rede"
+
+# 0) ponte da status line (exe de console): stdin -> stdout e ia/claude.json
+if (Test-Path $Ponte) {
+  $pdata = Join-Path ([IO.Path]::GetTempPath()) ("sd-ponte-" + [guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Path $pdata | Out-Null
+  $env:STREAMDECK_DATA = $pdata
+  $out = Get-Content tests/fixtures/claude_status.json -Raw | & (Resolve-Path $Ponte).Path
+  $env:STREAMDECK_DATA = $data
+  if (-not ($out -join "").Trim()) { Write-Host "FALHA: a ponte nao imprimiu nada"; exit 1 }
+  if (-not (Test-Path (Join-Path $pdata "ia/claude.json"))) { Write-Host "FALHA: a ponte nao gravou ia/claude.json"; exit 1 }
+  Write-Host "ok ponte: $($out -join ' ')"
+  Remove-Item -Recurse -Force $pdata -ErrorAction SilentlyContinue
+}
 
 $base = "http://127.0.0.1:8765"
 $h = @{ "X-StreamDeck" = "1" }

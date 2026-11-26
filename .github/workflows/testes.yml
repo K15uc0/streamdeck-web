@@ -77,14 +77,24 @@ jobs:
         run: pip install pyinstaller==6.10.0
 
       # arquivo unico (portatil, clientes ate a 2.4.0) e versao em pasta (instalador)
+      - name: Gerar a ponte da status line (StreamDeckPonte.exe)
+        shell: pwsh
+        run: |
+          python tools/versao.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pyinstaller --onedir --console --noupx --name StreamDeckPonte --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --collect-submodules streamdeck --workpath build/ponte --specpath build/ponte --distpath dist/ponte ponte_entry.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (Test-Path build/ponte.zip) { Remove-Item build/ponte.zip }
+          Compress-Archive -Path "dist/ponte/StreamDeckPonte/*" -DestinationPath build/ponte.zip
+
       - name: Gerar StreamDeck.exe (arquivo unico e pasta)
         shell: pwsh
         run: |
           python tools/versao.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pyinstaller --onefile --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --collect-submodules streamdeck --workpath build/onefile --specpath build/onefile --distpath dist server.py
+          pyinstaller --onefile --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --add-data "$PWD/build/ponte.zip;." --collect-submodules streamdeck --workpath build/onefile --specpath build/onefile --distpath dist server.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pyinstaller --onedir --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --collect-submodules streamdeck --workpath build/onedir --specpath build/onedir --distpath dist/onedir server.py
+          pyinstaller --onedir --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --add-data "$PWD/build/ponte.zip;." --collect-submodules streamdeck --workpath build/onedir --specpath build/onedir --distpath dist/onedir server.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Testar o .exe portatil (abrir, API, fechar)

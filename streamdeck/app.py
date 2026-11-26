@@ -145,6 +145,11 @@ def main():
     os.makedirs(paths.IMAGES_DIR, exist_ok=True)
     token = storage.token()
     winapi.migrate_autostart()
+    try:
+        from . import ia
+        ia.refresh_bridge()
+    except Exception as e:  # noqa: BLE001
+        print("Aviso: ponte do Claude Code: %s" % e)
     stop_old_instances()
     srv = port = None
     for port in PORTS:

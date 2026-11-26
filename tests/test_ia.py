@@ -8,6 +8,8 @@ import sys
 import tempfile
 import time
 import unittest
+import zipfile
+from unittest import mock
 
 import apoio  # noqa: F401
 from streamdeck import ia, paths
@@ -31,6 +33,7 @@ class IaTests(unittest.TestCase):
         os.environ["CODEX_HOME"] = os.path.join(self.tmp, "codex")
         os.environ["CLAUDE_CONFIG_DIR"] = os.path.join(self.tmp, "claude")
         os.makedirs(os.path.join(self.tmp, "claude"))
+        ia._CX.update(key=None, val=None, t=0.0)
         cj = os.path.join(paths.BASE, "ia", "claude.json")
         if os.path.exists(cj):
             os.remove(cj)
@@ -137,6 +140,68 @@ class IaTests(unittest.TestCase):
         r = subprocess.run([sys.executable, script], input=entrada, stdout=subprocess.PIPE,
                            env=dict(os.environ), timeout=10)
         self.assertIn("5h 24%".encode(), r.stdout)
+
+    def test_ponte_sem_sys_std(self):
+        """Estilo .exe sem console: sys.stdout/stdin None, so descritores."""
+        code = ("import sys; sys.stdin = None; sys.stdout = None; sys.stderr = None\n"
+                "from streamdeck import ponte_claude; ponte_claude.main()")
+        with open(os.path.join(FIX, "claude_status.json"), "rb") as f:
+            entrada = f.read()
+        r = subprocess.run([sys.executable, "-c", code], input=entrada, stdout=subprocess.PIPE,
+                           cwd=apoio.ROOT, env=dict(os.environ), timeout=10)
+        self.assertIn("5h 24%".encode(), r.stdout)
+        self.assertTrue(os.path.exists(os.path.join(paths.BASE, "ia", "claude.json")))
+
+    def test_settings_com_bom(self):
+        sp = os.path.join(self.tmp, "claude", "settings.json")
+        with open(sp, "wb") as f:
+            f.write(b"\xef\xbb\xbf" + json.dumps({"model": "x"}).encode())
+        self.assertTrue(ia.install_bridge()["ok"])
+        with open(sp, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["model"], "x")
+        self.assertTrue(ia.bridge_installed())
+
+    def test_install_falha_atomica(self):
+        sp = os.path.join(self.tmp, "claude", "settings.json")
+        with open(sp, "w") as f:
+            json.dump({"model": "x"}, f)
+        with mock.patch("streamdeck.ia.os.replace", side_effect=PermissionError("preso")):
+            r = ia.install_bridge()
+        self.assertFalse(r["ok"])
+        with open(sp) as f:
+            self.assertEqual(json.load(f), {"model": "x"})
+        self.assertEqual([n for n in os.listdir(os.path.dirname(sp)) if n.endswith(".tmp")], [])
+
+    def test_backup_primeiro_e_mantido(self):
+        sp = os.path.join(self.tmp, "claude", "settings.json")
+        with open(sp, "w") as f:
+            json.dump({"model": "original"}, f)
+        ia.install_bridge()
+        ia.uninstall_bridge()
+        with open(sp, "w") as f:
+            json.dump({"model": "outro"}, f)
+        ia.install_bridge()
+        with open(sp + ".streamdeck.bak") as f:
+            self.assertEqual(json.load(f)["model"], "original")
+
+    def test_frozen_extrai_e_reaponta(self):
+        zp = os.path.join(self.tmp, "ponte.zip")
+        with zipfile.ZipFile(zp, "w") as z:
+            z.writestr("StreamDeckPonte.exe", "x")
+        shutil.rmtree(os.path.join(paths.BASE, "ia", "ponte"), True)
+        with mock.patch.object(paths, "FROZEN", True), mock.patch.object(ia, "_ponte_zip", return_value=zp):
+            self.assertTrue(ia.install_bridge()["ok"])
+            with open(os.path.join(self.tmp, "claude", "settings.json")) as f:
+                cmd = json.load(f)["statusLine"]["command"]
+            self.assertTrue(cmd.startswith('"') and "\\" not in cmd and cmd.endswith('StreamDeckPonte.exe"'))
+            exe = os.path.join(paths.BASE, "ia", "ponte", "StreamDeckPonte.exe")
+            self.assertTrue(os.path.exists(exe))
+            self.assertFalse(ia.refresh_bridge())      # em dia
+            with open(os.path.join(paths.BASE, "ia", "ponte", "version.txt"), "w") as f:
+                f.write("0.0.1")
+            os.remove(exe)
+            self.assertTrue(ia.refresh_bridge())       # versao diferente: extrai de novo
+            self.assertTrue(os.path.exists(exe))
 
     def test_ponte_lixo(self):
         script = os.path.join(paths.PKG_DIR, "ponte_claude.py")
