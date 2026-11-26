@@ -1,5 +1,10 @@
 # Novidades
 
+## 2.9.1
+
+- Blocos do monitor e do consumo das IAs se ajustam a telas pequenas (celular deitado): o nome do bloco (CPU, Memória, Claude 5 h...) sempre aparece, o valor ocupa o espaço que sobra e a rede mostra baixar e enviar na mesma linha.
+- Nome do bloco não é mais cortado ("Mem..."): quando não cabe junto do ícone, o ícone sai.
+
 ## 2.9.0
 
 - **Monitor do PC no celular**: botão "Monitor do PC" (modelo pronto no editor) e blocos ao vivo de CPU, memória, GPU, temperatura da CPU e da GPU, rede (baixar e enviar) e espaço de cada disco (escolha a letra). Tocar no bloco abre a tela de processos.
