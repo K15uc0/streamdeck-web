@@ -345,7 +345,9 @@
     } else ic.innerHTML = "";
     var main = rich.main, subs = rich.subs;
     /* bloco largo e baixo: junta a primeira linha de apoio ao valor (ex.: rede com subida) */
-    if (subs.length && live === "pc:net" && (small || (main + "  " + subs[0]).length * Math.min(h * 0.3, 30) * 0.6 <= w - pad * 2)) {
+    /* so junta se as duas taxas couberem inteiras numa linha com letra legivel (>= 13 px) */
+    var joined = main + "  " + (subs[0] || ""), joinFs = small ? 13 : Math.min(h * 0.3, 30);
+    if (subs.length && live === "pc:net" && joined.length * joinFs * 0.6 <= w - pad * 1.7) {
       main = main + "  " + subs[0]; subs = subs.slice(1);
     }
     if (cap) {
