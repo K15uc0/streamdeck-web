@@ -326,16 +326,28 @@
 
   /* texto ao vivo do PC / IAs: legenda em cima, valor grande, linhas de apoio e barra no rodape */
   function paintRich(t, w, h, m, pad, rich, fg, icon, live) {
-    var e = t.el, barH = m >= 140 ? 7 : 4, small = m < 66;
-    var capFs = Math.max(10, Math.min(15, Math.round(m * 0.13))), subFs = Math.max(10, Math.min(14, Math.round(m * 0.115)));
-    var isz = Math.max(14, Math.min(26, Math.round(m * 0.24))), hasIc = !!icon && !small;
-    var cap = small ? "" : captionOf(t, live), capH = hasIc ? isz : cap ? Math.round(capFs * 1.3) : 0;
-    var botPad = Math.max(6, Math.round(pad * 0.7)) + barH;
+    var e = t.el, barH = m >= 140 ? 7 : m < 66 ? 3 : 4, small = m < 66;
+    /* bloco pequeno (celular deitado): margens menores, legenda sempre visivel */
+    if (small) pad = Math.max(5, Math.round(m * 0.1));
+    var capFs = small ? Math.max(9, Math.min(12, Math.round(h * 0.17))) : Math.max(10, Math.min(15, Math.round(m * 0.13)));
+    var subFs = small ? Math.max(9, Math.min(11, Math.round(h * 0.16))) : Math.max(10, Math.min(14, Math.round(m * 0.115)));
+    var cap = captionOf(t, live);
+    var isz = Math.max(14, Math.min(26, Math.round(m * 0.24)));
+    /* o icone so entra se a legenda couber inteira ao lado dele */
+    var capW = cap.length * capFs * 0.6;
+    var hasIc = !!icon && !small && (!cap || capW <= w - pad * 2 - isz - 6);
+    var capH = hasIc ? isz : cap ? Math.round(capFs * 1.3) : 0;
+    var botPad = Math.max(small ? 4 : 6, Math.round(pad * 0.7)) + barH;
     var ic = t.ic, lb = t.lb;
     if (hasIc) {
       ic.innerHTML = SD.iconHtml(icon, isz, fg);
       ic.style.right = px(pad); ic.style.top = px(pad);
     } else ic.innerHTML = "";
+    var main = rich.main, subs = rich.subs;
+    /* bloco largo e baixo: junta a primeira linha de apoio ao valor (ex.: rede com subida) */
+    if (subs.length && live === "pc:net" && (small || (main + "  " + subs[0]).length * Math.min(h * 0.3, 30) * 0.6 <= w - pad * 2)) {
+      main = main + "  " + subs[0]; subs = subs.slice(1);
+    }
     if (cap) {
       if (!t.lcap) t.lcap = el("div", "lcap", null, t.el);
       t.lcap.innerHTML = esc(cap);
@@ -345,12 +357,14 @@
       t.lcap.style.right = px(pad + (hasIc ? isz + 6 : 0));
       t.lcap.style.top = px(pad + Math.max(0, Math.round((capH - capFs * 1.2) / 2)));
     } else if (t.lcap) { e.removeChild(t.lcap); t.lcap = null; }
-    var len = Math.max(3, rich.main.length), mainFs = Math.max(14, Math.min(44, Math.round(m * 0.27)));
-    mainFs = Math.max(11, Math.min(mainFs, Math.floor((w - pad * 1.7) / (len * 0.6))));
-    var lh = Math.round(subFs * 1.3), avail = h - (pad + capH) - botPad - Math.round(mainFs * 1.2) - 2;
-    var subs = rich.subs;
+    var len = Math.max(3, main.length);
+    var room = h - (pad + capH) - botPad - 2;
+    var mainFs = Math.max(14, Math.min(44, Math.round(m * 0.27)));
+    if (small) mainFs = Math.round(room / 1.15);
+    mainFs = Math.max(11, Math.min(mainFs, 44, Math.floor((w - pad * 1.7) / (len * 0.6))));
+    var lh = Math.round(subFs * 1.3), avail = room - Math.round(mainFs * 1.2);
     if (w < 90 && live.indexOf("ia:") === 0 && rich.bar != null) subs = [Math.round(rich.bar) + "% usado"].concat(rich.old ? [subs[subs.length - 1]] : []);
-    var n = small ? 0 : Math.max(0, Math.min(subs.length, Math.floor(avail / lh)));
+    var n = Math.max(0, Math.min(subs.length, Math.floor(avail / lh)));
     if (n) {
       if (!t.lsub) t.lsub = el("div", "lsub", null, t.el);
       var hh = "";
@@ -360,6 +374,7 @@
       t.lsub.style.fontSize = px(subFs); t.lsub.style.lineHeight = px(lh);
       t.lsub.style.left = px(pad); t.lsub.style.right = px(pad * 0.7); t.lsub.style.bottom = px(botPad - 1);
     } else if (t.lsub) { e.removeChild(t.lsub); t.lsub = null; }
+    if (main !== rich.main) lb.innerHTML = esc(main);
     lb.className = "lb bl";
     lb.style.left = px(pad); lb.style.right = px(pad * 0.7);
     lb.style.bottom = px(botPad + n * lh);
