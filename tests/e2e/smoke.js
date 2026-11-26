@@ -310,6 +310,18 @@ async function editor(browser, base, errors) {
   cfg = await getCfg();
   assert.strictEqual(cfg.pages.length, n0 + 1);
   assert.deepStrictEqual(cfg.pages[3].grid, { columns: 5, rows: 2, portrait: { columns: 2, rows: 5 } }, "pagina nova com grade");
+  /* ids fixos: pagina nova tem id proprio; copia nao leva o id da original */
+  var ids = cfg.pages.map(function (p) { return p.id; });
+  ids.forEach(function (id) { assert.ok(/^[0-9a-f]{4,16}$/.test(id), "pagina com id: " + id); });
+  saved = saveOk();
+  await page.locator("#pages .pg").nth(0).click({ button: "right" });
+  await page.locator("#pmDup").click();
+  await saved;
+  cfg = await getCfg();
+  assert.strictEqual(cfg.pages.length, n0 + 2);
+  assert.strictEqual(cfg.pages[0].id, ids[0], "original mantem o id");
+  assert.ok(cfg.pages[1].id && ids.indexOf(cfg.pages[1].id) < 0, "copia ganha id novo");
+  assert.deepStrictEqual(cfg.pages.slice(2).map(function (p) { return p.id; }), ids.slice(1), "mover mantem ids");
   await ctx.close();
 }
 
