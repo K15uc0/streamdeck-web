@@ -174,6 +174,7 @@ def upgrade(ip, ua):
         legacy = _load().get("legacy_full") is True
         dev = create(ua=ua, ip=ip, full=legacy)
         _UPGRADES[(ip, ua or "")] = (dev["id"], now)
+        dev["new"] = True
         return dev
 
 
@@ -195,6 +196,15 @@ def get(dev_id):
     with LOCK:
         try:
             return _public(_by_id(_load(), dev_id))
+        except KeyError:
+            return None
+
+
+def get_key(dev_id):
+    """Chave do aparelho (so para regravar o cookie dele mesmo)."""
+    with LOCK:
+        try:
+            return _by_id(_load(), dev_id)["key"]
         except KeyError:
             return None
 

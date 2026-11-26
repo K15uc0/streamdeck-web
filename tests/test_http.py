@@ -154,7 +154,8 @@ class HttpTest(unittest.TestCase):
     def test_primeiro_acesso_grava_cookie(self):
         st, h, _ = apoio.fake_request("GET", "/?k=" + storage.token(), ip="192.168.0.80")
         self.assertEqual(st, 302)
-        self.assertIn("sdk=" + storage.token(), h["set-cookie"])
+        self.assertRegex(h["set-cookie"], r"^sdk=[0-9a-f]{32};")      # chave do aparelho (2.11)
+        self.assertNotIn(storage.token(), h["set-cookie"])
         st, _, _ = apoio.fake_request("GET", "/?k=errado", ip="192.168.0.80")
         self.assertEqual(st, 403)
 
