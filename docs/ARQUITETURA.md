@@ -161,6 +161,12 @@ com `web/css/editar.css` e `web/js/editar.js`, que reutilizam `web/js/core.js`
 A mesma lista de botões é distribuída linha a linha em cada grade; se a grade
 atual tiver menos posições que a lista, os excedentes não aparecem (o editor avisa).
 
+**Grade por página (2.10).** Opcional em cada página:
+`"grid": {"columns": 5, "rows": 4, "portrait": {"columns": 4, "rows": 5}}` (mesmos
+limites; `portrait` opcional, com a mesma regra de transpor). Sem `grid`, a página usa
+a grade geral. `SD.pageGrid(cfg, i)` (core.js) devolve a grade válida da página; o
+celular e o editor usam a da página atual. No editor, "Grade: Geral | Própria".
+
 **Celular (só uso).** Sem modo edição. Ajustes por aparelho em localStorage
 (`sd_prefs`): `orientation` = `auto|portrait|landscape`, `autoFullscreen` bool.
 Tela cheia pela barra; trava via `screen.orientation.lock` quando possível, senão

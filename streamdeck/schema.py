@@ -161,24 +161,29 @@ def validate_button(b, n_pages, where, kinds=KINDS):
                 actions.validate(b[key], n_pages, "%s (%s)" % (where, name))
 
 
+def _grid(g, prefix):
+    """Valida colunas/linhas (e "portrait" opcional) de uma grade."""
+    for key, lo, hi in (("columns", 1, 10), ("rows", 1, 8)):
+        v = g.get(key)
+        if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
+            raise ValueError("%s%s deve ficar entre %d e %d" % (prefix, key, lo, hi))
+    por = g.get("portrait")
+    if por is not None:
+        if not isinstance(por, dict):
+            raise ValueError("%sportrait invalido" % prefix)
+        for key, lo, hi in (("columns", 1, 10), ("rows", 1, 8)):
+            v = por.get(key)
+            if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
+                raise ValueError("%svertical: %s deve ficar entre %d e %d" % (prefix, key, lo, hi))
+
+
 def validate_config(cfg):
     if not isinstance(cfg, dict):
         raise ValueError("configuracao invalida")
     if cfg.get("version") != CONFIG_VERSION:
         raise ValueError("versao da configuracao invalida (esperado %d)" % CONFIG_VERSION)
     _opt_str(cfg, "title", MAX_TITLE, "configuracao")
-    for key, lo, hi in (("columns", 1, 10), ("rows", 1, 8)):
-        v = cfg.get(key)
-        if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
-            raise ValueError("%s deve ficar entre %d e %d" % (key, lo, hi))
-    por = cfg.get("portrait")
-    if por is not None:
-        if not isinstance(por, dict):
-            raise ValueError("portrait invalido")
-        for key, lo, hi in (("columns", 1, 10), ("rows", 1, 8)):
-            v = por.get(key)
-            if not isinstance(v, int) or isinstance(v, bool) or not (lo <= v <= hi):
-                raise ValueError("vertical: %s deve ficar entre %d e %d" % (key, lo, hi))
+    _grid(cfg, "")
     pages = cfg.get("pages")
     if not isinstance(pages, list) or not pages:
         raise ValueError("precisa ter ao menos uma pagina")
@@ -190,6 +195,11 @@ def validate_config(cfg):
         if pg.get("layout", "grid") != "grid":
             raise ValueError("pagina %d: layout invalido" % (pi + 1))
         _opt_str(pg, "name", MAX_NAME, "pagina %d" % (pi + 1))
+        grid = pg.get("grid")
+        if grid is not None:
+            if not isinstance(grid, dict):
+                raise ValueError("pagina %d: grade invalida" % (pi + 1))
+            _grid(grid, "pagina %d: " % (pi + 1))
         apps = pg.get("apps")
         if apps is not None:
             if not isinstance(apps, list) or len(apps) > MAX_APPS:

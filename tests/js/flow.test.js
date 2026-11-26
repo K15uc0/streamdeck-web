@@ -218,5 +218,23 @@ test("remapPages: segurar, toque duplo e pastas", function () {
   assert.ok(SD.isEmpty(f[1]), "F2 deveria ficar vazio");
 });
 
+/* -------------------------------------------------------- pageGrid --- */
+test("pageGrid: sem grade propria usa a geral", function () {
+  var c = { columns: 4, rows: 3, pages: [{ buttons: [] }] };
+  assert.strictEqual(SD.pageGrid(c, 0), c);
+  assert.strictEqual(SD.pageGrid(c, 5), c);
+});
+test("pageGrid: grade propria da pagina", function () {
+  var g = { columns: 5, rows: 4 };
+  var c = { columns: 4, rows: 3, pages: [{ buttons: [] }, { grid: g, buttons: [] }] };
+  assert.strictEqual(SD.pageGrid(c, 1), g);
+  assert.strictEqual(SD.pageGrid(c, 0), c);
+});
+test("pageGrid: grade propria invalida cai na geral", function () {
+  var c = { columns: 4, rows: 3, pages: [{ grid: { columns: 11, rows: 2 } }, { grid: { columns: 3 } }] };
+  assert.strictEqual(SD.pageGrid(c, 0), c);
+  assert.strictEqual(SD.pageGrid(c, 1), c);
+});
+
 console.log("\n" + passed + " ok, " + failed + " com falha");
 process.exit(failed ? 1 : 0);

@@ -128,7 +128,7 @@ TEMPLATES = [
      ]}},
     {"id": "monitor", "name": "Monitor do PC", "icon": "cpu",
      "desc": "CPU, memória, GPU, temperatura e rede ao vivo, tela de processos e o consumo do Claude e do Codex.",
-     "page": {"name": "Monitor", "buttons": [
+     "page": {"name": "Monitor", "grid": {"columns": 5, "rows": 4}, "buttons": [
          _btn("CPU", "cpu", L.BLUE, {"type": "none"}, live="pc:cpu", w=2),
          _btn("Memória", "layers", L.PURPLE, {"type": "none"}, live="pc:mem"),
          _btn("GPU", "chart", L.GREEN, {"type": "none"}, live="pc:gpu"),
@@ -189,6 +189,9 @@ def check():
             raise ValueError("Modelo %s: botoes demais" % t["name"])
         for i, b in enumerate(btns):
             schema.validate_button(b, 1, "Modelo %s, botao %d" % (t["name"], i + 1))
+        if "grid" in t["page"]:
+            schema.validate_config({"version": schema.CONFIG_VERSION, "columns": 5, "rows": 3,
+                                    "pages": [t["page"]]})
 
 
 def templates():

@@ -1,5 +1,12 @@
 # Novidades
 
+## 2.10.0
+
+- **Grade por página**: cada página pode ter a sua própria quantidade de colunas e linhas. No editor, na barra da página, escolha "Grade: Própria" e ajuste colunas e linhas (e a grade vertical) só daquela página. "Geral" volta a usar a grade de todas as páginas.
+- O celular mostra cada página com a grade dela, igual ao editor.
+- Mudar a grade geral não altera as páginas com grade própria. Na lista de páginas, a grade própria aparece ao lado do nome (ex.: 5×4).
+- O modelo "Monitor do PC" cria a página já com grade 5×4, para os blocos caberem sem aperto.
+
 ## 2.9.1
 
 - Blocos do monitor e do consumo das IAs se ajustam a telas pequenas (celular deitado): o nome do bloco (CPU, Memória, Claude 5 h...) sempre aparece, o valor ocupa o espaço que sobra e a rede mostra baixar e enviar na mesma linha.

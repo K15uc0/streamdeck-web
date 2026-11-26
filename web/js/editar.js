@@ -99,12 +99,15 @@
     for (var i = 0; i < bs.length; i++) if (!edEmpty(bs[i])) n++;
     return n;
   }
-  /* grade da orientacao: {c, r, auto} */
-  function dims(o) {
-    if (o === "land") return { c: cfg.columns, r: cfg.rows };
-    if (cfg.portrait) return { c: cfg.portrait.columns, r: cfg.portrait.rows };
-    if (cfg.columns > cfg.rows) return { c: cfg.rows, r: cfg.columns, auto: true };
-    return { c: cfg.columns, r: cfg.rows, auto: true };
+  /* dono da grade de uma pagina: a propria (pg.grid) ou a geral (cfg) */
+  function gridOf(pg) { return pg && pg.grid ? pg.grid : cfg; }
+  /* grade da orientacao: {c, r, auto} (da pagina atual, ou de pg) */
+  function dims(o, pg) {
+    var g = gridOf(pg || curPage());
+    if (o === "land") return { c: g.columns, r: g.rows };
+    if (g.portrait) return { c: g.portrait.columns, r: g.portrait.rows };
+    if (g.columns > g.rows) return { c: g.rows, r: g.columns, auto: true };
+    return { c: g.columns, r: g.rows, auto: true };
   }
   function opt(s, value, label, cur) {
     var o = el("option", null, null, s);
@@ -361,6 +364,7 @@
       el("span", "n", String(i + 1), row);
       var t = el("span", "t", esc(pageName(i)), row);
       if (pg.apps && pg.apps.length) el("span", "ap", "auto", row).title = "Troca sozinha: " + pg.apps.join(", ");
+      if (pg.grid) el("span", "ap", pg.grid.columns + "×" + pg.grid.rows, row).title = "Grade própria desta página";
       el("span", "c", String(count(pg)), row);
       var more = el("button", "more", "…", row);
       more.title = "Mais opções";
@@ -555,29 +559,47 @@
     });
     var s = $("sizes");
     s.innerHTML = "";
+    /* grade: geral (todas as paginas) ou propria (so desta pagina) */
+    var pg = curPage(), g = gridOf(pg);
+    el("span", null, "Grade:", s);
+    var gm = el("select", null, null, s);
+    gm.id = "gridMode";
+    gm.title = "Geral: a grade de todas as páginas. Própria: só desta página.";
+    opt(gm, "geral", "Geral", pg.grid ? "propria" : "geral");
+    opt(gm, "propria", "Própria", pg.grid ? "propria" : "geral");
+    gm.onchange = function () {
+      change(function () {
+        var p = curPage();
+        if (gm.value === "geral") delete p.grid;
+        else {
+          p.grid = { columns: cfg.columns, rows: cfg.rows };
+          if (cfg.portrait) p.grid.portrait = { columns: cfg.portrait.columns, rows: cfg.portrait.rows };
+        }
+      });
+    };
     if (orient === "land") {
-      el("span", null, "Grade horizontal:", s);
-      numSelect(s, cfg.columns, 1, 10, function (v) { change(function () { cfg.columns = v; }); }).title = "Colunas";
+      el("span", null, pg.grid ? "Horizontal desta página:" : "Horizontal:", s);
+      numSelect(s, g.columns, 1, 10, function (v) { change(function () { g.columns = v; }); }).title = "Colunas";
       el("span", "x", "colunas ×", s);
-      numSelect(s, cfg.rows, 1, 8, function (v) { change(function () { cfg.rows = v; }); }).title = "Linhas";
+      numSelect(s, g.rows, 1, 8, function (v) { change(function () { g.rows = v; }); }).title = "Linhas";
       el("span", "x", "linhas", s);
     } else {
       var d = dims("port");
-      el("span", null, "Grade vertical:", s);
+      el("span", null, pg.grid ? "Vertical desta página:" : "Vertical:", s);
       var m = el("select", null, null, s);
       m.id = "portMode";
-      opt(m, "auto", "Automática (invertida)", cfg.portrait ? "custom" : "auto");
-      opt(m, "custom", "Personalizada", cfg.portrait ? "custom" : "auto");
+      opt(m, "auto", "Automática (invertida)", g.portrait ? "custom" : "auto");
+      opt(m, "custom", "Personalizada", g.portrait ? "custom" : "auto");
       m.onchange = function () {
         change(function () {
-          if (m.value === "auto") delete cfg.portrait;
-          else cfg.portrait = { columns: Math.min(10, d.c), rows: Math.min(8, d.r) };
+          if (m.value === "auto") delete g.portrait;
+          else g.portrait = { columns: Math.min(10, d.c), rows: Math.min(8, d.r) };
         });
       };
-      if (cfg.portrait) {
-        numSelect(s, cfg.portrait.columns, 1, 10, function (v) { change(function () { cfg.portrait.columns = v; }); });
+      if (g.portrait) {
+        numSelect(s, g.portrait.columns, 1, 10, function (v) { change(function () { g.portrait.columns = v; }); });
         el("span", "x", "colunas ×", s);
-        numSelect(s, cfg.portrait.rows, 1, 8, function (v) { change(function () { cfg.portrait.rows = v; }); });
+        numSelect(s, g.portrait.rows, 1, 8, function (v) { change(function () { g.portrait.rows = v; }); });
         el("span", "x", "linhas", s);
       } else {
         el("span", "x", d.c + " × " + d.r, s);
@@ -2631,7 +2653,7 @@
     });
   }
   function miniPage(pg, parentEl) {
-    var d = dims("land"), W = 150, gap = 3;
+    var d = dims("land", pg), W = 150, gap = 3;
     var cw = Math.floor((W - gap * (d.c - 1)) / d.c), H = cw * d.r + gap * (d.r - 1);
     var wrap = el("div", "tmini", null, parentEl);
     wrap.style.width = W + "px"; wrap.style.height = H + "px";

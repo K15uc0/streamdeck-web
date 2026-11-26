@@ -695,7 +695,7 @@
     if (p && okDim(p.columns, 10) && okDim(p.rows, 8)) return { cols: okDim(p.columns, 10), rows: okDim(p.rows, 8) };
     return c > r ? { cols: r, rows: c } : { cols: c, rows: r };
   };
-  function dims() { return SD.gridDims(SD.cfg, frame.portrait); }
+  function dims() { return SD.gridDims(SD.pageGrid(SD.cfg, SD.page), frame.portrait); }
 
   /* blocos na tela (pagina e pasta aberta) */
   function visible() { return folder ? keys.concat(fkeys) : keys; }
