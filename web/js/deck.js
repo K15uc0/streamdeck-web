@@ -95,9 +95,9 @@
   SD.ia = null;        /* ultimo {claude, codex, grok} (/api/state?ia=1) + at */
   var GB = 1073741824, MB = 1048576;
   var DOW = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-  var CAPS = { "pc:cpu": "CPU", "pc:mem": "Memória", "pc:gpu": "GPU", "pc:temp_cpu": "Temp. CPU", "pc:temp_gpu": "Temp. GPU",
-    "pc:net": "Rede", "ia:claude:5h": "Claude 5 h", "ia:claude:week": "Claude semana",
-    "ia:codex:5h": "Codex 5 h", "ia:codex:week": "Codex semana" };
+  var CAPS = { "pc:cpu": "CPU", "pc:mem": "Memória", "pc:gpu": "GPU", "pc:temp_cpu": "CPU \u00b0C", "pc:temp_gpu": "GPU \u00b0C",
+    "pc:net": "Rede", "ia:claude:5h": "Claude 5 h", "ia:claude:week": "Claude sem",
+    "ia:codex:5h": "Codex 5 h", "ia:codex:week": "Codex sem" };
   function isRichLive(live) { return live.indexOf("pc:") === 0 || live.indexOf("ia:") === 0; }
   function num1(n) { return (Math.round(n * 10) / 10).toFixed(1).replace(".", ",").replace(/,0$/, ""); }
   function fmtSize(b) {
@@ -346,11 +346,13 @@
     var len = Math.max(3, rich.main.length), mainFs = Math.max(14, Math.min(44, Math.round(m * 0.27)));
     mainFs = Math.max(11, Math.min(mainFs, Math.floor((w - pad * 1.7) / (len * 0.6))));
     var lh = Math.round(subFs * 1.3), avail = h - (pad + capH) - botPad - Math.round(mainFs * 1.2) - 2;
-    var n = small ? 0 : Math.max(0, Math.min(rich.subs.length, Math.floor(avail / lh)));
+    var subs = rich.subs;
+    if (w < 90 && live.indexOf("ia:") === 0 && rich.bar != null) subs = [Math.round(rich.bar) + "% usado"].concat(rich.old ? [subs[subs.length - 1]] : []);
+    var n = small ? 0 : Math.max(0, Math.min(subs.length, Math.floor(avail / lh)));
     if (n) {
       if (!t.lsub) t.lsub = el("div", "lsub", null, t.el);
       var hh = "";
-      for (var i = 0; i < n; i++) hh += '<div class="' + (rich.old && i === rich.subs.length - 1 ? "o" : "") + '">' + esc(rich.subs[i]) + "</div>";
+      for (var i = 0; i < n; i++) hh += '<div class="' + (rich.old && subs[i] === rich.subs[rich.subs.length - 1] ? "o" : "") + '">' + esc(subs[i]) + "</div>";
       t.lsub.innerHTML = hh;
       t.lsub.style.color = fg;
       t.lsub.style.fontSize = px(subFs); t.lsub.style.lineHeight = px(lh);
@@ -705,7 +707,7 @@
     for (var i = 0; i < v.length; i++) if (v[i].b && String(v[i].b.live || "").indexOf("ia:") === 0) return true;
     return false;
   }
-  var IA_EVERY = 30000, iaAt = 0;
+  var IA_EVERY = 30000, iaAt = 0, soonAt = 0;
 
   /* vibrar (se ligado nos ajustes deste aparelho) */
   function buzz(p) {
@@ -952,7 +954,7 @@
   function setupLive() {
     clearTimeout(liveT); clearInterval(secT); secT = null;
     var k = liveKinds();
-    if (pollT && SD.cfg && ((needPc() && !SD.pc) || (needIa() && SD.now() - iaAt > IA_EVERY - 1000))) pollSoon();
+    if (pollT && SD.cfg && SD.now() - soonAt > 1500 && ((needPc() && !SD.pc) || (needIa() && SD.now() - iaAt > IA_EVERY - 1000))) pollSoon();
     if (k.clock) {
       liveT = setTimeout(function () {
         repaintLive(function (l) { return l === "clock" || l === "date"; });
@@ -1016,13 +1018,14 @@
       for (var i = 0; i < rs.length; i++) SD.setClass(rs[i], "open", false);
       v.openPid = null;
     }
-    function row(p) {
-      var r = el("div", "prow" + (p.pid === v.openPid ? " open" : ""), null, list);
-      var kill = el("div", "pr-kill", "Encerrar", r);
+    function row(p, canKill) {
+      var r = el("div", "prow" + (canKill && p.pid === v.openPid ? " open" : ""), null, list);
+      var kill = canKill ? el("div", "pr-kill", "Encerrar", r) : null;
       var m = el("div", "pr-main", null, r);
       el("span", "pr-n", esc(p.name), m);
       el("span", "pr-c" + (monSort === "cpu" ? " on" : ""), num1(p.cpu) + "%", m);
       el("span", "pr-m" + (monSort === "mem" ? " on" : ""), fmtSize(p.mem), m);
+      if (!canKill) { m.style.cursor = "default"; return; }
       kill.onclick = function () { killProc(v, p); };
       var sx = 0, sy = 0, moved = false;
       function pt(e) { var t = e.touches[0]; return SD.toLocal ? SD.toLocal(t.clientX, t.clientY) : { x: t.clientX, y: t.clientY }; }
@@ -1048,7 +1051,7 @@
       list.innerHTML = "";
       var ps = data.processes || [];
       if (!ps.length) el("div", "mon-empty", "Sem dados", list);
-      for (var i = 0; i < ps.length; i++) row(ps[i]);
+      for (var i = 0; i < ps.length; i++) row(ps[i], !!data.allow_kill);
       if (foot) { foot.parentNode.removeChild(foot); foot = null; }
       if (!data.allow_kill) foot = grp.foot("Para encerrar processos pelo celular, ative em Conectar no PC.");
     }
@@ -1056,7 +1059,7 @@
       var seq = ++v.seq;
       SD.req("GET", "/api/monitor?sort=" + monSort, null, function (ok, data) {
         if (v.dead || seq !== v.seq) return;
-        if (!ok || !data) { net.innerHTML = "Sem conexão com o PC"; return; }
+        if (!ok || !data) { fillHead(null); net.innerHTML = "Sem conexão com o PC"; return; }
         fillHead(data.snapshot);
         if (!v.touching) fillList(data);
       });
@@ -1654,6 +1657,7 @@
     });
   }
   function pollSoon() {
+    soonAt = SD.now();
     clearTimeout(pollT);
     pollT = setTimeout(poll, 50);
     if (needLevels()) fetchLevels();

@@ -526,10 +526,9 @@ html.theme-light, html.theme-light body { background: #f2f2f7; color: #000; }
 .key .lsub div { overflow: hidden; text-overflow: ellipsis; }
 .key .lsub div.o { opacity: 0.7; font-style: italic; }
 .key.stale .lb, .key.stale .lcap { opacity: 0.55; }
-.key .sbar.lbar { background: rgba(0,0,0,0.30); }
-.key.light .sbar.lbar { background: rgba(0,0,0,0.12); }
-.key .sbar.lbar i { background: #30d158; }
-.theme-light .key .sbar.lbar { background: rgba(0,0,0,0.10); }
+.key.live .sbar.lbar { background: rgba(0,0,0,0.30); }
+.key.live.light .sbar.lbar { background: rgba(0,0,0,0.12); }
+.theme-light .key.live .sbar.lbar { background: rgba(0,0,0,0.10); }
 .key.stale .sbar.lbar i { opacity: 0.55; }
 
 /* tela do monitor */
