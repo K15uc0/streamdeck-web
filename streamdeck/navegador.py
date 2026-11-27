@@ -19,6 +19,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import threading
 import time
 from urllib.parse import urlparse
@@ -26,7 +27,8 @@ from urllib.parse import urlparse
 from . import paths, winapi
 
 STATE_PATH = os.path.join(paths.BASE, "navegador.json")
-EXT_DIR = os.path.join(paths.APP_DIR, "extensao")
+EXT_SRC = os.path.join(paths.APP_DIR, "extensao")       # dentro do programa
+EXT_COPY = os.path.join(paths.BASE, "extensao")         # copia fixa (o .exe de arquivo unico usa pasta temporaria)
 ORIGIN_RE = re.compile(r"^chrome-extension://([a-p]{32})$")   # ids do Chrome/Edge
 CODE_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"                # sem 0/O/1/I
 CODE_LEN = 6
@@ -108,6 +110,29 @@ def _clean_tab(t):
             "current": t.get("current") is True,
             "yt": url.startswith(("https://www.youtube.com/", "https://m.youtube.com/", "https://youtube.com/",
                                   "https://music.youtube.com/"))}
+
+
+def _manifest(folder):
+    try:
+        with open(os.path.join(folder, "manifest.json"), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def ext_folder():
+    """Pasta para "Carregar sem compactacao". Rodando pelo codigo: extensao/ do
+    projeto. No .exe: copia em <dados>/extensao (o Chrome guarda o caminho; a
+    pasta do .exe de arquivo unico muda a cada abertura), atualizada quando o
+    manifest muda. Devolve None se a extensao nao veio com o programa."""
+    if not os.path.isfile(os.path.join(EXT_SRC, "manifest.json")):
+        return None
+    if not paths.FROZEN:
+        return EXT_SRC
+    src = _manifest(EXT_SRC)
+    if _manifest(EXT_COPY) != src:
+        shutil.copytree(EXT_SRC, EXT_COPY, dirs_exist_ok=True)
+    return EXT_COPY
 
 
 class Ponte(object):

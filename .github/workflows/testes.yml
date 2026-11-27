@@ -97,9 +97,9 @@ jobs:
         run: |
           python tools/versao.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pyinstaller --onefile --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --add-data "$PWD/build/ponte.zip;." --collect-submodules streamdeck --workpath build/onefile --specpath build/onefile --distpath dist server.py
+          pyinstaller --onefile --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/extensao;extensao" --add-data "$PWD/config.padrao.json;." --add-data "$PWD/build/ponte.zip;." --collect-submodules streamdeck --workpath build/onefile --specpath build/onefile --distpath dist server.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pyinstaller --onedir --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/config.padrao.json;." --add-data "$PWD/build/ponte.zip;." --collect-submodules streamdeck --workpath build/onedir --specpath build/onedir --distpath dist/onedir server.py
+          pyinstaller --onedir --windowed --noupx --name StreamDeck --icon "$PWD/icon.ico" --version-file "$PWD/build/version_info.txt" --add-data "$PWD/web;web" --add-data "$PWD/extensao;extensao" --add-data "$PWD/config.padrao.json;." --add-data "$PWD/build/ponte.zip;." --collect-submodules streamdeck --workpath build/onedir --specpath build/onedir --distpath dist/onedir server.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Testar o .exe portatil (abrir, API, fechar)

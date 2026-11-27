@@ -784,7 +784,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def local_navegador(self, q):
         st = navegador.PONTE.status()
-        st.update(ok=True, folder=navegador.EXT_DIR, folder_ok=os.path.isdir(navegador.EXT_DIR))
+        try:
+            folder = navegador.ext_folder()
+        except OSError as e:
+            print("! nao deu para copiar a extensao: %s" % e)
+            folder = None
+        st.update(ok=True, folder=folder, folder_ok=bool(folder))
         return self._json(200, st)
 
     def local_navegador_save(self, body):
@@ -797,9 +802,13 @@ class Handler(BaseHTTPRequestHandler):
             except OSError as e:
                 return self._json(500, {"ok": False, "error": str(e)})
         elif op == "folder":
-            if not os.path.isdir(navegador.EXT_DIR):
+            try:
+                folder = navegador.ext_folder()
+            except OSError as e:
+                return self._json(500, {"ok": False, "error": str(e)})
+            if not folder:
                 return self._json(404, {"ok": False, "error": "pasta da extensao nao encontrada"})
-            winapi.open_folder(navegador.EXT_DIR)
+            winapi.open_folder(folder)
         else:
             return self._json(400, {"ok": False, "error": "operacao invalida"})
         return self.local_navegador(None)

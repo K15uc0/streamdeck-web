@@ -300,6 +300,21 @@ class ExtensaoArquivosTest(unittest.TestCase):
         self.assertEqual(m["host_permissions"], ["http://127.0.0.1/*", "*://*.youtube.com/*"])
         self.assertNotIn("content_scripts", m)
 
+    def test_pasta_da_extensao(self):
+        self.assertEqual(navegador.ext_folder(), navegador.EXT_SRC)
+        with mock.patch.object(paths, "FROZEN", True):
+            if os.path.isdir(navegador.EXT_COPY):
+                import shutil
+                shutil.rmtree(navegador.EXT_COPY)
+            self.assertEqual(navegador.ext_folder(), navegador.EXT_COPY)
+            self.assertTrue(os.path.isfile(os.path.join(navegador.EXT_COPY, "sw.js")))
+        with mock.patch.object(navegador.winapi, "open_folder") as of:
+            st, _, d = call("POST", "/api/local/navegador", {"op": "folder"})
+            self.assertTrue(d["folder_ok"])
+            of.assert_called_once_with(navegador.EXT_SRC)
+        st, _, d = call("POST", "/api/local/navegador", {"op": "x"})
+        self.assertEqual(st, 400)
+
     def test_portas_iguais_as_do_programa(self):
         with open(os.path.join(apoio.ROOT, "extensao", "ponte.js"), encoding="utf-8") as f:
             src = f.read()
