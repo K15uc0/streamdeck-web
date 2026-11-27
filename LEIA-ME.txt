@@ -81,6 +81,32 @@ MONITOR DO PC E CONSUMO DAS IAS (2.9)
   por esse botao; ela atualiza so com o Claude Code aberto. O Codex e lido dos
   registros dele. Grok: ainda indisponivel.
 
+AVISOS, NOTIFICACOES E NAVEGADOR (2.12)
+- Avisos no celular: limite do Claude/Codex (80% e 95%), temperatura alta, CPU
+  no maximo, OBS desconectou/voltou, aparelho novo e (opcional) agendamentos.
+  Aparecem numa faixa no alto da tela; historico em Ajustes > Avisos. Liga e
+  desliga cada tipo em Conectar > Avisos no celular.
+- Notificacoes do Windows (experimental, desligado por padrao): Conectar >
+  Notificacoes do Windows. Mostra app, titulo e texto das notificacoes do PC,
+  so em aparelhos com Controle total. Pode parar de funcionar se o Windows
+  mudar; nesse caso aparece "indisponivel nesta versao do Windows".
+- Navegador: o bloco "Navegador" mostra no celular as abas do Chrome/Edge do PC
+  (tocar vai para a aba, deslizar para a esquerda fecha), com voltar, avancar,
+  recarregar, rolar, pausar o YouTube e abrir site. A acao "Navegador" faz o
+  mesmo em qualquer botao.
+- Instalar a extensao (so precisa para a lista de abas):
+  1. Conectar > Navegador > "Abrir pasta da extensao".
+  2. No Chrome abra chrome://extensions (no Edge, edge://extensions) e ligue o
+     "Modo do desenvolvedor".
+  3. "Carregar sem compactacao" e escolha a pasta aberta no passo 1.
+  4. No Conectar clique em "Parear extensao" e digite o codigo no icone do
+     Stream Deck na barra do navegador.
+  A extensao so fala com este PC (127.0.0.1), nao le o conteudo das paginas e
+  so pode rodar codigo no YouTube (pausar e rolar). "Desparear" corta o acesso.
+  Sem ela, os botoes viram atalhos de teclado (Ctrl+Tab, Alt+Esquerda, F5,
+  PageDown...) no navegador que estiver na frente.
+- Fechar abas e abrir endereco digitado pelo celular precisam de Controle total.
+
 RODAR PELO CODIGO-FONTE (opcional)
 Com Python 3.8+ instalado: de dois cliques em "Iniciar Stream Deck.bat".
 Nesse modo os dados ficam na propria pasta do programa e a atualizacao e manual.
