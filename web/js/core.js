@@ -569,6 +569,39 @@
      esquerda para a direita (como o "dense" do CSS grid). O que nao couber
      fica de fora. Devolve [{i, x, y, w, h}] (x/y = coluna/linha, base 0). */
   /* grade de uma pagina: a propria (page.grid, 2.10) ou a geral do config */
+  /* ---------------------------------------------- aparelho (2.11) --- */
+  /* SD.device = {name, pages: null|[indices], full} vem do servidor (/api/state e o
+     cabecalho X-Device-Pages do /api/config); null = ainda nao sabe (mostra tudo).
+     O servidor recusa apertar botao de pagina nao liberada; aqui so esconde. */
+  SD.device = null;
+  SD.pageOk = function (pages, i) {
+    if (!pages) return true;
+    for (var j = 0; j < pages.length; j++) if (pages[j] === i) return true;
+    return false;
+  };
+  /* indices das paginas liberadas que existem (n paginas) */
+  SD.allowedPages = function (pages, n) {
+    var out = [];
+    for (var i = 0; i < n; i++) if (SD.pageOk(pages, i)) out.push(i);
+    return out;
+  };
+  /* proxima pagina liberada a partir de cur na direcao dir (+1/-1), ou -1 */
+  SD.nextPage = function (pages, n, cur, dir) {
+    for (var i = cur + dir; i >= 0 && i < n; i += dir) if (SD.pageOk(pages, i)) return i;
+    return -1;
+  };
+  /* "*" = todas; "0,2" = lista; "" = nenhuma */
+  SD.parseDevicePages = function (h) {
+    if (h == null || h === "*") return null;
+    if (h === "") return [];
+    var out = [], parts = String(h).split(",");
+    for (var i = 0; i < parts.length; i++) {
+      var v = parseInt(parts[i], 10);
+      if (!isNaN(v)) out.push(v);
+    }
+    return out;
+  };
+
   SD.pageGrid = function (cfg, pi) {
     var pg = cfg && cfg.pages && cfg.pages[pi], g = pg && pg.grid;
     function ok(n, max) { return typeof n === "number" && n % 1 === 0 && n >= 1 && n <= max; }
@@ -786,7 +819,8 @@
         var found = null;
         for (var i = 0; i < SD.conns.length; i++) if (SD.conns[i].host === SD.here) found = SD.conns[i];
         if (!found) SD.conns.unshift({ name: data.name || SD.here, host: SD.here, code: data.code });
-        else found.code = data.code;
+        else if (data.code) found.code = data.code;
+        else delete found.code;
         SD.saveConns();
         if (SD.renderNav) SD.renderNav();
         if (SD.updAvail() && !updToastShown) {
@@ -819,8 +853,10 @@
   SD.switchTo = function (idx) {
     var c = SD.conns[idx];
     function go() {
-      location.href = "http://" + c.host + "/?k=" + encodeURIComponent(c.code || "") +
-        "&sync=" + encodeURIComponent(JSON.stringify(SD.conns));
+      /* sem codigo guardado (2.11: o PC nao entrega o codigo aos aparelhos):
+         entra pela chave do aparelho, que esta no cookie daquele PC */
+      var sync = encodeURIComponent(JSON.stringify(SD.conns));
+      location.href = "http://" + c.host + (c.code ? "/?k=" + encodeURIComponent(c.code) + "&sync=" : "/#sync=") + sync;
     }
     if (SD.alive[c.host] === false) {
       SD.alert({ title: "“" + (c.name || c.host) + "” não respondeu",

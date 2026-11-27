@@ -772,10 +772,22 @@
   SD.onConn = function () { SD.renderNav(); };
 
   /* ========================================================== grade ===== */
+  function devPages() { return SD.device ? SD.device.pages : null; }
   SD.render = function () {
     if (!SD.cfg) return;
     if (SD.page >= SD.cfg.pages.length) SD.page = SD.cfg.pages.length - 1;
     if (SD.page < 0) SD.page = 0;
+    /* aparelho com paginas limitadas: so as liberadas aparecem */
+    var ok = SD.allowedPages(devPages(), SD.cfg.pages.length);
+    if (!ok.length) {
+      if (folder) closeFolder(true);
+      keys = []; built = null; grid.innerHTML = ""; dotsEl.innerHTML = "";
+      showMsg("lock", "Nenhuma página liberada", "No PC, abra Conectar > Aparelhos e escolha as páginas que este aparelho pode ver.");
+      SD.renderNav();
+      return;
+    }
+    if (msg.getAttribute("data-k") === "nopage") msg.style.display = "none";
+    if (!SD.pageOk(devPages(), SD.page)) SD.page = ok[0];
     renderDots();
     SD.layout();
   };
@@ -825,8 +837,11 @@
   SD.getKeys = function () { return keys; };
 
   function renderDots() {
-    var n = SD.cfg.pages.length, h = "";
-    if (n > 1) for (var j = 0; j < n; j++) h += '<span data-p="' + j + '"' + (j === SD.page ? ' class="on"' : "") + "><i></i></span>";
+    var ok = SD.allowedPages(devPages(), SD.cfg.pages.length), h = "";
+    if (ok.length > 1) for (var i = 0; i < ok.length; i++) {
+      var j = ok[i];
+      h += '<span data-p="' + j + '"' + (j === SD.page ? ' class="on"' : "") + "><i></i></span>";
+    }
     dotsEl.innerHTML = h;
     var sp = dotsEl.getElementsByTagName("span");
     for (var k = 0; k < sp.length; k++) sp[k].onclick = function () { SD.goPage(parseInt(this.getAttribute("data-p"), 10)); };
@@ -866,6 +881,7 @@
   /* ========================================================= paginas ===== */
   SD.goPage = function (to, dir) {
     if (!SD.cfg || !SD.cfg.pages[to] || to === SD.page) return;
+    if (!SD.pageOk(devPages(), to)) { SD.toast("Página não liberada para este aparelho", true); return; }
     if (folder) closeFolder(true);
     if (dir == null) dir = to > SD.page ? 1 : -1;
     SD.page = to;
@@ -1072,7 +1088,7 @@
       if (!ps.length) el("div", "mon-empty", "Sem dados", list);
       for (var i = 0; i < ps.length; i++) row(ps[i], !!data.allow_kill);
       if (foot) { foot.parentNode.removeChild(foot); foot = null; }
-      if (!data.allow_kill) foot = grp.foot("Para encerrar processos pelo celular, ative em Conectar no PC.");
+      if (!data.allow_kill) foot = grp.foot("Para encerrar processos por este aparelho, ligue “Controle total” para ele em Conectar > Aparelhos, no PC.");
     }
     v.load = function () {
       var seq = ++v.seq;
@@ -1090,7 +1106,7 @@
     SD.confirm("Encerrar processo?", p.name + " (PID " + p.pid + "). Dados não salvos podem ser perdidos.", "Encerrar", true, function () {
       SD.req("POST", "/api/monitor/kill", JSON.stringify({ pid: p.pid }), function (ok, data, status) {
         if (ok) { v.openPid = null; SD.toast("Processo encerrado"); if (v.load) v.load(); return; }
-        if (status === 403) SD.toast("Ative em Conectar no PC", true);
+        if (status === 403) SD.toast("Precisa de Controle total (Conectar > Aparelhos, no PC)", true);
         else if (status === 400) SD.toast((data && data.error) || "Processo protegido", true);
         else SD.toast(SD.errText(data, status, "Falha ao encerrar"), true);
       });
@@ -1171,7 +1187,9 @@
       if (toggles) { SD.toggles[tkey] = was; if (p === SD.page) setLit(k, was); }
       flash(k, false);
       buzz([30, 40, 30]);
-      SD.toast(SD.errText(data, status), true);
+      if (status === 403 && data && data.reason === "full") SD.toast("Este botão precisa de Controle total (Conectar > Aparelhos, no PC)", true);
+      else if (status === 403 && data && data.reason === "page") SD.toast("Página não liberada para este aparelho", true);
+      else SD.toast(SD.errText(data, status), true);
     });
   }
 
@@ -1425,7 +1443,7 @@
       return;
     }
     var n = SD.cfg.pages.length;
-    if ((SD.page === 0 && dx > 0) || (SD.page === n - 1 && dx < 0)) dx = dx / 3;   /* elastico nas pontas */
+    if (SD.nextPage(devPages(), n, SD.page, dx < 0 ? 1 : -1) < 0) dx = dx / 3;   /* elastico nas pontas */
     css(grid, "transition", "none");
     css(grid, "transform", "translate3d(" + Math.round(dx) + "px,0,0)");
   }
@@ -1443,8 +1461,8 @@
       return;
     }
     css(grid, "transition", "");
-    var to = SD.page + (dx < 0 ? 1 : -1);
-    if ((Math.abs(dx) > W * 0.18 || fast) && SD.cfg.pages[to]) {
+    var to = SD.nextPage(devPages(), SD.cfg.pages.length, SD.page, dx < 0 ? 1 : -1);
+    if ((Math.abs(dx) > W * 0.18 || fast) && to >= 0) {
       css(grid, "transform", "translate3d(" + (dx < 0 ? -W : W) * 0.4 + "px,0,0)");
       grid.style.opacity = "0";
       setTimeout(function () { SD.goPage(to, dx < 0 ? 1 : -1); }, 120);
@@ -1578,6 +1596,7 @@
   var offlineToast = false, pollT = null;
 
   function showMsg(icon, title, text) {
+    msg.setAttribute("data-k", title === "Nenhuma página liberada" ? "nopage" : "");
     msg.innerHTML = '<div class="m-ic">' + SD.svg(icon, 34, SD.lightTheme ? "rgba(60,60,67,0.6)" : "rgba(235,235,245,0.6)") + "</div><b>" + esc(title) + "</b><p>" + esc(text) + "</p>";
     msg.style.display = "block";
   }
@@ -1587,6 +1606,13 @@
       if (ok && data && data.pages) {
         SD.cfg = data;
         try { SD.cfgV = x.getResponseHeader("X-Config-Version"); } catch (e) {}
+        try {
+          var dp = x.getResponseHeader("X-Device-Pages");
+          if (dp != null) {
+            SD.device = { name: SD.device && SD.device.name, full: !!(SD.device && SD.device.full), pages: SD.parseDevicePages(dp) };
+            localStorage.setItem("sd_device", JSON.stringify(SD.device));
+          }
+        } catch (e) {}
         SD.cacheCfg();
         offlineToast = false;
         msg.style.display = "none";
@@ -1600,7 +1626,7 @@
         grid.innerHTML = ""; dotsEl.innerHTML = "";
         SD.dropCache();
         SD.initConns(); SD.renderNav();
-        if (status === 403) showMsg("lock", "Aparelho sem acesso", "Este aparelho ainda não tem o código de acesso (ou ele foi trocado). No PC, abra a tela Conectar e leia o QR code.");
+        if (status === 403) showMsg("lock", "Aparelho sem acesso", "Este aparelho ainda não tem acesso ou foi removido no PC. No PC, abra a tela Conectar e leia o QR code.");
         else showMsg("lock", "Muitas tentativas", "Muitas tentativas com código errado. Aguarde 10 minutos e leia o QR code de novo na tela do PC.");
       } else {
         if (!SD.conns.length) { SD.initConns(); SD.renderNav(); SD.pingAll(); }
@@ -1639,7 +1665,7 @@
     SD.app = app;
     if (!SD.prefs.autoPage || G || SD.sheet.isOpen()) return;
     var to = pageForApp(app);
-    if (to >= 0 && to !== SD.page) SD.goPage(to);
+    if (to >= 0 && to !== SD.page && SD.pageOk(devPages(), to)) SD.goPage(to);
   }
   SD.pageForApp = pageForApp;
 
@@ -1663,6 +1689,7 @@
       if (!ok) { if (status === 403) SD.load(); return; }
       if (offlineToast) { offlineToast = false; SD.toast("Conectado"); }
       readSkew(x);
+      if (st.device) applyDevice(st.device);
       if (st.toggles) SD.applyToggles(st.toggles, st.since || {});
       if (st.levels) SD.applyLevels(st.levels);
       SD.applySounds(st.sounds);
@@ -1674,6 +1701,13 @@
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
       if (st.app !== undefined) onApp(st.app);
     });
+  }
+  /* paginas liberadas mudaram no PC: redesenha (pode trocar de pagina) */
+  function applyDevice(d) {
+    var old = SD.device ? JSON.stringify(SD.device.pages) : "null";
+    SD.device = { name: d.name, pages: d.pages || null, full: !!d.full };
+    try { localStorage.setItem("sd_device", JSON.stringify(SD.device)); } catch (e) {}
+    if (old !== JSON.stringify(SD.device.pages) && SD.cfg && !G) { built = null; SD.render(); }
   }
   function pollSoon() {
     soonAt = SD.now();
@@ -1710,6 +1744,7 @@
     SD.readSync();
     SD.initConns();
     lockOrientation();   /* app instalado: trava ja na abertura */
+    try { SD.device = JSON.parse(localStorage.getItem("sd_device") || "null"); } catch (e) { SD.device = null; }
     SD.cfg = SD.cachedCfg();
     if (SD.cfg) { msg.style.display = "none"; SD.render(); }   /* abre na hora com o que estava guardado */
     else { SD.layout(); showMsg("wifi", "Conectando…", "Procurando o Stream Deck no PC."); }

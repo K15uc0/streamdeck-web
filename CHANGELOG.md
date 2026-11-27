@@ -1,5 +1,15 @@
 # Novidades
 
+## 2.11.0
+
+- **Aparelhos**: cada celular ou tablet agora tem a sua própria chave de acesso. Na tela **Conectar** do PC, o novo cartão **Aparelhos** mostra todos os aparelhos cadastrados, com o último acesso de cada um.
+- **Dê um nome** a cada aparelho (ex.: "Tablet da sala") clicando no nome dele.
+- **Escolha as páginas** que cada aparelho vê. As outras somem do aparelho (pontos, deslizar e troca automática pelo app em foco) e o PC recusa os botões delas. A escolha acompanha a página: mover, duplicar ou apagar páginas no editor não troca o que cada aparelho vê, e páginas novas só aparecem nos aparelhos com páginas escolhidas depois que você marcar.
+- **Remover** um aparelho corta o acesso dele na hora, sem atrapalhar os outros. Para voltar, ele precisa ler o QR code de novo.
+- **Controle total** (por aparelho) substitui a chave "Permitir encerrar programas pelo celular". Sem ele, o aparelho não usa botões que desligam, reiniciam, suspendem ou encerram a sessão do PC, nem encerra processos no monitor. Abrir programas, sites, comandos comuns, atalhos, sons, OBS e o resto continuam funcionando normalmente. No próprio PC tudo funciona sempre.
+- **Quem já estava conectado continua funcionando**, sem ler o QR code de novo: no primeiro acesso depois da atualização, cada aparelho ganha a sua chave automaticamente e aparece na lista. Se "Permitir encerrar programas" estava ligado, esses aparelhos já vêm com Controle total.
+- **Gerar novo código de acesso** agora só troca o QR code para aparelhos novos; os aparelhos da lista continuam funcionando (para tirar um deles, use Remover).
+
 ## 2.10.1
 
 - **Cada página agora tem sempre a sua própria grade**, independente das outras. No editor, as colunas e linhas da barra da página (e a grade vertical) mudam só a página aberta; a escolha "Grade: Geral | Própria" saiu.

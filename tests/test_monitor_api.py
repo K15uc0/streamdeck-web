@@ -18,6 +18,19 @@ def remoto(method, path, body=None):
                               headers={"Content-Type": "application/json"})
 
 
+def remoto_total(method, path, body=None):
+    """Pedido de um aparelho com Controle total (chave no cookie)."""
+    from streamdeck import devices
+    dev = devices.create(ip="192.168.0.50")
+    devices.set_full(dev["id"], True)
+    data = json.dumps(body).encode("utf-8") if body is not None else b""
+    try:
+        return apoio.fake_request(method, path, body=data, headers={
+            "Content-Type": "application/json", "Cookie": "sdk=" + dev["key"]})
+    finally:
+        devices.remove(dev["id"])
+
+
 class MonitorApiTest(unittest.TestCase):
     def setUp(self):
         self._q = apoio.quiet()
@@ -77,8 +90,7 @@ class MonitorApiTest(unittest.TestCase):
             monitor.SIM_PROCS = orig
 
     def test_kill_remoto_protegido_400(self):
-        storage.save_settings(dict(storage.load_settings(), allow_kill=True))
-        st, _, _ = remoto("POST", "/api/monitor/kill", {"pid": 4})
+        st, _, _ = remoto_total("POST", "/api/monitor/kill", {"pid": 4})
         self.assertEqual(st, 400)
 
     def test_kill_sem_cabecalho_403(self):
@@ -97,10 +109,6 @@ class MonitorApiTest(unittest.TestCase):
             monitor.kill = orig
         self.assertEqual(st, 500)
         self.assertEqual(r["error"], "falha ao encerrar")
-
-    def test_settings_kill_remoto_nao_altera(self):
-        remoto("POST", "/api/local/settings_kill", {"allow": True})
-        self.assertIsNot(storage.load_settings().get("allow_kill"), True)
 
     def test_state_traz_pc_e_ia(self):
         st, _, r = call("GET", "/api/state?pc=1&ia=1")
@@ -135,8 +143,7 @@ class MonitorApiTest(unittest.TestCase):
         self.assertEqual(st, 403)
 
     def test_kill_remoto_permitido(self):
-        storage.save_settings(dict(storage.load_settings(), allow_kill=True))
-        st, _, body = remoto("POST", "/api/monitor/kill", {"pid": 1200})
+        st, _, body = remoto_total("POST", "/api/monitor/kill", {"pid": 1200})
         self.assertEqual(st, 200)
 
     def test_kill_remoto_sem_codigo(self):
@@ -154,29 +161,11 @@ class MonitorApiTest(unittest.TestCase):
             self.assertEqual(st, 400, pid)
             self.assertFalse(r["ok"])
 
-    def test_settings_kill_so_local(self):
-        st, _, r = call("POST", "/api/local/settings_kill", {"allow": True})
-        self.assertEqual((st, r["allow_kill"]), (200, True))
-        self.assertIs(storage.load_settings()["allow_kill"], True)
-        st, _, _ = remoto("POST", "/api/local/settings_kill", {"allow": False})
-        self.assertEqual(st, 403)
-        st, _, _ = call("POST", "/api/local/settings_kill", {"allow": "sim"})
-        self.assertEqual(st, 400)
-
-    def test_settings_kill_preserva_obs(self):
+    def test_ajustes_quebrados_nao_sobrescreve(self):
         from streamdeck import obs, paths
-        obs.save_settings({"host": "1.2.3.4", "port": 4455, "password": "x"})
-        call("POST", "/api/local/settings_kill", {"allow": True})
-        call("POST", "/api/local/settings_kill", {"allow": False})
-        s = storage.load_settings()
-        self.assertEqual(s["obs"]["host"], "1.2.3.4")
-        self.assertIs(s["allow_kill"], False)
         with open(paths.SETTINGS_PATH, "w") as f:
             f.write("{quebrado")
         try:
-            st, _, r = call("POST", "/api/local/settings_kill", {"allow": True})
-            self.assertEqual(st, 500)
-            self.assertFalse(r["ok"])
             with self.assertRaises(storage.SettingsError):
                 obs.save_settings({"host": "5.6.7.8"})
             with open(paths.SETTINGS_PATH) as f:

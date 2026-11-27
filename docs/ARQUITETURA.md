@@ -86,16 +86,16 @@ Migração v1 -> v2 (automática ao carregar, com cópia `config.v1.bak.json`):
   botões de mudo e controles do Deck A), "Rádio · Pads" (pads dos 4 bancos juntos, sem repetidos e
   não vazios) e "Rádio · Chat" (mensagens). Ações `page` (`to`) são remapeadas.
 
-## API (todas exigem `X-StreamDeck: 1`; código via cookie `sdk` ou `?k=`)
+## API (todas exigem `X-StreamDeck: 1`; chave do aparelho no cookie `sdk`, ver 2.11)
 
 | Método | Rota | Resposta |
 |---|---|---|
-| GET | `/api/config` | config v2; cabeçalho `X-Config-Version` |
+| GET | `/api/config` | config v2; cabeçalhos `X-Config-Version` e `X-Device-Pages` (2.11) |
 | POST | `/api/config` | `{ok, v}`; 400 `{ok:false, error}`; 403 se ação perigosa vinda de fora do PC |
 | GET | `/api/actions` | `{ok, actions:[ActionSchema]}` |
-| GET | `/api/info` | `{ok, name, code, sounds, tabs, version, local, update}` |
-| GET | `/api/press?p=&b=` | `{ok, toggles?}` ; erro `{ok:false, error}` |
-| GET | `/api/state?levels=1` | `{ok, v, update, toggles:{"p:b":true}, levels?}` |
+| GET | `/api/info` | `{ok, name, code (só no PC), sounds, tabs, version, local, update, device}` |
+| GET | `/api/press?p=&b=` | `{ok, toggles?}` ; erro `{ok:false, error}`; 403 `{reason:"page"\|"full"}` (2.11) |
+| GET | `/api/state?levels=1` | `{ok, v, update, toggles:{"p:b":true}, levels?, device}` |
 | GET | `/api/volume?c=master&v=40` ou `?c=mic&mute=toggle` | `{ok, levels:{master:{v,muted}, effects:{...}, mic:{...}}}` |
 | POST | `/api/tabs` | lista de abas |
 | GET/POST | `/api/update`, `/api/update/check`, `/api/update/apply` | iguais à 1.x |
@@ -336,13 +336,13 @@ diz o site e se confunde com outros, como Instagram); atualizado a cada ~3 s em 
 - `GET /api/state?ia=1`: acrescenta `ia` = `{claude, codex, grok}`. Cada um é `null` ou
   `{five_hour, weekly, updated, source, tokens_today}`, onde as janelas são `{used, left, resets_at}`.
   O resultado fica em cache por 10 s (`IA_TTL`).
-- `GET /api/monitor?sort=cpu|mem`: `{ok, snapshot, processes (até 15), allow_kill}`.
-- `POST /api/monitor/kill` `{pid}`: exige `allow_kill` true quando a chamada não é local (403 se desligado).
+- `GET /api/monitor?sort=cpu|mem`: `{ok, snapshot, processes (até 15), allow_kill}` (2.11: `allow_kill`
+  = quem pede tem Controle total).
+- `POST /api/monitor/kill` `{pid}`: exige Controle total do aparelho (2.11; antes `allow_kill` nos ajustes).
   Protegido ou inexistente -> 400 com a mensagem.
-- `GET /api/local/ia` (só no PC): `{ok, bridge_installed, claude_updated, codex_found, allow_kill}`.
+- `GET /api/local/ia` (só no PC): `{ok, bridge_installed, claude_updated, codex_found}`.
 - `POST /api/local/ia` (só no PC) `{install: true|false}`: instala ou remove a ponte; 400 se falhar.
-- `POST /api/local/settings_kill` (só no PC) `{allow: true|false}`: grava `allow_kill` em `settings.json`
-  de `paths.SETTINGS_PATH` (não no config de botões).
+- (2.11) `POST /api/local/settings_kill` saiu: virou Controle total por aparelho.
 
 **Botões**
 
@@ -353,3 +353,67 @@ diz o site e se confunde com outros, como Instagram); atualizado a cada ~3 s em 
   `pc:temp_gpu`, `pc:net`, `pc:disk:<letra A-Z>`, `ia:claude:5h`, `ia:claude:week`, `ia:codex:5h`,
   `ia:codex:week`. No cliente, `SD.pc` e `SD.ia` guardam a última resposta (`applyPc`/`applyIa` repintam
   os blocos com prefixo `pc:`/`ia:`).
+
+## 2.11: aparelhos (chave por aparelho)
+
+Antes, todo aparelho entrava com o mesmo código (`token.txt`, cookie `sdk` ou `?k=`). Agora o código geral
+só **cadastra** aparelhos; cada aparelho entra com a chave dele.
+
+**Arquivo** `Documentos\StreamDeck\aparelhos.json` (`paths.DEVICES_PATH`), módulo `streamdeck/devices.py`:
+`{"devices": [{id, key, name, created, last_seen, last_ip, pages: null|[ids de página], full}], "legacy_full": bool}`.
+Gravação atômica (`storage.write_json`: `.tmp` + `os.replace`) sob `devices.LOCK`; relido se o mtime mudar.
+Arquivo ilegível: ninguém entra pela chave e nada é gravado por cima (`DevicesError`). Limite de 50 aparelhos.
+`key` = `secrets.token_hex(16)`, comparada com `hmac.compare_digest` contra todos (sem sair no primeiro).
+A chave nunca sai de `devices.py` a não ser no `Set-Cookie` do próprio aparelho: `list_public()`, `find()`
+e `get()` devolvem cópias sem `key`; o log mostra só nome e IP.
+`last_seen`/`last_ip` (`touch`): sempre na memória, no disco no máximo a cada 60 s por aparelho (ou se o IP mudar).
+
+**Quem pede** (`Handler._auth`, guardado em `self._ctx`):
+
+1. `127.0.0.1`/`::1`: o próprio PC, pode tudo (`LOCAL_CTX`), sem aparelho.
+2. Cookie `sdk` = chave de um aparelho: aquele aparelho (removido -> 403 no pedido seguinte, sem cache).
+3. Cookie `sdk` = código geral (cookie de antes da 2.11): `devices.upgrade(ip, navegador)` cria o aparelho
+   e a resposta desse mesmo pedido leva `Set-Cookie: sdk=<chave nova>` (HttpOnly, SameSite=Strict). Pedidos
+   juntos do mesmo IP e navegador (120 s) reaproveitam o mesmo aparelho.
+4. `?k=<código geral>` (scripts, testes): sem aparelho, todas as páginas, **sem** Controle total.
+   Chave de aparelho em `?k=` não vale (chaves nunca vão no endereço).
+5. Senão 403 `codigo de acesso invalido` e conta tentativa (`security.note_fail`, bloqueio após 10).
+
+Primeiro acesso `/?k=<código>`: cria o aparelho (ou reaproveita, se o cookie já é de um aparelho) e responde
+302 com `Set-Cookie` da chave e `Location: /` (ou `/#sync=`). Do próprio PC não cria aparelho.
+`GET /api/info` só entrega `code` ao PC (um aparelho com páginas limitadas poderia se recadastrar com ele);
+no celular, a troca de PC pelas abas usa `/#sync=` quando não há código guardado (entra pelo cookie daquele PC).
+"Gerar novo código" troca só o código geral: aparelhos cadastrados continuam valendo.
+
+**Permissões** (servidor decide; o celular só esconde):
+
+- Páginas: `pages` `null` = todas. `GET /api/press` em página fora da lista -> 403 `{reason: "page"}`
+  (não conta tentativa). A lista guarda **ids de página** (`page.id` no config, `^[0-9a-f]{4,16}$`, único;
+  `schema.add_page_ids` dá um id a toda página sem id na migração; o editor dá id novo a página nova,
+  duplicada ou de modelo e mantém o id ao mover). A cada pedido `httpd._dev_ctx` converte ids em posições
+  atuais (`devices.page_indices`), então `X-Device-Pages`, `device.pages` e `/api/press` usam índices
+  sempre certos: mover não muda o que o aparelho vê, página apagada some, página nova fica oculta para
+  aparelho com páginas escolhidas até marcar. Listas antigas de índices (2.11 inicial) viram ids uma vez,
+  com o config atual, ao ler o `aparelhos.json`.
+- Controle total (`full`): sem ele, 403 `{reason: "full"}` para ações sensíveis (`devices.sensitive`):
+  `command` que desliga/reinicia/suspende/encerra a sessão (`devices.POWER_RE`) e `multi` com algum
+  desses; e `POST /api/monitor/kill`. Abrir programas, sites e comandos comuns continua liberado
+  (os botões são montados no próprio PC).
+- Migração do `allow_kill` (uma vez, quando `aparelhos.json` ainda não existe): grava `legacy_full` =
+  `allow_kill` e tira `allow_kill` dos ajustes. Aparelhos criados pelo cookie antigo (os que já existiam)
+  nascem com `full = legacy_full`; aparelhos novos pelo QR nascem sem.
+
+**API**
+
+- `/api/state` e `/api/info`: `device: {name, pages, full}` (no PC: `{"Este PC", null, true}`).
+- `/api/config`: cabeçalho `X-Device-Pages` (`*` = todas, `0,2`, ou vazio = nenhuma), para o celular
+  já abrir só com as páginas liberadas; o config vem inteiro (índices e ações `page` não mudam).
+- `GET /api/local/devices` (só no PC): `{ok, devices: [{id, name, created, last_seen, last_ip, pages, full}],
+  pages: [{name, index, id}]}`, sem chaves; `devices[].pages` são ids.
+- `POST /api/local/devices` (só no PC) `{id, op, value}`: `op` = `rename` (1 a 40 letras), `pages`
+  (`null` ou lista de ids), `full` (bool) ou `remove`. 400 valor inválido, 404 aparelho inexistente.
+
+**Celular** (`deck.js`, funções puras em `core.js`: `SD.pageOk`, `SD.allowedPages`, `SD.nextPage`,
+`SD.parseDevicePages`): `SD.device` (guardado em `sd_device`) esconde as páginas não liberadas nos pontos,
+no deslizar, na troca automática pelo app e na ação "Ir para página"; sem nenhuma página mostra
+"Nenhuma página liberada". Recusas 403 com `reason` viram avisos claros.

@@ -190,6 +190,72 @@ async function stalePc(browser, base, token, errors) {
   await ctx.close();
 }
 
+/* IPv4 da rede deste PC: pedidos por ele chegam como de outro aparelho (nao 127.0.0.1) */
+function lanIp() {
+  var ifs = os.networkInterfaces();
+  for (var n in ifs) for (var i = 0; i < ifs[n].length; i++) {
+    var a = ifs[n][i];
+    if ((a.family === "IPv4" || a.family === 4) && !a.internal) return a.address;
+  }
+  return null;
+}
+
+/* aparelhos (2.11): primeiro acesso cria o aparelho; Conectar mostra o cartao;
+   pagina nao liberada some do celular e o servidor recusa apertar */
+async function aparelhos(browser, base, lanBase, token, data, errors) {
+  var ctx = await browser.newContext({ viewport: { width: 640, height: 288 } });
+  var page = await ctx.newPage();
+  /* o 403 de proposito (pagina nao liberada) e o ping das abas guardadas para
+     127.0.0.1 (o Chromium bloqueia rede publica -> loopback) nao contam */
+  var mine = [];
+  watchConsole(page, mine, "aparelho");
+  await page.goto(lanBase + "/?k=" + token);
+  await page.locator("#grid .cell", { hasText: "Copiar" }).waitFor({ state: "visible", timeout: 10000 });
+  assert.strictEqual(page.url(), lanBase + "/", "codigo saiu do endereco");
+  var cookies = await ctx.cookies();
+  var sdk = cookies.filter(function (c) { return c.name === "sdk"; })[0];
+  assert.ok(sdk && /^[0-9a-f]{32}$/.test(sdk.value) && sdk.value !== token && sdk.httpOnly, "cookie com a chave do aparelho");
+  var pressed = page.waitForResponse(function (r) { return r.url().indexOf("/api/press?p=0&b=1") >= 0; });
+  await page.locator("#grid .cell", { hasText: "Copiar" }).click();
+  assert.strictEqual((await pressed).status(), 200, "aparelho aperta botao");
+  var file = JSON.parse(fs.readFileSync(path.join(data, "aparelhos.json"), "utf8"));
+  assert.strictEqual(file.devices.length, 1);
+  assert.strictEqual(await page.locator("#dots span").count(), 3, "3 paginas");
+
+  /* Conectar (no PC) mostra o aparelho; limita as paginas pelo cartao */
+  var pc = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  var cp = await pc.newPage();
+  watchConsole(cp, errors, "conectar");
+  await cp.goto(base + "/conectar");
+  var card = cp.locator("#devs .dev");
+  await card.first().waitFor({ state: "visible", timeout: 10000 });
+  assert.strictEqual(await card.count(), 1);
+  var html = await cp.content();
+  assert.ok(html.indexOf(sdk.value) < 0, "chave nao aparece no Conectar");
+  var saved = cp.waitForResponse(function (r) { return r.url().indexOf("/api/local/devices") >= 0 && r.request().method() === "POST"; });
+  await card.locator(".chip", { hasText: "Dois" }).click();
+  assert.strictEqual((await saved).status(), 200);
+  await card.locator(".badge.lim", { hasText: "2 páginas" }).waitFor({ timeout: 5000 });
+  await pc.close();
+
+  /* celular: "Dois" some (2 pontos), deslizar pula, e o servidor recusa a pagina 1 */
+  await page.reload();
+  await page.locator("#grid .cell", { hasText: "Copiar" }).waitFor({ state: "visible", timeout: 10000 });
+  await page.waitForFunction(function () { return document.querySelectorAll("#dots span").length === 2; }, null, { timeout: 8000 });
+  var shown = await page.locator("#dots span").evaluateAll(function (els) { return els.map(function (e) { return e.getAttribute("data-p"); }); });
+  assert.deepStrictEqual(shown, ["0", "2"]);
+  await page.evaluate(function () { window.SD.goPage(1); });
+  assert.strictEqual(await page.evaluate(function () { return window.SD.page; }), 0, "pagina 1 nao abre");
+  var r = await page.evaluate(function () {
+    return fetch("/api/press?p=1&b=0", { headers: { "X-StreamDeck": "1" } }).then(function (x) { return x.status; });
+  });
+  assert.strictEqual(r, 403, "servidor recusa pagina nao liberada");
+  await ctx.close();
+  mine.forEach(function (e) {
+    if (!/ping\.gif|ERR_FAILED|status of 403/.test(e)) errors.push(e);
+  });
+}
+
 async function editor(browser, base, errors) {
   var ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   var page = await ctx.newPage();
@@ -244,6 +310,18 @@ async function editor(browser, base, errors) {
   cfg = await getCfg();
   assert.strictEqual(cfg.pages.length, n0 + 1);
   assert.deepStrictEqual(cfg.pages[3].grid, { columns: 5, rows: 2, portrait: { columns: 2, rows: 5 } }, "pagina nova com grade");
+  /* ids fixos: pagina nova tem id proprio; copia nao leva o id da original */
+  var ids = cfg.pages.map(function (p) { return p.id; });
+  ids.forEach(function (id) { assert.ok(/^[0-9a-f]{4,16}$/.test(id), "pagina com id: " + id); });
+  saved = saveOk();
+  await page.locator("#pages .pg").nth(0).click({ button: "right" });
+  await page.locator("#pmDup").click();
+  await saved;
+  cfg = await getCfg();
+  assert.strictEqual(cfg.pages.length, n0 + 2);
+  assert.strictEqual(cfg.pages[0].id, ids[0], "original mantem o id");
+  assert.ok(cfg.pages[1].id && ids.indexOf(cfg.pages[1].id) < 0, "copia ganha id novo");
+  assert.deepStrictEqual(cfg.pages.slice(2).map(function (p) { return p.id; }), ids.slice(1), "mover mantem ids");
   await ctx.close();
 }
 
@@ -264,6 +342,11 @@ async function main() {
     console.log("ok   grade propria por pagina");
     await stalePc(browser, base, token, errors);
     console.log("ok   pc velho");
+    var ip = lanIp();
+    if (ip) {
+      await aparelhos(browser, base, "http://" + ip + ":" + srv.port, token, data, errors);
+      console.log("ok   aparelhos (" + ip + ")");
+    } else console.log("--   aparelhos: sem IP de rede, pulado");
     await editor(browser, base, errors);
     console.log("ok   editor 1440x900");
     assert.deepStrictEqual(errors, [], "erros no console:\n" + errors.join("\n"));

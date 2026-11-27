@@ -51,7 +51,12 @@ SEGURANCA
   bloqueiam o aparelho por 10 minutos.
 - Os botoes so podem ser criados e editados no proprio PC (Conectar > Editar
   botoes). Os aparelhos so usam.
-- Achou que alguem pegou o codigo? Conectar > "Gerar novo codigo de acesso".
+- Cada aparelho que le o QR code ganha a sua propria chave (2.11). Em
+  Conectar > Aparelhos: nome, paginas que ele ve, "Controle total" (botoes que
+  desligam, reiniciam ou suspendem o PC, e encerrar processos)
+  e Remover (o aparelho perde o acesso na hora).
+- Achou que alguem pegou o codigo? Conectar > "Gerar novo codigo de acesso"
+  (vale para aparelhos novos; os da lista continuam: use Remover para tirar um).
 - A conexao e por http comum (o tablet antigo nao suporta https). Use em redes
   confiaveis (sua casa, seu trabalho), nao em Wi-Fi publico.
 
@@ -60,7 +65,7 @@ DICAS
   ou "Permanecer ativo" nas Opcoes do desenvolvedor (com o tablet carregando).
 - Para o endereco nao mudar, reserve o IP do PC no roteador (DHCP).
 - O codigo de acesso protege o PC: sem ele ninguem na rede aciona os botoes.
-  Fica em token.txt (apague para gerar outro; os aparelhos precisam ler o QR de novo).
+  Fica em token.txt. As chaves de cada aparelho ficam em aparelhos.json.
 - Se a porta 8765 estiver ocupada, o programa usa a 8766 ou 8767.
 
 MONITOR DO PC E CONSUMO DAS IAS (2.9)
@@ -69,8 +74,8 @@ MONITOR DO PC E CONSUMO DAS IAS (2.9)
   processos.
 - Temperaturas: deixe o LibreHardwareMonitor aberto com
   Options > Remote Web Server > Run. Sem ele, o resto do monitor funciona.
-- Encerrar programas: vem desligado. Ligue em Conectar > Monitor do PC. Programas
-  essenciais do Windows ficam protegidos.
+- Encerrar programas: so no PC ou em aparelhos com Controle total
+  (Conectar > Aparelhos). Programas essenciais do Windows ficam protegidos.
 - Consumo das IAs (Conectar > Consumo das IAs): limite de 5 h e semanal do Claude
   e do Codex. O Claude precisa da ponte na linha de status do Claude Code, instalada
   por esse botao; ela atualiza so com o Claude Code aberto. O Codex e lido dos

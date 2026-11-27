@@ -3,10 +3,17 @@
 
 Ordem das barreiras (nao mudar):
   todo pedido: rede local -> Host deste PC -> limite de tentativas
-  GET : /ping.gif | /conectar, /editar e /api/local/* so no PC | "/?k=" grava cookie |
-        /api/*: cabecalho X-StreamDeck/Origin -> codigo de acesso -> rota | arquivos de web/
-  POST: cabecalho X-StreamDeck/Origin -> /api/local/* so no PC | codigo de acesso -> rota
+  GET : /ping.gif | /conectar, /editar e /api/local/* so no PC | "/?k=" cria o aparelho e grava
+        a chave dele no cookie | /api/*: cabecalho X-StreamDeck/Origin -> aparelho -> rota |
+        arquivos de web/
+  POST: cabecalho X-StreamDeck/Origin -> /api/local/* so no PC | aparelho -> rota
         (POST /api/config so no PC)
+
+Quem pede (self._ctx, ver _auth): o proprio PC (pode tudo); um aparelho pela
+chave do cookie sdk (paginas liberadas e Controle total dele); cookie antigo
+igual ao codigo geral (vira aparelho e recebe a chave nova no mesmo pedido);
+ou ?k=<codigo geral> (sem aparelho: todas as paginas, sem Controle total).
+Chaves de aparelho so valem no cookie (nunca no endereco) e nunca vao para log.
 """
 import json
 import os
@@ -21,7 +28,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, agenda, audio, diag, ia, library, media, monitor, obs, paths, schema, security, state, storage, updates, \
+from . import VERSION, actions, agenda, audio, devices, diag, ia, library, media, monitor, obs, paths, schema, security, state, storage, updates, \
     tocando, templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
@@ -84,7 +91,8 @@ ROUTES = {
     ("POST", "/api/monitor/kill"): "post_monitor_kill",
     ("GET", "/api/local/ia"): "local_ia",
     ("POST", "/api/local/ia"): "local_ia_save",
-    ("POST", "/api/local/settings_kill"): "local_settings_kill",
+    ("GET", "/api/local/devices"): "local_devices",
+    ("POST", "/api/local/devices"): "local_devices_save",
 }
 # gesto do /api/press -> campo do botao com a acao
 PRESS_KINDS = {"tap": "action", "hold": "hold", "double": "double"}
@@ -126,6 +134,25 @@ def is_local_only(path, full=None):
 BACKUP_PREFIX = "/api/local/backups/"   # GET /api/local/backups/<nome>
 NO_CODE = {("GET", "/api/local/info")}       # ja restritas ao proprio PC
 # do proprio PC (tela Conectar/Editar) a API nao pede o codigo de acesso
+
+
+COOKIE = "sdk=%s; Max-Age=315360000; Path=/; HttpOnly; SameSite=Strict"
+LOCAL_CTX = {"id": None, "name": "Este PC", "pages": None, "full": True}
+GUEST_CTX = {"id": None, "name": "Codigo geral", "pages": None, "full": False}
+DENY_PAGE = "pagina nao liberada para este aparelho"
+DENY_FULL = "este botao precisa de Controle total (ligue para este aparelho em Conectar no PC)"
+
+
+def _dev_ctx(dev):
+    """pages vira as posicoes ATUAIS das paginas liberadas (o aparelho guarda
+    ids; calcular a cada pedido mantem certo depois de mover/apagar paginas)."""
+    pages = dev["pages"]
+    if pages is not None:
+        try:
+            pages = devices.page_indices(pages, storage.load_config())
+        except Exception:  # noqa: BLE001 - sem config, nada liberado
+            pages = []
+    return {"id": dev["id"], "name": dev["name"], "pages": pages, "full": dev["full"] is True}
 
 
 def _int(q, name):
@@ -244,6 +271,8 @@ class Handler(BaseHTTPRequestHandler):
         if extra:
             for name, value in extra.items():
                 self.send_header(name, value)
+        if getattr(self, "_set_cookie", None):   # cookie antigo trocado pela chave do aparelho
+            self.send_header("Set-Cookie", COOKIE % self._set_cookie)
         if cors_img:   # ping.gif precisa ser carregado pelas abas de outros PCs
             self.send_header("X-Content-Type-Options", "nosniff")
         else:
@@ -312,8 +341,37 @@ class Handler(BaseHTTPRequestHandler):
                 return value
         return ""
 
+    def _auth(self, q):
+        """Contexto de quem pede (dict) ou None. Ver o topo do arquivo."""
+        if self._local():
+            return LOCAL_CTX
+        ip = self.client_address[0]
+        c = self._cookie_token()
+        if c:
+            dev = devices.find(c)
+            if dev:
+                devices.touch(dev["id"], ip)
+                return _dev_ctx(dev)
+            if security.same_token(c):
+                try:
+                    dev = devices.upgrade(ip, self.headers.get("User-Agent") or "")
+                except (devices.DevicesError, OSError) as e:
+                    print("! nao deu para criar o aparelho de %s: %s" % (ip, e))
+                    return GUEST_CTX
+                if dev.get("new"):
+                    print("* aparelho \"%s\" (%s) recebeu chave propria" % (dev["name"], ip))
+                self._set_cookie = dev["key"]
+                return _dev_ctx(dev)
+        if security.same_token((q.get("k") or [""])[0]):
+            return GUEST_CTX
+        return None
+
     def _authed(self, q):
-        return security.same_token((q.get("k") or [""])[0]) or security.same_token(self._cookie_token())
+        self._ctx = self._auth(q)
+        return self._ctx is not None
+
+    def _who(self):
+        return getattr(self, "_ctx", None) or (LOCAL_CTX if self._local() else GUEST_CTX)
 
     def _deny_auth(self):
         security.note_fail(self.client_address[0])
@@ -333,6 +391,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _guard(self):
         """Barreiras aplicadas a todo pedido. Devolve False se ja respondeu."""
+        self._ctx = None          # conexao mantida: nada do pedido anterior
+        self._set_cookie = None
         ip = self.client_address[0]
         if not security.ip_allowed(ip):
             print("! recusado: %s nao e da rede local" % ip)
@@ -382,7 +442,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._json(400, {"ok": False, "error": str(e)})
 
-        if not (self._local() or self._authed(q)):
+        if not self._authed(q):
             print("! pedido recusado de %s: codigo de acesso ausente ou errado" % self.client_address[0])
             return self._deny_auth()
         if not self._local():
@@ -417,7 +477,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # imagens dos botoes: <img> nao manda cabecalho, entao so o codigo
         if url.path.startswith("/img/"):
-            if not (self._authed(q) or self._local()):
+            if not self._authed(q):
                 # imagens nao contam como tentativa de codigo errado
                 return self._send(403, "acesso negado", TEXT)
             from urllib.parse import unquote
@@ -432,7 +492,7 @@ class Handler(BaseHTTPRequestHandler):
             if not self._api_header_ok():
                 return self._json(403, {"ok": False, "error": "pedido recusado"})
             key = ("GET", url.path)
-            if key not in NO_CODE and not (self._authed(q) or self._local()):
+            if key not in NO_CODE and not self._authed(q):
                 return self._deny_auth()
             if not self._local():
                 diag.note_client(self.client_address[0], self.headers.get("User-Agent"))
@@ -443,9 +503,23 @@ class Handler(BaseHTTPRequestHandler):
         return self._static(url.path)
 
     def _first_access(self, url, k):
+        ip = self.client_address[0]
         if not security.same_token(k):
-            security.note_fail(self.client_address[0])
+            security.note_fail(ip)
             return self._send(403, "Codigo de acesso invalido. Leia o QR code de novo na tela do PC.", TEXT)
+        key = None
+        if not self._local():     # o proprio PC nao precisa de aparelho
+            dev = devices.find(self._cookie_token())   # leu o QR de novo: mesmo aparelho
+            if dev:
+                key = devices.get_key(dev["id"])
+            else:
+                try:
+                    dev = devices.create(ua=self.headers.get("User-Agent") or "", ip=ip)
+                except devices.DevicesError as e:
+                    print("! novo aparelho recusado (%s): %s" % (ip, e))
+                    return self._send(503, "Nao deu para cadastrar este aparelho: %s." % e, TEXT)
+                key = dev["key"]
+                print("* novo aparelho cadastrado: \"%s\" (%s)" % (dev["name"], ip))
         sync = ""
         for part in url.query.split("&"):
             if part.startswith("sync="):
@@ -453,8 +527,8 @@ class Handler(BaseHTTPRequestHandler):
         if not SYNC_RE.match(sync):
             sync = ""
         self.send_response(302)
-        self.send_header("Set-Cookie", "sdk=%s; Max-Age=315360000; Path=/; HttpOnly; SameSite=Strict"
-                         % storage.token())
+        if key:
+            self.send_header("Set-Cookie", COOKIE % key)
         self.send_header("Location", "/#sync=" + sync if sync else "/")
         self.send_header("Content-Length", "0")
         self._security_headers()
@@ -538,7 +612,12 @@ class Handler(BaseHTTPRequestHandler):
             st["ia"] = _ia_status()
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
+        st["device"] = self._device_info()
         return self._json(200, st)
+
+    def _device_info(self):
+        c = self._who()
+        return {"name": c["name"], "pages": c["pages"], "full": c["full"]}
 
     def get_monitor(self, q):
         sort = (q.get("sort") or ["cpu"])[0]
@@ -547,12 +626,13 @@ class Handler(BaseHTTPRequestHandler):
         monitor.touch(prime=True)
         return self._json(200, {"ok": True, "snapshot": monitor.snapshot(),
                                 "processes": monitor.processes(15, sort),
-                                "allow_kill": storage.load_settings().get("allow_kill") is True})
+                                "allow_kill": self._who()["full"]})
 
     def post_monitor_kill(self, q):
-        if not self._local() and storage.load_settings().get("allow_kill") is not True:
-            print("! encerrar processo recusado de %s: desligado nos ajustes" % self.client_address[0])
-            return self._json(403, {"ok": False, "error": "encerrar processos esta desligado (ligue no PC)"})
+        if not self._who()["full"]:
+            print("! encerrar processo recusado de %s: aparelho sem Controle total" % self.client_address[0])
+            return self._json(403, {"ok": False, "reason": "full", "error": "encerrar processos precisa de "
+                                    "Controle total (ligue para este aparelho em Conectar no PC)"})
         try:
             body = self._body_json()
             pid = body.get("pid") if isinstance(body, dict) else None
@@ -570,8 +650,7 @@ class Handler(BaseHTTPRequestHandler):
         c = st.get("claude")
         return self._json(200, {"ok": True, "bridge_installed": ia.bridge_installed(),
                                 "claude_updated": (c or {}).get("updated"),
-                                "codex_found": st.get("codex") is not None,
-                                "allow_kill": storage.load_settings().get("allow_kill") is True})
+                                "codex_found": st.get("codex") is not None})
 
     def local_ia_save(self, body):
         want = body.get("install") if isinstance(body, dict) else None
@@ -583,15 +662,37 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, r)
         return self._json(200, {"ok": True, "bridge_installed": ia.bridge_installed()})
 
-    def local_settings_kill(self, body):
-        allow = body.get("allow") if isinstance(body, dict) else None
-        if not isinstance(allow, bool):
-            return self._json(400, {"ok": False, "error": "allow deve ser true ou false"})
+    def local_devices(self, q):
+        """Aparelhos para a tela Conectar (sem as chaves)."""
         try:
-            storage.update_settings(lambda s: s.__setitem__("allow_kill", allow))
-        except storage.SettingsError as e:
+            pages = [{"name": p.get("name") or "", "index": i, "id": p.get("id")}
+                     for i, p in enumerate(storage.load_config().get("pages") or [])]
+        except Exception:  # noqa: BLE001
+            pages = []
+        return self._json(200, {"ok": True, "devices": devices.list_public(), "pages": pages})
+
+    def local_devices_save(self, body):
+        """{id, op: rename|pages|full|remove, value}"""
+        if not isinstance(body, dict):
+            return self._json(400, {"ok": False, "error": "pedido invalido"})
+        dev_id, op, value = body.get("id"), body.get("op"), body.get("value")
+        fns = {"rename": devices.rename, "pages": devices.set_pages, "full": devices.set_full}
+        try:
+            if op == "remove":
+                if not devices.remove(dev_id):
+                    raise KeyError(dev_id)
+                print("* aparelho removido; a chave dele deixou de valer")
+                return self._json(200, {"ok": True})
+            if op not in fns:
+                return self._json(400, {"ok": False, "error": "operacao invalida"})
+            fns[op](dev_id, value)
+        except KeyError:
+            return self._json(404, {"ok": False, "error": "aparelho nao encontrado"})
+        except ValueError as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        except (devices.DevicesError, OSError) as e:
             return self._json(500, {"ok": False, "error": str(e)})
-        return self._json(200, {"ok": True, "allow_kill": allow})
+        return self._json(200, {"ok": True, "device": devices.get(dev_id)})
 
     def get_volume(self, q):
         try:
@@ -605,7 +706,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_config(self, q):
         try:
-            return self._json(200, storage.load_config(), extra={"X-Config-Version": storage.config_version()})
+            pages = self._who()["pages"]
+            return self._json(200, storage.load_config(), extra={
+                "X-Config-Version": storage.config_version(),
+                "X-Device-Pages": "*" if pages is None else ",".join(str(p) for p in pages)})
         except Exception as e:
             return self._json(500, {"ok": False, "error": str(e)})
 
@@ -613,11 +717,12 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {"ok": True, "actions": actions.schema()})
 
     def get_info(self, q):
-        return self._json(200, {"ok": True, "name": socket.gethostname(),
-                                "code": storage.token(), "sounds": audio.list_sounds(),
-                                "tabs": storage.load_tabs(), "version": VERSION,
-                                "local": self._local(),
-                                "update": updates.update_status()})
+        info = {"ok": True, "name": socket.gethostname(), "sounds": audio.list_sounds(),
+                "tabs": storage.load_tabs(), "version": VERSION, "local": self._local(),
+                "update": updates.update_status(), "device": self._device_info()}
+        if self._local():   # aparelho nao recebe o codigo geral (driblaria paginas e remocao)
+            info["code"] = storage.token()
+        return self._json(200, info)
 
     def get_press(self, q):
         g = (q.get("g") or ["tap"])[0] or "tap"
@@ -629,6 +734,9 @@ class Handler(BaseHTTPRequestHandler):
             if p < 0 or b < 0 or (f is not None and f < 0):
                 raise IndexError("botao inexistente")
             cfg = storage.load_config()
+            who = self._who()
+            if not devices.page_allowed(who["pages"], p):
+                return self._json(403, {"ok": False, "error": DENY_PAGE, "reason": "page"})
             btn = cfg["pages"][p]["buttons"][b]
             if f is not None:
                 if btn.get("kind") != "folder":
@@ -642,6 +750,10 @@ class Handler(BaseHTTPRequestHandler):
             if g != "tap" and not isinstance(a, dict):
                 return self._json(400, {"ok": False, "error": "este botao nao tem acao %s" % (
                     "ao segurar" if g == "hold" else "no toque duplo")})
+            if not who["full"] and devices.sensitive(a):
+                print("! %s recusado para %s: precisa de Controle total" % (
+                    btn.get("label") or "?", self.client_address[0]))
+                return self._json(403, {"ok": False, "error": DENY_FULL, "reason": "full"})
             print("> %s%s" % (btn.get("label") or "?", "" if g == "tap" else " (%s)" % g))
             actions.run(a or {"type": "none"}, key=state.key(p, b, f))
             if btn.get("toggle") is True and g == "tap":
@@ -809,7 +921,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def local_newcode(self, body):
         storage.new_token()
-        print("* novo codigo de acesso gerado; os aparelhos precisam ler o QR de novo")
+        print("* novo codigo de acesso gerado; aparelhos ja cadastrados continuam entrando")
         return self._json(200, {"ok": True})
 
     def post_update_check(self, q):

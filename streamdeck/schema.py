@@ -3,6 +3,7 @@
 import copy
 import json
 import re
+import secrets
 
 from . import actions, agenda
 from .audio import TARGETS as FADER_TARGETS
@@ -189,12 +190,20 @@ def validate_config(cfg):
         raise ValueError("precisa ter ao menos uma pagina")
     if len(pages) > MAX_PAGES:
         raise ValueError("no maximo %d paginas" % MAX_PAGES)
+    seen_ids = set()
     for pi, pg in enumerate(pages):
         if not isinstance(pg, dict) or not isinstance(pg.get("buttons"), list):
             raise ValueError("pagina %d invalida" % (pi + 1))
         if pg.get("layout", "grid") != "grid":
             raise ValueError("pagina %d: layout invalido" % (pi + 1))
         _opt_str(pg, "name", MAX_NAME, "pagina %d" % (pi + 1))
+        if "id" in pg:
+            pid = pg["id"]
+            if not isinstance(pid, str) or not PAGE_ID_RE.match(pid):
+                raise ValueError("pagina %d: id invalido" % (pi + 1))
+            if pid in seen_ids:
+                raise ValueError("pagina %d: id repetido" % (pi + 1))
+            seen_ids.add(pid)
         grid = pg.get("grid")
         if grid is not None:
             if not isinstance(grid, dict):
@@ -224,7 +233,7 @@ def migrate(cfg):
         if ver != CONFIG_VERSION:
             return cfg, False
         bad_icon = _has_bad_icon(cfg.get("pages"))
-        if not bad_icon and not _needs_grid(cfg):
+        if not bad_icon and not _needs_grid(cfg) and not _needs_ids(cfg):
             return cfg, False
         out = copy.deepcopy(cfg)
         for page in out["pages"]:
@@ -232,10 +241,61 @@ def migrate(cfg):
                 if isinstance(btn, dict):
                     fix_icon(btn)
         add_page_grids(out)
+        add_page_ids(out)
         return out, True
     out = migrate_v1(cfg)
     add_page_grids(out)
+    add_page_ids(out)
     return out, True
+
+
+# ------------------------------------------------- id fixo de cada pagina ---
+PAGE_ID_RE = re.compile(r"^[0-9a-f]{4,16}$")
+
+
+def _needs_ids(cfg):
+    pages = cfg.get("pages")
+    if not isinstance(pages, list):
+        return False
+    seen = set()
+    for p in pages:
+        if not isinstance(p, dict):
+            continue
+        pid = p.get("id")
+        if not isinstance(pid, str) or not PAGE_ID_RE.match(pid) or pid in seen:
+            return True
+        seen.add(pid)
+    return False
+
+
+def add_page_ids(cfg):
+    """2.11: toda pagina tem um id fixo (os aparelhos guardam ids, nao
+    posicoes, entao mover/apagar paginas nao troca o que cada um ve).
+    Pagina sem id (ou com id repetido) ganha um novo. Devolve True se mudou."""
+    pages = cfg.get("pages") if isinstance(cfg, dict) else None
+    if not isinstance(pages, list):
+        return False
+    used, changed = set(), False
+    for pg in pages:
+        if isinstance(pg, dict) and isinstance(pg.get("id"), str) and PAGE_ID_RE.match(pg["id"]) \
+                and pg["id"] not in used:
+            used.add(pg["id"])
+            continue
+        if not isinstance(pg, dict):
+            continue
+        pid = secrets.token_hex(4)
+        while pid in used:
+            pid = secrets.token_hex(4)
+        used.add(pid)
+        pg["id"] = pid
+        changed = True
+    return changed
+
+
+def page_ids(cfg):
+    """[id de cada pagina] na ordem atual (None onde faltar)."""
+    pages = cfg.get("pages") if isinstance(cfg, dict) else None
+    return [p.get("id") if isinstance(p, dict) else None for p in (pages or [])]
 
 
 # ------------------------------------------------- grade de cada pagina ---

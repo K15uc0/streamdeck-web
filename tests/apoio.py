@@ -16,6 +16,11 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURES = os.path.join(ROOT, "tests", "fixtures")
 
+# CI: se um teste travar, mostra onde (pilha de todas as threads) a cada N s
+if os.environ.get("SD_TEST_DUMP"):
+    import faulthandler
+    faulthandler.dump_traceback_later(int(os.environ["SD_TEST_DUMP"]), repeat=True)
+
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
@@ -45,7 +50,7 @@ def base_config():
         "columns": 4,
         "rows": 2,
         "pages": [
-            {"name": "Um", "grid": {"columns": 4, "rows": 2}, "buttons": [
+            {"name": "Um", "id": "a1a1", "grid": {"columns": 4, "rows": 2}, "buttons": [
                 {"label": "ON AIR", "icon": "onair", "color": "#ff453a", "toggle": True,
                  "action": {"type": "none"}},
                 {"label": "Copiar", "icon": "copy", "color": "#0a84ff",
@@ -58,7 +63,7 @@ def base_config():
                 {"kind": "fader", "label": "Master", "icon": "sound", "target": "master"},
                 {"label": "Ir 2", "action": {"type": "page", "to": 1}},
             ]},
-            {"name": "Dois", "grid": {"columns": 4, "rows": 2}, "buttons": [
+            {"name": "Dois", "id": "b2b2", "grid": {"columns": 4, "rows": 2}, "buttons": [
                 {"label": "Voltar", "action": {"type": "page", "to": 0}},
             ]},
         ],

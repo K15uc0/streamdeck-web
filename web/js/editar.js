@@ -2583,7 +2583,19 @@
   }
   /* insere pg na posicao at e corrige os "Ir para pagina" das paginas existentes.
      remapNew: corrige tambem as acoes da pagina nova (copia de uma pagina deste config). */
+  /* id fixo de pagina (os aparelhos guardam ids): toda pagina nova ganha um
+     novo; copia nunca leva o id da original. Mover mantem o id. */
+  function newPageId() {
+    var used = {}, id, k;
+    cfg.pages.forEach(function (p) { if (p && p.id) used[p.id] = 1; });
+    do {
+      id = "";
+      for (k = 0; k < 8; k++) id += "0123456789abcdef".charAt(Math.floor(Math.random() * 16));
+    } while (used[id]);
+    return id;
+  }
   function insertPage(at, pg, remapNew) {
+    pg.id = newPageId();
     var n = cfg.pages.length, map = {};
     for (var k = 0; k < n; k++) map[k] = k < at ? k : k + 1;
     if (remapNew) cfg.pages.push(pg);
