@@ -6,6 +6,7 @@ import json
 import os
 import re
 import unittest
+from unittest import mock
 
 import apoio
 from streamdeck import devices, monitor, paths, security, state, storage
@@ -39,7 +40,7 @@ def pedir(method, path, key=None, ip=IP, body=None, headers=None):
 def config_teste():
     cfg = apoio.base_config()
     cfg["pages"][0]["buttons"].append(
-        {"label": "Desligar", "action": {"type": "command", "command": "shutdown /s /t 0"}})
+        {"label": "Desligar", "action": {"type": "command", "command": "echo shutdown /s /t 0"}})
     cfg["pages"][0]["buttons"].append(
         {"label": "Site", "action": {"type": "open", "target": "https://exemplo.com"}})
     return cfg
@@ -51,6 +52,10 @@ SITE_B = 7
 
 class AparelhosHttpTest(unittest.TestCase):
     def setUp(self):
+        # nunca roda comando de verdade (no Windows do CI desligaria a maquina)
+        self._popen = mock.patch("streamdeck.actions.system.subprocess.Popen")
+        self._popen.start()
+        self.addCleanup(self._popen.stop)
         self._q = apoio.quiet()
         self._q.__enter__()
         Servidor.start()
