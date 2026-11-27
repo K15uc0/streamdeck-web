@@ -474,6 +474,11 @@ def _active():
     return time.time() - _STATE["polled"] < ACTIVE_FOR
 
 
+def active():
+    """Algum aparelho esta olhando o monitor (a coleta esta rodando)."""
+    return _active()
+
+
 def _collect(with_lhm=False):
     now = time.time()
     if not IS_WINDOWS:

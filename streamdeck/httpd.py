@@ -28,7 +28,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, agenda, audio, devices, diag, ia, library, media, monitor, obs, paths, schema, security, state, storage, updates, \
+from . import VERSION, actions, agenda, audio, avisos, devices, diag, ia, library, media, monitor, notif_windows, obs, paths, schema, security, state, storage, updates, \
     tocando, templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
@@ -92,6 +92,9 @@ ROUTES = {
     ("GET", "/api/local/ia"): "local_ia",
     ("POST", "/api/local/ia"): "local_ia_save",
     ("GET", "/api/local/devices"): "local_devices",
+    ("GET", "/api/avisos"): "get_avisos",
+    ("GET", "/api/local/avisos"): "local_avisos",
+    ("POST", "/api/local/avisos"): "local_avisos_save",
     ("POST", "/api/local/devices"): "local_devices_save",
 }
 # gesto do /api/press -> campo do botao com a acao
@@ -176,6 +179,24 @@ def _ia_status():
                 _IA_CACHE["val"] = {"claude": None, "codex": None, "grok": None}
             _IA_CACHE["t"] = now
         return _IA_CACHE["val"]
+
+
+_RULES_T = [0.0]
+
+
+def _run_rules(ob):
+    """Regras dos avisos com o que ja foi coletado (no maximo 1x/s)."""
+    now = time.time()
+    if 0 <= now - _RULES_T[0] < 1.0:
+        return
+    _RULES_T[0] = now
+    avisos.REGRAS.check_obs(ob)
+    iv = _IA_CACHE["val"]
+    if iv and 0 <= now - _IA_CACHE["t"] < 120:
+        avisos.REGRAS.check_ia(iv)
+    if paths.IS_WINDOWS and monitor.active():
+        avisos.REGRAS.check_pc(monitor.cached_snapshot())
+    notif_windows.LEITOR.maybe_poll(now)
 
 
 def _pc_summary(s):
@@ -520,6 +541,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(503, "Nao deu para cadastrar este aparelho: %s." % e, TEXT)
                 key = dev["key"]
                 print("* novo aparelho cadastrado: \"%s\" (%s)" % (dev["name"], ip))
+                avisos.device_new(dev["name"])
         sync = ""
         for part in url.query.split("&"):
             if part.startswith("sync="):
@@ -613,7 +635,39 @@ class Handler(BaseHTTPRequestHandler):
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         st["device"] = self._device_info()
+        try:
+            _run_rules(ob)
+        except Exception as e:  # noqa: BLE001 - aviso nunca derruba o estado
+            print("! avisos: %s" % e.__class__.__name__)
+        n = None
+        try:
+            n = int((q.get("since") or [""])[0])
+        except ValueError:
+            pass
+        items, last = avisos.FILA.poll(n, self._who()["full"])
+        st["alert_id"] = last
+        if n is not None:
+            st["alerts"] = items
         return self._json(200, st)
+
+    def get_avisos(self, q):
+        """Historico (central de avisos) deste aparelho."""
+        items, last = avisos.FILA.poll(None, self._who()["full"])
+        return self._json(200, {"ok": True, "alerts": items, "alert_id": last})
+
+    def local_avisos(self, q):
+        return self._json(200, dict(avisos.settings(), ok=True, windows_status=notif_windows.LEITOR.info(),
+                                    is_windows=paths.IS_WINDOWS))
+
+    def local_avisos_save(self, body):
+        try:
+            avisos.save_settings(body)
+        except ValueError as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        except (storage.SettingsError, OSError) as e:
+            return self._json(500, {"ok": False, "error": str(e)})
+        notif_windows.retry()
+        return self.local_avisos(None)
 
     def _device_info(self):
         c = self._who()

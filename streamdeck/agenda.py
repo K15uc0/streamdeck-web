@@ -339,6 +339,11 @@ class Agenda(object):
             print("! agendamento %s: %s" % (it.get("name") or sid, err))
         with self.lock:
             self.info[sid] = {"last": time.time(), "last_error": err}
+        try:
+            from . import avisos     # aqui: actions carrega a agenda no import
+            avisos.schedule_ran(it.get("name") or "", err)
+        except Exception:  # noqa: BLE001
+            pass
         when = it.get("when") if isinstance(it.get("when"), dict) else {}
         if scheduled and when.get("type") == "once":
             with self.lock:
