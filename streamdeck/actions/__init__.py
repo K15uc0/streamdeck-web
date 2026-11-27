@@ -18,7 +18,7 @@ REGISTRY = {}   # tipo -> Action (na ordem de registro)
 # ordem no editor das acoes que vem com o programa; as novas vao no fim
 ORDER = ("none", "hotkey", "open", "command", "page", "multi",
          "sound", "stopsound", "text", "http", "mute",
-         "app", "apphotkey", "site", "tab",
+         "app", "apphotkey", "site", "tab", "browser",
          "obs_scene", "obs_stream", "obs_record", "obs_mute")
 CONTEXT = threading.local()   # CONTEXT.key = "p:b[:f]" do botao que disparou (ou None)
 
@@ -177,7 +177,7 @@ def validate(a, n_pages, where):
 
 def _load():
     # imports explicitos: o PyInstaller enxerga e inclui os modulos
-    from . import flow, keyboard, system, audio, web, apps, obs  # noqa: F401  (ordem = ordem no editor)
+    from . import flow, keyboard, system, audio, web, apps, browser, obs  # noqa: F401  (ordem = ordem no editor)
 
 
 _load()

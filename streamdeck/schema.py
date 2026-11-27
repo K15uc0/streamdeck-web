@@ -15,8 +15,8 @@ MAX_LABEL = 60             # texto do botao
 MAX_NAME = 60              # nome da pagina
 MAX_TITLE = 80
 MAX_SHORT = 40             # icone, cor
-KINDS = ("button", "fader", "folder", "monitor")
-FOLDER_KINDS = ("button", "fader", "monitor")   # pasta dentro de pasta nao
+KINDS = ("button", "fader", "folder", "monitor", "browser")
+FOLDER_KINDS = ("button", "fader", "monitor", "browser")   # pasta dentro de pasta nao
 MAX_FOLDER = 60            # botoes dentro de uma pasta
 MAX_APPS = 20              # apps por pagina (troca automatica)
 LIVE = ("clock", "date", "volume:master", "volume:effects", "volume:mic", "timer",
@@ -150,8 +150,8 @@ def validate_button(b, n_pages, where, kinds=KINDS):
             raise ValueError("%s: pasta com botoes demais (maximo %d)" % (where, MAX_FOLDER))
         for i, x in enumerate(inner):
             validate_button(x, n_pages, "%s, item %d" % (where, i + 1), FOLDER_KINDS)
-    elif kind == "monitor":
-        pass    # sem acao: o toque abre a tela de processos
+    elif kind in ("monitor", "browser"):
+        pass    # sem acao: o toque abre a tela de processos / de abas do navegador
     elif kind == "fader":
         if b.get("target") not in FADER_TARGETS:
             raise ValueError("%s: o fader deve controlar %s" % (where, ", ".join(FADER_TARGETS)))
@@ -348,7 +348,7 @@ def flow(buttons, cols, rows):
 
 def _real(b):
     """Botao que conta para caber (botoes vazios no fim da lista nao contam)."""
-    return isinstance(b, dict) and (b.get("kind") in ("folder", "monitor") or _used(b)
+    return isinstance(b, dict) and (b.get("kind") in ("folder", "monitor", "browser") or _used(b)
                                     or bool(b.get("icon")) or bool(b.get("image")))
 
 

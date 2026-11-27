@@ -40,6 +40,9 @@ EXEMPLOS = {
     "site": ({"url": "https://www.youtube.com/", "browser": "chrome", "profile": "Profile 1", "appmode": True},
              [({"url": "www.x.com"}, "http"), ({"url": "https://x", "browser": "opera"}, "invalido"),
               ({"url": "https://x", "profile": 'a"b'}, "perfil")]),
+    "browser": ({"op": "open_url", "url": "https://www.youtube.com/"},
+                [({}, "escolha"), ({"op": "x"}, "invalido"), ({"op": "open_url", "url": "javascript:x"}, "http"),
+                 ({"op": "scroll", "dir": "x"}, "invalido")]),
     "tab": ({"browser": "edge", "title": "YouTube"}, [({}, "preencha"), ({"title": "x", "browser": "x"}, "invalido")]),
 }
 
