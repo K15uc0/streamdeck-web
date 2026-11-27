@@ -24,6 +24,9 @@ streamdeck/
   updates.py              verificação e aplicação de atualizações
   state.py                estado em memória (botões liga/desliga)
   httpd.py                servidor HTTP e tabela de rotas
+  avisos.py               avisos do celular: fila curta e regras (2.12)
+  notif_windows.py        notificacoes do Windows, experimental (2.12)
+  navegador.py            ponte com a extensao do navegador e atalhos (2.12)
   app.py                  main(): porta, log, cópias antigas, abrir tela Conectar
   actions/
     __init__.py           registro: @action(...), run(), validate(), schema()
@@ -32,6 +35,12 @@ streamdeck/
     audio.py              sound, stopsound, mute
     web.py                http
     flow.py               none, page, multi
+    browser.py            browser (navegador do PC, 2.12)
+extensao/                 extensao "Stream Deck" para Chrome/Edge (Manifest V3, 2.12)
+  manifest.json           permissoes: tabs, scripting, storage; hosts 127.0.0.1 e youtube.com
+  ponte.js                logica (pareamento, abas, long-poll, comandos); testada no node
+  sw.js                   service worker (importScripts ponte.js; eventos das abas)
+  popup.html/.js/.css     janela do icone: parear com o codigo / desparear
 web/
   index.html              casca (HTML mínimo)
   conectar.html           tela do PC (QR code)
@@ -44,6 +53,8 @@ web/
   js/deck.js              grade, toque, páginas, faders, liga/desliga
   js/editar.js            editor do PC: grade, formulário a partir do schema, autosave
   js/settings.js          ajustes, páginas, PCs (abas), atualizações
+  js/avisos.js            faixa e central de avisos (2.12)
+  js/navegador.js         folha do bloco Navegador (2.12)
 ```
 
 JavaScript em ES5 (sem módulos, sem `let`/`=>`), para funcionar em Android antigo.
@@ -417,3 +428,84 @@ no celular, a troca de PC pelas abas usa `/#sync=` quando não há código guard
 `SD.parseDevicePages`): `SD.device` (guardado em `sd_device`) esconde as páginas não liberadas nos pontos,
 no deslizar, na troca automática pelo app e na ação "Ir para página"; sem nenhuma página mostra
 "Nenhuma página liberada". Recusas 403 com `reason` viram avisos claros.
+
+## 2.12: avisos, notificações do Windows e navegador
+
+### Avisos (`streamdeck/avisos.py`, `web/js/avisos.js`)
+
+- **Fila** em memória (`avisos.FILA`): últimos 50, `id` crescente que começa no relógio em ms (um id visto
+  antes de reiniciar nunca passa dos novos; se passar, o servidor devolve a fila toda).
+- **Regras** só com dados já coletados (nada dispara coleta), rodadas no `GET /api/state` no máximo 1x/s
+  (`httpd._run_rules`): `ia` (Claude/Codex ≥ 80% e ≥ 95%, uma vez por janela), `temp` (CPU/GPU acima do
+  limite, padrão 90 °C, a cada 5 min no máximo), `cpu` (> 95% por 1 min), `obs` (desconectou/voltou),
+  `device` (aparelho novo, em `_first_access`), `schedule` (agendamento rodou; desligado por padrão),
+  `windows` (abaixo).
+- **Ajustes** em `seguranca.json`, chave `avisos`: `{types: {tipo: bool}, temp_limit, ignored_apps}`.
+  `GET/POST /api/local/avisos` (Conectar › Avisos no celular / Notificações do Windows).
+- **API**: `GET /api/state?since=<id>` devolve `alert_id` (último id) e `alerts` (os novos que o aparelho
+  pode ver); sem `since` só `alert_id`. `GET /api/avisos` = histórico do aparelho. Avisos `full_only`
+  só vão para aparelhos com Controle total. Texto de aviso nunca vai para o log.
+- **Celular**: o poll manda `since`; aviso novo vira faixa no topo (4 s, vibra se ligado) e entra na
+  central (Ajustes › Avisos).
+
+### Notificações do Windows (`streamdeck/notif_windows.py`, experimental, desligado por padrão)
+
+Lê `%LOCALAPPDATA%\Microsoft\Windows\Notifications\wpndatabase.db` com `sqlite3` somente leitura (URI
+`mode=ro`; travado → cópia temporária com `-wal`/`-shm`), no máximo a cada 5 s, numa thread curta disparada
+pelo `/api/state`. Esquema não documentado (`Notification`: `Id`, `HandlerId`, `Payload` XML, `ArrivalTime`;
+`NotificationHandler.PrimaryId` = app): qualquer diferença desliga o recurso com o estado "indisponível
+nesta versão do Windows". Toasts novos viram avisos `windows` com `full_only` (só aparelhos com Controle
+total); apps da lista `ignored_apps` são pulados.
+
+### Navegador (`streamdeck/navegador.py`, `extensao/`, `web/js/navegador.js`)
+
+**Extensão** (Chrome/Edge, Manifest V3, carregada sem compactação). Permissões só `tabs`, `scripting`,
+`storage`; hosts só `http://127.0.0.1/*` (qualquer porta; o programa usa 8765–8767) e `*://*.youtube.com/*`
+(o único site onde roda script: pausar e rolar). Sem `content_scripts`, não lê páginas. A pasta vem no
+programa (`--add-data extensao;extensao` nas duas versões do PyInstaller); no `.exe`,
+`navegador.ext_folder()` copia para `Documentos\StreamDeck\extensao` (o `.exe` de arquivo único usa
+uma pasta temporária diferente a cada abertura e o Chrome guarda o caminho), atualizando quando o
+`manifest.json` muda.
+
+**Pareamento e segurança** (`/api/browser/*`, tratado em `httpd._browser_api` antes das outras barreiras
+de API):
+
+- Só do próprio PC (`127.0.0.1`) e só com `Origin: chrome-extension://<32 letras a-p>`; qualquer outro
+  Origin, sem Origin ou de outro IP → 403. Sites comuns não conseguem mandar esse Origin.
+- **Tudo POST**: o Chrome não manda `Origin` nos GET da extensão (manda nos POST), então GET aqui é 404/403.
+- Conectar › Navegador › **Parear extensão** (`POST /api/local/navegador {op:"pair"}`) gera um código de 6
+  caracteres (sem 0/O/1/I), válido por 5 min, uso único, morre após 5 erros. A extensão manda
+  `POST /api/browser/pair {code}` e recebe uma chave de 64 hex (`secrets.token_hex(32)`), guardada em
+  `chrome.storage.local` e em `Documentos\StreamDeck\navegador.json` (`{ext_id, key, at}`) junto com o id
+  da extensão. Parear de novo troca a chave (a antiga para de valer).
+- Demais rotas exigem o id pareado no Origin **e** a chave no cabeçalho `X-StreamDeck-Ext`, comparados
+  com `hmac.compare_digest`; senão 401 `{reason:"unpaired"}` (a extensão esquece a chave).
+- **Desparear** (`{op:"unpair"}`) apaga o arquivo, a fila e as abas e acorda os long-polls.
+- A chave nunca sai para o Conectar nem para o log; para o celular vai só o domínio de cada aba.
+
+**Rotas da extensão**: `POST /api/browser/hello` (achar a porta: `{app:"streamdeck", paired}`),
+`/pair`, `/tabs {tabs:[{id, window, title, url, active, audible, current}]}` (a extensão manda quando as
+abas mudam, com 400 ms de espera para juntar mudanças), `/commands?wait=25` (long-poll: segura até 25 s
+ou até chegar comando; `{commands:[...]}`). No máximo 2 long-polls ao mesmo tempo (o terceiro volta na
+hora com `busy`); o `ThreadingHTTPServer` atende cada conexão numa thread, então long-polls parados não
+travam os outros pedidos (`Handler.timeout` 30 s > 25 s). Comandos não buscados em 10 s são descartados.
+A extensão mantém o service worker vivo chamando uma API do Chrome a cada 20 s enquanto pareada.
+
+**Comandos** (`navegador.check_cmd`): `activate {tab}`, `close_tab {tab?}`, `open_url {url}` (só
+http/https, nova aba), `yt_toggle` (aba do YouTube tocando, senão a ativa, senão qualquer; `video.paused`),
+`scroll {dir: up|down|top|bottom}`, `back`, `forward`, `reload`, `tab_next`, `tab_prev`.
+
+**Sem extensão** (não pareada ou sem contato há 30 s) e nos casos que a extensão não faz (rolar fora do
+YouTube, pausar sem aba do YouTube), `navegador.fallback` usa atalhos na janela da frente
+(`winapi.send_keys`): Ctrl+Tab, Ctrl+Shift+Tab, K, Alt+←/→, F5, Ctrl+W, PageDown/PageUp/Home/End.
+`open_url`: se a janela da frente é um navegador, Ctrl+L + digita o endereço (`winapi.type_text`) + Enter;
+senão abre no navegador padrão. `activate` precisa da extensão.
+
+**Celular e permissões**: bloco `kind: "browser"` (sem ação; como `monitor`, também em pastas) abre a
+folha. `GET /api/navegador` → `{paired, connected, full, tabs:[{id, window, title, host, active, audible,
+current, yt}]}`; `POST /api/navegador {op, ...}` → `{ok, via: "ext"|"keys"}`. Os dois exigem um bloco
+Navegador numa página liberada para o aparelho (senão 403 `{reason:"page"}`). `close_tab` e `open_url`
+pela folha exigem Controle total (403 `{reason:"full"}`). A ação `browser` (`{op, url?, dir?}`) em
+botões segue as regras de botão (qualquer aparelho com a página), inclusive `open_url` com o endereço
+salvo no botão. Campos de ação podem ter `when: {campo: valor}` (o editor só mostra o campo nesse caso).
+

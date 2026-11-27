@@ -252,7 +252,7 @@ class ClienteTest(unittest.TestCase):
         self.cli.request("ToggleInputMute", {"inputName": "Mic/Aux"})
         self.assertTrue(esperar(lambda: self.cli.snapshot()["scene"] == "Cena 2"))
         self.assertTrue(esperar(lambda: self.cli.snapshot()["stream"]))
-        self.assertTrue(esperar(lambda: self.cli.snapshot()["muted"]["Mic/Aux"]))
+        self.assertTrue(esperar(lambda: self.cli.snapshot()["muted"].get("Mic/Aux")))
         with self.assertRaises(obs.ObsError) as cm:
             self.cli.request("NaoExiste")
         self.assertIn("nao existe", str(cm.exception))

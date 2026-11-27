@@ -54,6 +54,19 @@ Seus dados ficam em `Documentos\StreamDeck`. As novidades de cada versão estão
 
 Cada celular ou tablet que lê o QR code ganha a sua própria chave (guardada no navegador dele). Em **Conectar → Aparelhos**, no PC, você pode dar um nome a cada um, escolher as páginas que ele vê, ligar o **Controle total** (botões que desligam, reiniciam ou suspendem o PC, e encerrar processos) e **Remover** o aparelho, que perde o acesso na hora. Aparelhos que já estavam conectados ganham a chave sozinhos, sem ler o QR code de novo.
 
+## Avisos, notificações e navegador (2.12)
+
+- **Avisos no celular**: limite do Claude/Codex (80% e 95%), temperatura alta, CPU no máximo, OBS desconectou/voltou, aparelho novo e (opcional) agendamentos aparecem numa faixa no alto da tela do celular, com histórico em **Ajustes › Avisos**. Liga e desliga cada tipo em **Conectar → Avisos no celular**.
+- **Notificações do Windows (experimental)**: em **Conectar → Notificações do Windows**, mostra no celular as notificações do PC (app, título e texto), só em aparelhos com **Controle total**. Desligado por padrão; usa um arquivo interno do Windows que pode mudar.
+- **Navegador**: o bloco **Navegador** mostra no celular as abas do Chrome/Edge do PC (tocar vai para a aba, deslizar fecha), com voltar, avançar, recarregar, rolar, pausar o YouTube e abrir site. A ação **Navegador** faz o mesmo em qualquer botão.
+- **Instalar a extensão** (necessária só para a lista de abas):
+  1. Em **Conectar → Navegador**, clique em **Abrir pasta da extensão**.
+  2. No Chrome abra `chrome://extensions` (no Edge, `edge://extensions`) e ligue o **Modo do desenvolvedor**.
+  3. **Carregar sem compactação** → escolha a pasta aberta no passo 1.
+  4. Volte ao Conectar, clique em **Parear extensão** e digite o código no ícone do Stream Deck na barra do navegador.
+
+  A extensão só fala com este PC (127.0.0.1), não lê o conteúdo das páginas e só pode rodar código no YouTube (pausar e rolar). Sem ela, os botões viram atalhos de teclado (Ctrl+Tab, Alt+←, F5, PageDown…) no navegador que estiver na frente. Fechar abas e abrir endereço digitado pelo celular precisam de **Controle total**.
+
 ## Para desenvolvedores
 
 - Rodar pelo código: Python 3.8+, `python server.py` (sem dependências). O código do servidor fica no pacote `streamdeck/`; `server.py` só chama `streamdeck.app.main()`.
@@ -62,7 +75,7 @@ Cada celular ou tablet que lê o QR code ganha a sua própria chave (guardada no
 - Testar fora do Windows: `STREAMDECK_DATA=/tmp/sd python3 server.py` (as ações são simuladas e aparecem como `[simulado]` na janela).
 - Testes (rodam sozinhos no GitHub Actions em cada pull request, pelo `.github/workflows/testes.yml`, e antes de publicar uma versão):
   - Python, sem instalar nada: `python -m unittest discover -s tests` (validação e migração do config, ações, biblioteca, segurança e a API com o servidor de verdade numa porta livre; os dados ficam numa pasta temporária e nenhuma tecla é enviada de verdade).
-  - JavaScript do núcleo (`SD.flow`, `SD.geometry`...), só com Node: `node tests/js/flow.test.js`.
+  - JavaScript do núcleo (`SD.flow`, `SD.geometry`...), só com Node: `node tests/js/flow.test.js`; a extensão do navegador (com um `chrome` falso): `node tests/js/extensao.test.js`.
   - No navegador (celular 390x844, tablet 1180x820 e editor do PC): `npm install --no-save playwright@1.48.2`, `npx playwright install chromium` e `node tests/e2e/smoke.js` (sobe o `server.py` sozinho; falha com qualquer erro no console).
   - `.exe` (Windows, pwsh): depois de gerar com o PyInstaller (comandos em `.github/workflows/testes.yml`), `./tests/exe_smoke.ps1 -Exe dist/StreamDeck.exe` (portátil) ou `-Exe dist/onedir/StreamDeck/StreamDeck.exe` (pasta) abre o programa, confere a API e fecha.
   - Instalador (Windows, Inno Setup 6.3+): `iscc /DMyAppVersion=x.y.z installer\streamdeck.iss` gera `dist-installer/StreamDeck-Instalador.exe`; `./tests/installer_smoke.ps1` instala numa pasta temporária, atualiza com o app aberto, desinstala e confere que os dados ficaram.

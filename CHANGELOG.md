@@ -1,5 +1,17 @@
 # Novidades
 
+## 2.12.0
+
+- **Avisos no celular**: o PC avisa no alto da tela do celular (faixa no estilo do iPhone, some em 4 s) quando o Claude ou o Codex chegam a 80% e a 95% do limite, a CPU ou a GPU passam do limite de temperatura (padrão 90 °C), o processador fica acima de 95% por mais de 1 minuto, o OBS desconecta ou volta, um aparelho novo se conecta e, se você quiser, quando um agendamento roda.
+- Toque na faixa ou abra **Ajustes › Avisos** para ver os últimos avisos. O celular vibra com os avisos onde o navegador deixa (dá para desligar ali mesmo).
+- Na tela **Conectar** do PC, o novo cartão **Avisos no celular** liga e desliga cada tipo de aviso e muda o limite de temperatura.
+- **Notificações do Windows (experimental, desligado por padrão)**: mostra no celular as notificações que aparecem no PC (app, título e texto), só nos aparelhos com **Controle total**. Dá para ignorar apps. O texto não vai para o log. Se o Windows não deixar ler, aparece "indisponível nesta versão do Windows".
+- **Navegador**: novo tipo de bloco **Navegador**. Tocar abre no celular a lista de abas do navegador do PC (título e site): toque numa aba para ir até ela, deslize para a esquerda para fechar. Na mesma tela: voltar, avançar, recarregar, pausar/continuar o YouTube, rolar (subir, descer, topo, fim) e **Abrir site**.
+- **Extensão Stream Deck para Chrome e Edge**: vem junto com o programa. Em **Conectar › Navegador**, use **Abrir pasta da extensão**, carregue a pasta em `chrome://extensions` (Modo do desenvolvedor › Carregar sem compactação) e clique em **Parear extensão** para ver o código que vai na extensão. Ela só fala com este PC, não lê o conteúdo das páginas e só pode mexer no YouTube (para pausar e rolar). **Desparear** corta o acesso na hora.
+- **Sem a extensão** tudo continua funcionando por atalhos de teclado no navegador que estiver na frente (Ctrl+Tab, Alt+←, F5, PageDown…); só a lista de abas precisa dela.
+- Nova ação **Navegador** para qualquer botão: próxima/anterior aba, abrir site em nova aba, pausar o YouTube, rolar, voltar, avançar, recarregar e fechar aba. Os botões de navegador da biblioteca e o modelo de página **Navegador** já usam a ação nova.
+- Fechar abas e abrir um endereço digitado pelo celular precisam de **Controle total** no aparelho; abrir os sites salvos nos botões continua liberado.
+
 ## 2.11.0
 
 - **Aparelhos**: cada celular ou tablet agora tem a sua própria chave de acesso. Na tela **Conectar** do PC, o novo cartão **Aparelhos** mostra todos os aparelhos cadastrados, com o último acesso de cada um.

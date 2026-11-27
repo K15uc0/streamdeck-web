@@ -28,7 +28,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import VERSION, actions, agenda, audio, devices, diag, ia, library, media, monitor, obs, paths, schema, security, state, storage, updates, \
+from . import VERSION, actions, agenda, audio, avisos, devices, diag, ia, library, media, monitor, navegador, notif_windows, obs, paths, schema, security, state, storage, updates, \
     tocando, templates, windows, winapi
 
 SYNC_RE = re.compile(r"^[A-Za-z0-9%._~!*'()\-]{0,8000}$")
@@ -47,7 +47,7 @@ CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 
        "base-uri 'none'; form-action 'none'")
 
 TEXT = "text/plain; charset=utf-8"
-QUIET = ("/ping.gif", "/api/state", "/api/volume")   # nao aparecem no log
+QUIET = ("/ping.gif", "/api/state", "/api/volume", "/api/browser/commands", "/api/browser/tabs", "/api/navegador")   # nao aparecem no log
 SEEN = set()
 
 # (metodo, caminho) -> metodo do Handler. Rotas /api/local/* so respondem no proprio PC.
@@ -92,8 +92,24 @@ ROUTES = {
     ("GET", "/api/local/ia"): "local_ia",
     ("POST", "/api/local/ia"): "local_ia_save",
     ("GET", "/api/local/devices"): "local_devices",
+    ("GET", "/api/avisos"): "get_avisos",
+    ("GET", "/api/local/avisos"): "local_avisos",
+    ("POST", "/api/local/avisos"): "local_avisos_save",
     ("POST", "/api/local/devices"): "local_devices_save",
+    ("GET", "/api/navegador"): "get_navegador",
+    ("POST", "/api/navegador"): "post_navegador",
+    ("GET", "/api/local/navegador"): "local_navegador",
+    ("POST", "/api/local/navegador"): "local_navegador_save",
 }
+# so a extensao pareada (Origin chrome-extension://<id>, do proprio PC); ver navegador.py
+BROWSER_ROUTES = {
+    ("POST", "/api/browser/hello"): "ext_hello",
+    ("POST", "/api/browser/pair"): "ext_pair",
+    ("POST", "/api/browser/tabs"): "ext_tabs",
+    ("POST", "/api/browser/commands"): "ext_commands",
+}
+# tudo POST: o Chrome nao manda Origin no GET da extensao (e sempre manda no POST)
+DENY_BROWSER = "o navegador precisa de um bloco Navegador numa pagina liberada para este aparelho"
 # gesto do /api/press -> campo do botao com a acao
 PRESS_KINDS = {"tap": "action", "hold": "hold", "double": "double"}
 # paginas e arquivos que so abrem no proprio PC
@@ -176,6 +192,24 @@ def _ia_status():
                 _IA_CACHE["val"] = {"claude": None, "codex": None, "grok": None}
             _IA_CACHE["t"] = now
         return _IA_CACHE["val"]
+
+
+_RULES_T = [0.0]
+
+
+def _run_rules(ob):
+    """Regras dos avisos com o que ja foi coletado (no maximo 1x/s)."""
+    now = time.time()
+    if 0 <= now - _RULES_T[0] < 1.0:
+        return
+    _RULES_T[0] = now
+    avisos.REGRAS.check_obs(ob)
+    iv = _IA_CACHE["val"]
+    if iv and 0 <= now - _IA_CACHE["t"] < 120:
+        avisos.REGRAS.check_ia(iv)
+    if paths.IS_WINDOWS and monitor.active():
+        avisos.REGRAS.check_pc(monitor.cached_snapshot())
+    notif_windows.LEITOR.maybe_poll(now)
 
 
 def _pc_summary(s):
@@ -422,6 +456,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         url = urlparse(self.path)
         q = parse_qs(url.query)
+        if _norm_path(url.path).startswith("/api/browser/"):
+            return self._browser_api("POST", url.path, q)
         if not self._api_header_ok():
             return self._json(403, {"ok": False, "error": "pedido recusado"})
 
@@ -463,6 +499,8 @@ class Handler(BaseHTTPRequestHandler):
         # sinal de vida para as abas de outros aparelhos (imagem 1x1, sem dados)
         if url.path == "/ping.gif":
             return self._send(200, PIXEL, "image/gif", cors_img=True)
+        if _norm_path(url.path).startswith("/api/browser/"):
+            return self._browser_api("GET", url.path, q)
 
         # tela de conexao: so no proprio PC
         if is_local_only(url.path):
@@ -502,6 +540,57 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._static(url.path)
 
+    # ------------------------------------------------ extensao do navegador ---
+    def _browser_api(self, method, path, q):
+        """/api/browser/*: so do proprio PC e so com Origin chrome-extension://<id>.
+        Fora hello/pair, o id tem de ser o pareado e a chave (X-StreamDeck-Ext) conferir."""
+        name = BROWSER_ROUTES.get((method, path))
+        m = navegador.ORIGIN_RE.match(self.headers.get("Origin") or "")
+        if not self._local() or not m:
+            return self._json(403, {"ok": False, "error": "pedido recusado"})
+        if name is None:
+            return self._json(404, {"ok": False})
+        self._ext_id = m.group(1)
+        if name not in ("ext_hello", "ext_pair"):
+            if not navegador.PONTE.check(self._ext_id, self.headers.get("X-StreamDeck-Ext") or ""):
+                return self._json(401, {"ok": False, "error": "extensao nao pareada", "reason": "unpaired"})
+        try:
+            body = self._body_json() if method == "POST" else None
+        except ValueError:
+            return self._json(400, {"ok": False, "error": "pedido invalido"})
+        return getattr(self, name)(q, body)
+
+    def ext_hello(self, q, body):
+        key = self.headers.get("X-StreamDeck-Ext") or ""
+        return self._json(200, {"ok": True, "app": "streamdeck", "version": VERSION, "port": state.PORT[0],
+                                "paired": navegador.PONTE.check(self._ext_id, key)})
+
+    def ext_pair(self, q, body):
+        try:   # o codigo morre sozinho depois de 5 erros (nao bloqueia o proprio PC)
+            key = navegador.PONTE.pair(self._ext_id, (body or {}).get("code") if isinstance(body, dict) else None)
+        except navegador.BrowserError as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        except OSError as e:
+            return self._json(500, {"ok": False, "error": str(e)})
+        return self._json(200, {"ok": True, "key": key})
+
+    def ext_tabs(self, q, body):
+        try:
+            n = navegador.PONTE.set_tabs((body or {}).get("tabs") if isinstance(body, dict) else None)
+        except navegador.BrowserError as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        return self._json(200, {"ok": True, "n": n})
+
+    def ext_commands(self, q, body):
+        try:
+            wait = float((q.get("wait") or [navegador.POLL_MAX])[0])
+        except ValueError:
+            wait = navegador.POLL_MAX
+        cmds = navegador.PONTE.wait(wait)
+        if cmds is None:
+            return self._json(200, {"ok": True, "commands": [], "busy": True})
+        return self._json(200, {"ok": True, "commands": cmds})
+
     def _first_access(self, url, k):
         ip = self.client_address[0]
         if not security.same_token(k):
@@ -520,6 +609,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(503, "Nao deu para cadastrar este aparelho: %s." % e, TEXT)
                 key = dev["key"]
                 print("* novo aparelho cadastrado: \"%s\" (%s)" % (dev["name"], ip))
+                avisos.device_new(dev["name"])
         sync = ""
         for part in url.query.split("&"):
             if part.startswith("sync="):
@@ -613,7 +703,116 @@ class Handler(BaseHTTPRequestHandler):
         if q.get("levels") or q.get("mix"):
             st["levels"] = audio.levels()
         st["device"] = self._device_info()
+        try:
+            _run_rules(ob)
+        except Exception as e:  # noqa: BLE001 - aviso nunca derruba o estado
+            print("! avisos: %s" % e.__class__.__name__)
+        n = None
+        try:
+            n = int((q.get("since") or [""])[0])
+        except ValueError:
+            pass
+        items, last = avisos.FILA.poll(n, self._who()["full"])
+        st["alert_id"] = last
+        if n is not None:
+            st["alerts"] = items
         return self._json(200, st)
+
+    def get_avisos(self, q):
+        """Historico (central de avisos) deste aparelho."""
+        items, last = avisos.FILA.poll(None, self._who()["full"])
+        return self._json(200, {"ok": True, "alerts": items, "alert_id": last})
+
+    def local_avisos(self, q):
+        return self._json(200, dict(avisos.settings(), ok=True, windows_status=notif_windows.LEITOR.info(),
+                                    is_windows=paths.IS_WINDOWS))
+
+    def local_avisos_save(self, body):
+        try:
+            avisos.save_settings(body)
+        except ValueError as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        except (storage.SettingsError, OSError) as e:
+            return self._json(500, {"ok": False, "error": str(e)})
+        notif_windows.retry()
+        return self.local_avisos(None)
+
+    def _browser_allowed(self):
+        """O aparelho tem um bloco Navegador numa pagina liberada?"""
+        pages = self._who()["pages"]
+        if pages is None:
+            return True
+        try:
+            cfg = storage.load_config()
+        except Exception:  # noqa: BLE001
+            return False
+        for i, pg in enumerate(cfg.get("pages") or []):
+            if i not in pages:
+                continue
+            for b in pg.get("buttons") or []:
+                inner = b.get("buttons") if isinstance(b, dict) and b.get("kind") == "folder" else [b]
+                if any(isinstance(x, dict) and x.get("kind") == "browser" for x in inner or []):
+                    return True
+        return False
+
+    def get_navegador(self, q):
+        if not self._browser_allowed():
+            return self._json(403, {"ok": False, "error": DENY_BROWSER, "reason": "page"})
+        p = navegador.PONTE
+        return self._json(200, {"ok": True, "paired": p.paired(), "connected": p.connected(),
+                                "tabs": p.tab_list(), "full": self._who()["full"]})
+
+    def post_navegador(self, q):
+        """Folha do bloco Navegador: {op, tab?, url?, dir?}. Fechar aba e abrir
+        endereco digitado precisam de Controle total."""
+        if not self._browser_allowed():
+            return self._json(403, {"ok": False, "error": DENY_BROWSER, "reason": "page"})
+        try:
+            cmd = navegador.check_cmd(self._body_json())
+        except (ValueError, navegador.BrowserError) as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        if cmd["op"] in ("close_tab", "open_url") and not self._who()["full"]:
+            print("! navegador (%s) recusado para %s: precisa de Controle total" % (cmd["op"], self.client_address[0]))
+            return self._json(403, {"ok": False, "error": DENY_FULL, "reason": "full"})
+        try:
+            how = navegador.execute(cmd)
+        except navegador.BrowserError as e:
+            return self._json(400, {"ok": False, "error": str(e)})
+        except Exception as e:  # noqa: BLE001
+            print("! navegador: %s" % e)
+            return self._json(500, {"ok": False, "error": "falha no navegador"})
+        return self._json(200, {"ok": True, "via": how})
+
+    def local_navegador(self, q):
+        st = navegador.PONTE.status()
+        try:
+            folder = navegador.ext_folder()
+        except OSError as e:
+            print("! nao deu para copiar a extensao: %s" % e)
+            folder = None
+        st.update(ok=True, folder=folder, folder_ok=bool(folder))
+        return self._json(200, st)
+
+    def local_navegador_save(self, body):
+        op = body.get("op") if isinstance(body, dict) else None
+        if op == "pair":
+            navegador.PONTE.new_code()
+        elif op == "unpair":
+            try:
+                navegador.PONTE.unpair()
+            except OSError as e:
+                return self._json(500, {"ok": False, "error": str(e)})
+        elif op == "folder":
+            try:
+                folder = navegador.ext_folder()
+            except OSError as e:
+                return self._json(500, {"ok": False, "error": str(e)})
+            if not folder:
+                return self._json(404, {"ok": False, "error": "pasta da extensao nao encontrada"})
+            winapi.open_folder(folder)
+        else:
+            return self._json(400, {"ok": False, "error": "operacao invalida"})
+        return self.local_navegador(None)
 
     def _device_info(self):
         c = self._who()

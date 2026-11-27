@@ -16,6 +16,7 @@
     var t = { b: b, kind: b && b.kind === "fader" ? "fader" : "button" };
     t.folder = !!(b && b.kind === "folder");
     t.monitor = !!(b && b.kind === "monitor");
+    t.browser = !!(b && b.kind === "browser");
     t.empty = SD.isEmpty(b);
     var e = t.el = el("div", "key");
     if (t.kind === "fader") {
@@ -265,8 +266,8 @@
     var rich = live && isRichLive(live) ? richOf(live) : null;
     var lt = rich ? rich.main : live ? liveText(t, live) : null;
     if (lt == null) live = "";
-    var label = live ? lt : SD.trim(a.label) || (t.monitor ? "Monitor" : "");
-    var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : t.monitor ? "monitor" : "";
+    var label = live ? lt : SD.trim(a.label) || (t.monitor ? "Monitor" : t.browser ? "Navegador" : "");
+    var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : t.monitor ? "monitor" : t.browser ? "globe" : "";
     e.className = "key" + (t.lit || t.olit ? " lit" : "") + (a.on ? " onlook" : "") + (b.toggle ? " tg" : "") +
       (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "") + (rich && rich.old ? " stale" : "") +
       (!img && SD.isLight(bg) ? " light" : "") + (m >= 140 ? " big" : "") +
@@ -529,9 +530,9 @@
   /* ============================================ ajustes deste aparelho === */
   /* sd_prefs = { orientation: "auto"|"portrait"|"landscape", autoFullscreen: bool,
                   vibrate: bool (padrao true), autoPage: bool (padrao true),
-                  theme: "auto"|"escuro"|"claro" } */
+                  theme: "auto"|"escuro"|"claro", alertVibrate: bool (padrao true) } */
   var PREFS_KEY = "sd_prefs";
-  SD.prefs = { orientation: "auto", autoFullscreen: false, vibrate: true, autoPage: true, theme: "auto" };
+  SD.prefs = { orientation: "auto", autoFullscreen: false, vibrate: true, autoPage: true, theme: "auto", alertVibrate: true };
   function loadPrefs() {
     try {
       var p = JSON.parse(window.localStorage.getItem(PREFS_KEY));
@@ -540,6 +541,7 @@
         SD.prefs.autoFullscreen = !!p.autoFullscreen;
         if (typeof p.vibrate === "boolean") SD.prefs.vibrate = p.vibrate;
         if (typeof p.autoPage === "boolean") SD.prefs.autoPage = p.autoPage;
+        if (typeof p.alertVibrate === "boolean") SD.prefs.alertVibrate = p.alertVibrate;
         if (p.theme === "escuro" || p.theme === "claro") SD.prefs.theme = p.theme;
       }
     } catch (e) {}
@@ -733,6 +735,7 @@
     if (!SD.prefs.vibrate) return;
     try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {}
   }
+  SD.buzz = buzz;
 
   /* ========================================================== barra ===== */
   SD.renderNav = function () {
@@ -1162,6 +1165,7 @@
     var b = k.b, a = b && (g === "tap" ? b.action : gestureAction(b, g));
     if (k.folder) { if (g === "tap") { buzz(10); openFolder(k); } return; }
     if (k.monitor) { if (g === "tap") { buzz(10); openMonitor(); } return; }
+    if (k.browser) { if (g === "tap") { buzz(10); SD.openBrowser(); } return; }
     var toggles = g === "tap" && b && b.toggle;
     /* liga/desliga sem acao (ex.: ON AIR) ainda alterna o estado no PC */
     if (!b || ((!a || a.type === "none") && !toggles)) return;
@@ -1224,7 +1228,7 @@
 
   /* toque simples terminado (sem segurar nem arrastar) */
   function tap(k) {
-    if (k.folder || k.empty || k.monitor) { press(k, false, "tap"); return; }
+    if (k.folder || k.empty || k.monitor || k.browser) { press(k, false, "tap"); return; }
     /* bloco esperando confirmacao: este toque confirma o gesto pendente */
     if (conf && conf.k === k) {
       var g = conf.g;
@@ -1365,7 +1369,7 @@
       return true;
     }
     if (!k.empty) SD.setClass(k.el, "down", true);
-    if (!k.empty && !k.folder && !k.monitor && gestureAction(k.b, "hold")) {
+    if (!k.empty && !k.folder && !k.monitor && !k.browser && gestureAction(k.b, "hold")) {
       /* segurar: progresso no bloco e dispara em HOLD_MS (vence a repeticao) */
       k.holding = 1; repaint(k);
       k.el.offsetWidth;   /* aplica o estado inicial antes da transicao */
@@ -1683,7 +1687,8 @@
     var lv = needLevels(), pc = needPc(), ia = needIa() && SD.now() - iaAt > IA_EVERY - 1000;
     pollT = setTimeout(poll, needFast() ? 1000 : lv || pc ? 2000 : needNp() ? 3000 : 5000);
     if (SD.denied || !SD.cfg || document.hidden) return;
-    var qs = (lv ? "&levels=1" : "") + (pc ? "&pc=1" : "") + (ia ? "&ia=1" : "");
+    var qs = (lv ? "&levels=1" : "") + (pc ? "&pc=1" : "") + (ia ? "&ia=1" : "") +
+      (SD.alertId !== null && SD.alertId !== undefined ? "&since=" + SD.alertId : "");
     if (ia) iaAt = SD.now();
     SD.req("GET", "/api/state" + (qs ? "?" + qs.substring(1) : ""), null, function (ok, st, status, x) {
       if (!ok) { if (status === 403) SD.load(); return; }
@@ -1697,6 +1702,7 @@
       if (st.nowplaying !== undefined) SD.applyNowPlaying(st.nowplaying);
       if (st.pc) SD.applyPc(st.pc);
       if (st.ia) SD.applyIa(st.ia);
+      if (SD.applyAlerts) SD.applyAlerts(st.alerts, st.alert_id);
       if (SD.cfgV != null && st.v != null && String(st.v) !== String(SD.cfgV) && !G) SD.load();
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
       if (st.app !== undefined) onApp(st.app);

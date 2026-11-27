@@ -41,6 +41,16 @@ OBS_HELP = ("Usa o WebSocket do OBS (OBS 28 ou mais novo): no OBS, abra Ferramen
             "Troque o nome da cena/fonte pelo do seu OBS.")
 
 
+BROWSER_HELP = ("Com a extensão Stream Deck (Conectar > Navegador) funciona em qualquer janela; "
+                "sem ela, vira atalho de teclado no navegador que estiver na frente.")
+
+
+def _nav(label, icon, color, op, **extra):
+    a = {"type": "browser", "op": op}
+    a.update(extra)
+    return {"label": label, "icon": icon, "color": color, "action": a, "help": BROWSER_HELP}
+
+
 def _obs(label, icon, color, action, lit=None, live=None):
     it = {"label": label, "icon": icon, "color": color, "action": action, "help": OBS_HELP}
     if lit:
@@ -96,11 +106,16 @@ LIBRARY = [
     ]},
     {"name": "Navegador", "items": [
         _hk("Nova aba", "plus", BLUE, "ctrl+t"),
-        _hk("Fechar aba", "close", RED, "ctrl+w"),
+        _nav("Fechar aba", "close", RED, "close_tab"),
         _hk("Reabrir aba", "undo", ORANGE, "ctrl+shift+t"),
-        _hk("Próxima aba", "forward", INDIGO, "ctrl+tab"),
-        _hk("Aba anterior", "back", INDIGO, "ctrl+shift+tab"),
-        _hk("Recarregar", "updown", GREEN, "f5"),
+        _nav("Próxima aba", "forward", INDIGO, "tab_next"),
+        _nav("Aba anterior", "back", INDIGO, "tab_prev"),
+        _nav("Recarregar", "refresh", GREEN, "reload"),
+        _nav("Voltar", "left", BLUE, "back"),
+        _nav("Avançar", "right", BLUE, "forward"),
+        _nav("Pausar YouTube", "playpause", RED, "yt_toggle"),
+        _nav("Rolar para baixo", "down", TEAL, "scroll", dir="down"),
+        _nav("Rolar para cima", "up", TEAL, "scroll", dir="up"),
         _hk("Tela cheia", "desktop", GRAY, "f11"),
         _site("YouTube", "play", RED, "https://www.youtube.com/"),
         _site("Google", "globe", BLUE, "https://www.google.com/"),

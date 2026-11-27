@@ -1,7 +1,7 @@
 # Teste de fumaca do StreamDeck.exe (Windows, pwsh). Usado pelos workflows
 # testes.yml e release.yml: abre o .exe com dados numa pasta temporaria,
 # espera /api/local/hello, confere /api/config, /api/actions e
-# /api/local/windows e fecha pelo /api/local/quit. (No modo --onefile o PID do
+# /api/local/windows, a pasta da extensao do navegador e fecha pelo /api/local/quit. (No modo --onefile o PID do
 # hello e o do processo filho, nao o do Start-Process.) Serve para o .exe de
 # arquivo unico e para o da versao em pasta (--onedir --noconsole): nao depende
 # da saida do console, so da API e do streamdeck.log.
@@ -72,6 +72,10 @@ try {
   $wins = Invoke-RestMethod -Uri "$base/api/local/windows" -Headers $h -TimeoutSec 20
   if (-not $wins.ok) { Fail "/api/local/windows sem ok" }
   Write-Host "ok windows: $(@($wins.windows).Count) janela(s)"
+  $nav = Invoke-RestMethod -Uri "$base/api/local/navegador" -Headers $h -TimeoutSec 10
+  if (-not $nav.folder_ok) { Fail "extensao do navegador nao veio com o programa" }
+  if (-not (Test-Path (Join-Path $nav.folder "manifest.json"))) { Fail "manifest.json da extensao faltando em $($nav.folder)" }
+  Write-Host "ok extensao: $($nav.folder)"
   $page = Invoke-WebRequest -Uri "$base/" -TimeoutSec 10
   if ($page.StatusCode -ne 200 -or $page.Content -notmatch "core.js") { Fail "pagina inicial inesperada" }
   Write-Host "ok pagina inicial"

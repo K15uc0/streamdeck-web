@@ -27,7 +27,8 @@ var CONFIG = {
       { label: "Ir 2", icon: "forward", action: { type: "page", to: 1 } },
       { label: "", icon: "cpu", live: "pc:cpu" },
       { kind: "monitor", label: "Monitor" },
-      { kind: "monitor" }
+      { kind: "monitor" },
+      { kind: "browser", label: "Navegador" }
     ] },
     { name: "Dois", buttons: [{ label: "Voltar", icon: "back", action: { type: "page", to: 0 } }] },
     { name: "Tres", grid: { columns: 5, rows: 2, portrait: { columns: 2, rows: 5 } }, buttons: [
@@ -190,6 +191,80 @@ async function stalePc(browser, base, token, errors) {
   await ctx.close();
 }
 
+/* avisos (2.12): o celular pergunta com since=<ultimo id>; um aviso novo vira
+   faixa no topo, e tocar nela abre a central de avisos */
+async function avisosFaixa(browser, base, token, errors) {
+  var ctx = await browser.newContext({ viewport: { width: 640, height: 288 } });
+  var page = await ctx.newPage();
+  watchConsole(page, errors, "avisos");
+  var ALERT = { id: 9000000000001, t: Math.floor(Date.now() / 1000), kind: "temp", level: "crit",
+    title: "CPU a 93 °C", text: "Acima do limite de 90 °C." };
+  var sinceSeen = false;
+  await page.route("**/api/state*", async function (route) {
+    var r = await route.fetch(), j = await r.json();
+    var m = /[?&]since=(\d+)/.exec(route.request().url());
+    j.alert_id = 9000000000000;
+    if (m) { sinceSeen = true; j.alert_id = ALERT.id; j.alerts = +m[1] < ALERT.id ? [ALERT] : []; }
+    await route.fulfill({ response: r, json: j });
+  });
+  await page.route("**/api/avisos*", async function (route) {
+    await route.fulfill({ json: { ok: true, alerts: [ALERT], alert_id: ALERT.id } });
+  });
+  await page.goto(base + "/?k=" + token);
+  await page.locator("#banner.show", { hasText: "CPU a 93" }).waitFor({ timeout: 15000 });
+  assert.ok(sinceSeen, "poll deveria mandar since=");
+  var box = await page.locator("#banner").boundingBox();
+  assert.ok(box.y >= 0 && box.y < 40 && box.x >= 0 && box.x + box.width <= 640, "faixa fora do topo: " + JSON.stringify(box));
+  await page.locator("#banner").click();
+  await page.locator("#sheetwrap.show").waitFor({ timeout: 5000 });
+  await page.locator(".av-row", { hasText: "CPU a 93" }).waitFor({ state: "visible", timeout: 5000 });
+  await page.waitForTimeout(400);
+  await ctx.close();
+}
+
+/* navegador (2.12): folha do bloco Navegador com abas falsas; tocar vai para a
+   aba; sem extensao mostra o aviso e os atalhos */
+var FAKE_TABS = [
+  { id: 11, window: 1, title: "Lo-fi beats para estudar", host: "youtube.com", active: true, audible: true, current: true, yt: true },
+  { id: 12, window: 1, title: "Notícias do dia", host: "g1.globo.com", active: false, audible: false, current: false, yt: false },
+  { id: 13, window: 1, title: "Planilha de gastos", host: "docs.google.com", active: false, audible: false, current: false, yt: false },
+  { id: 14, window: 2, title: "Nova guia", host: "", active: true, audible: false, current: false, yt: false }
+];
+async function navegadorFolha(browser, base, token, size, errors) {
+  var name = "navegador " + size.width + "x" + size.height;
+  var ctx = await browser.newContext({ viewport: size });
+  var page = await ctx.newPage();
+  watchConsole(page, errors, name);
+  var nav = { ok: true, paired: true, connected: true, full: true, tabs: FAKE_TABS }, sent = [];
+  await page.route("**/api/navegador*", async function (route) {
+    var rq = route.request();
+    if (rq.method() === "POST") { sent.push(JSON.parse(rq.postData())); return route.fulfill({ json: { ok: true, via: "ext" } }); }
+    await route.fulfill({ json: nav });
+  });
+  await page.goto(base + "/?k=" + token);
+  await page.locator("#grid .cell", { hasText: "Navegador" }).click();
+  await page.locator("#sheetwrap.show").waitFor({ timeout: 5000 });
+  await page.locator(".nav-row", { hasText: "Lo-fi" }).waitFor({ state: "visible", timeout: 5000 });
+  assert.strictEqual(await page.locator(".nav-row").count(), 4);
+  assert.strictEqual(await page.locator(".nav-warn").isVisible(), false);
+  await page.waitForTimeout(450);
+  if (process.env.SD_SHOTS) await page.screenshot({ path: path.join(process.env.SD_SHOTS, "g212b-folha-" + size.width + "x" + size.height + ".png") });
+  await page.locator(".nav-row .pr-main", { hasText: "Notícias" }).click();
+  await page.locator(".nav-b", { hasText: "Descer" }).click();
+  await page.waitForTimeout(200);
+  assert.deepStrictEqual(sent.slice(0, 2), [{ op: "activate", tab: 12 }, { op: "scroll", dir: "down" }]);
+  /* sem extensao */
+  nav = { ok: true, paired: false, connected: false, full: false, tabs: [] };
+  await page.locator("#sheet .hb.r").click();
+  await page.locator("#sheetwrap.show").waitFor({ state: "hidden", timeout: 5000 });
+  await page.locator("#grid .cell", { hasText: "Navegador" }).click();
+  await page.locator(".nav-warn", { hasText: "Instale a extensão" }).waitFor({ state: "visible", timeout: 5000 });
+  assert.ok(await page.locator(".nav-url").isDisabled(), "sem Controle total: endereco desligado");
+  await page.waitForTimeout(450);
+  if (process.env.SD_SHOTS) await page.screenshot({ path: path.join(process.env.SD_SHOTS, "g212b-sem-extensao-" + size.width + "x" + size.height + ".png") });
+  await ctx.close();
+}
+
 /* IPv4 da rede deste PC: pedidos por ele chegam como de outro aparelho (nao 127.0.0.1) */
 function lanIp() {
   var ifs = os.networkInterfaces();
@@ -342,6 +417,11 @@ async function main() {
     console.log("ok   grade propria por pagina");
     await stalePc(browser, base, token, errors);
     console.log("ok   pc velho");
+    await avisosFaixa(browser, base, token, errors);
+    console.log("ok   avisos (faixa e central)");
+    await navegadorFolha(browser, base, token, { width: 390, height: 844 }, errors);
+    await navegadorFolha(browser, base, token, { width: 640, height: 288 }, errors);
+    console.log("ok   navegador (folha de abas)");
     var ip = lanIp();
     if (ip) {
       await aparelhos(browser, base, "http://" + ip + ":" + srv.port, token, data, errors);
