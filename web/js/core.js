@@ -561,7 +561,7 @@
   };
   /* isEmpty tambem vale para pasta (kind "folder" nunca e vazia) */
   var isEmpty0 = SD.isEmpty;
-  SD.isEmpty = function (b) { return b && (b.kind === "folder" || b.kind === "monitor") ? false : isEmpty0(b); };
+  SD.isEmpty = function (b) { return b && (b.kind === "folder" || b.kind === "monitor" || b.kind === "browser") ? false : isEmpty0(b); };
 
   /* Encaixe da grade (celular e editor usam a mesma regra):
      percorre os botoes na ordem; cada um ocupa w x h (1..4, limitado ao

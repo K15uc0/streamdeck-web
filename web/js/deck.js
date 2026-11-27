@@ -16,6 +16,7 @@
     var t = { b: b, kind: b && b.kind === "fader" ? "fader" : "button" };
     t.folder = !!(b && b.kind === "folder");
     t.monitor = !!(b && b.kind === "monitor");
+    t.browser = !!(b && b.kind === "browser");
     t.empty = SD.isEmpty(b);
     var e = t.el = el("div", "key");
     if (t.kind === "fader") {
@@ -265,8 +266,8 @@
     var rich = live && isRichLive(live) ? richOf(live) : null;
     var lt = rich ? rich.main : live ? liveText(t, live) : null;
     if (lt == null) live = "";
-    var label = live ? lt : SD.trim(a.label) || (t.monitor ? "Monitor" : "");
-    var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : t.monitor ? "monitor" : "";
+    var label = live ? lt : SD.trim(a.label) || (t.monitor ? "Monitor" : t.browser ? "Navegador" : "");
+    var icon = img ? "" : SD.hasIcon(a.icon) ? a.icon : t.folder ? "folder" : t.monitor ? "monitor" : t.browser ? "globe" : "";
     e.className = "key" + (t.lit || t.olit ? " lit" : "") + (a.on ? " onlook" : "") + (b.toggle ? " tg" : "") +
       (t.folder ? " folder" : "") + (img ? " img" + (label ? "" : " nolb") : "") + (live ? " live" : "") + (rich && rich.old ? " stale" : "") +
       (!img && SD.isLight(bg) ? " light" : "") + (m >= 140 ? " big" : "") +
@@ -734,6 +735,7 @@
     if (!SD.prefs.vibrate) return;
     try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {}
   }
+  SD.buzz = buzz;
 
   /* ========================================================== barra ===== */
   SD.renderNav = function () {
@@ -1163,6 +1165,7 @@
     var b = k.b, a = b && (g === "tap" ? b.action : gestureAction(b, g));
     if (k.folder) { if (g === "tap") { buzz(10); openFolder(k); } return; }
     if (k.monitor) { if (g === "tap") { buzz(10); openMonitor(); } return; }
+    if (k.browser) { if (g === "tap") { buzz(10); SD.openBrowser(); } return; }
     var toggles = g === "tap" && b && b.toggle;
     /* liga/desliga sem acao (ex.: ON AIR) ainda alterna o estado no PC */
     if (!b || ((!a || a.type === "none") && !toggles)) return;
@@ -1225,7 +1228,7 @@
 
   /* toque simples terminado (sem segurar nem arrastar) */
   function tap(k) {
-    if (k.folder || k.empty || k.monitor) { press(k, false, "tap"); return; }
+    if (k.folder || k.empty || k.monitor || k.browser) { press(k, false, "tap"); return; }
     /* bloco esperando confirmacao: este toque confirma o gesto pendente */
     if (conf && conf.k === k) {
       var g = conf.g;
@@ -1366,7 +1369,7 @@
       return true;
     }
     if (!k.empty) SD.setClass(k.el, "down", true);
-    if (!k.empty && !k.folder && !k.monitor && gestureAction(k.b, "hold")) {
+    if (!k.empty && !k.folder && !k.monitor && !k.browser && gestureAction(k.b, "hold")) {
       /* segurar: progresso no bloco e dispara em HOLD_MS (vence a repeticao) */
       k.holding = 1; repaint(k);
       k.el.offsetWidth;   /* aplica o estado inicial antes da transicao */
