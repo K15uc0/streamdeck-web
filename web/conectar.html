@@ -106,6 +106,11 @@
     vertical-align: 2px; background: rgba(255,159,10,0.18); color: #ff9f0a; }
   .badge.lim { background: rgba(10,132,255,0.18); color: #64b5ff; }
   .empty { padding: 18px 16px; color: rgba(235,235,245,0.6); font-size: 15px; line-height: 1.45; }
+  .avlim { color: rgba(235,235,245,0.6); font-size: 15px; white-space: nowrap; }
+  .avlim input { width: 64px; background: #2c2c2e; border: 0; border-radius: 9px; color: #fff; font: inherit; font-size: 15px;
+    padding: 7px 9px; outline: none; text-align: right; }
+  .avlim input:focus { box-shadow: 0 0 0 2px #0a84ff; }
+  .hdr .badge { text-transform: none; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 28px 16px 40px; } h1 { font-size: 28px; } }
 </style>
 </head>
@@ -180,6 +185,29 @@
     <div class="item"><span class="t"><b>Grok</b> · <span class="muted">indisponível por enquanto</span></span></div>
   </div>
   <p class="foot">Depois, escolha “Texto ao vivo” de <b>IAs</b> num bloco do editor. <b>Remover</b> restaura a linha de status que o Claude Code tinha antes.</p>
+
+  <div class="hdr">Avisos no celular</div>
+  <div class="list" id="avCard">
+    <label class="item"><span class="t">Limite das IAs<span class="s">Claude e Codex ao chegar em 80% e em 95% (uma vez por janela)</span></span><input type="checkbox" data-av="ia"></label>
+    <label class="item"><span class="t">Temperatura alta<span class="s">CPU ou GPU acima do limite, no máximo a cada 5 minutos</span></span><input type="checkbox" data-av="temp"></label>
+    <div class="item"><span class="t">Limite de temperatura</span><span class="avlim"><input id="avTemp" type="number" min="50" max="110" step="1"> °C</span></div>
+    <label class="item"><span class="t">Processador no máximo<span class="s">CPU acima de 95% por mais de 1 minuto</span></span><input type="checkbox" data-av="cpu"></label>
+    <label class="item"><span class="t">OBS<span class="s">Quando o OBS desconecta e quando volta</span></span><input type="checkbox" data-av="obs"></label>
+    <label class="item"><span class="t">Aparelho novo<span class="s">Quando um aparelho lê o QR code pela primeira vez</span></span><input type="checkbox" data-av="device"></label>
+    <label class="item"><span class="t">Agendamentos<span class="s">Cada vez que um agendamento roda</span></span><input type="checkbox" data-av="schedule"></label>
+  </div>
+  <p class="foot">Os avisos aparecem no alto da tela dos aparelhos com o Stream Deck aberto e ficam em <b>Ajustes › Avisos</b>.
+    Temperatura e processador só são verificados enquanto algum aparelho mostra o monitor do PC; o limite das IAs, enquanto algum mostra o consumo.</p>
+
+  <div class="hdr">Notificações do Windows <span class="badge">experimental</span></div>
+  <div class="list" id="nwCard">
+    <label class="item"><span class="t">Mostrar no celular<span class="s" id="nwStatus">…</span></span><input type="checkbox" data-av="windows"></label>
+    <div class="obsf"><label class="full">Apps ignorados (separe por vírgula)<input id="nwIgn" placeholder="Ex.: Chrome, Outlook" autocomplete="off" spellcheck="false"></label></div>
+    <div class="item btn"><button id="nwSave" class="primary">Salvar apps ignorados</button></div>
+  </div>
+  <p class="foot">Lê a central de notificações deste PC (título e texto) e manda <b>só para aparelhos com Controle total</b>.
+    O texto não fica gravado no log. Usa um arquivo interno do Windows que pode mudar; se não der para ler, aparece
+    “indisponível nesta versão do Windows”.</p>
 
   <div class="hdr">Segurança</div>
   <div class="list">
@@ -487,6 +515,41 @@ $("iaBtn").onclick = function () {
   }, function () { b.disabled = false; er.textContent = "Sem resposta do Stream Deck."; er.style.display = ""; });
 };
 loadIa();
+
+/* ------------------------------------------------------------- avisos --- */
+/* GET/POST /api/local/avisos -> {types:{ia,temp,cpu,obs,device,schedule,windows}, temp_limit,
+   ignored_apps:[..], windows_status, is_windows}; POST aceita so as chaves mudadas */
+function showAv(d) {
+  if (!d || d.ok === false) { $("nwStatus").textContent = "indisponível"; return; }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-av]"), function (c) {
+    c.checked = !!d.types[c.getAttribute("data-av")];
+  });
+  if (document.activeElement !== $("avTemp")) $("avTemp").value = d.temp_limit;
+  if (document.activeElement !== $("nwIgn")) $("nwIgn").value = (d.ignored_apps || []).join(", ");
+  var st = d.windows_status || "";
+  $("nwStatus").textContent = st === "desligado" ? "Desligado" : st.charAt(0).toUpperCase() + st.slice(1);
+  $("nwStatus").className = "s" + (/indispon/.test(st) ? " err" : "");
+}
+function avSave(body) {
+  api("/api/local/avisos", body).then(function (r) {
+    if (!r.ok) alert("Não salvou: " + (r.error || ""));
+    loadAv();
+  }, function () { alert("Sem resposta do Stream Deck."); loadAv(); });
+}
+function loadAv() { api("/api/local/avisos").then(showAv, function () { showAv(null); }); }
+Array.prototype.forEach.call(document.querySelectorAll("[data-av]"), function (c) {
+  c.onchange = function () { var t = {}; t[c.getAttribute("data-av")] = c.checked; avSave({ types: t }); };
+});
+$("avTemp").onchange = function () {
+  var v = parseInt($("avTemp").value, 10);
+  if (isNaN(v) || v < 50 || v > 110) { alert("Use um limite entre 50 e 110 °C."); return loadAv(); }
+  avSave({ temp_limit: v });
+};
+$("nwSave").onclick = function () {
+  avSave({ ignored_apps: $("nwIgn").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) });
+};
+loadAv();
+setInterval(function () { if (!document.hidden) loadAv(); }, 10000);
 
 /* ---------------------------------------------------------- aparelhos --- */
 /* GET /api/local/devices -> {devices:[{id,name,created,last_seen,last_ip,pages,full}], pages:[{name,index,id}]}

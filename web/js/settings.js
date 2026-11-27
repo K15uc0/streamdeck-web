@@ -96,6 +96,8 @@
 
     /* geral */
     var gg = ui.group(body, "Geral");
+    ui.row(gg, { icon: "bell", iconColor: "#ff453a", title: "Avisos", badge: SD.alertsUnread ? String(SD.alertsUnread) : "",
+      chevron: true, onTap: function () { SD.openAvisos(); } });
     var u = SD.info && SD.info.update;
     ui.row(gg, { icon: "download", iconColor: "#8e8e93", title: "Atualizações", badge: SD.updAvail() ? "1" : "",
       value: SD.info ? (SD.info.version || (u && u.version) || "") : "", chevron: true, onTap: openUpdates });

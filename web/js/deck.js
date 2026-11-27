@@ -529,9 +529,9 @@
   /* ============================================ ajustes deste aparelho === */
   /* sd_prefs = { orientation: "auto"|"portrait"|"landscape", autoFullscreen: bool,
                   vibrate: bool (padrao true), autoPage: bool (padrao true),
-                  theme: "auto"|"escuro"|"claro" } */
+                  theme: "auto"|"escuro"|"claro", alertVibrate: bool (padrao true) } */
   var PREFS_KEY = "sd_prefs";
-  SD.prefs = { orientation: "auto", autoFullscreen: false, vibrate: true, autoPage: true, theme: "auto" };
+  SD.prefs = { orientation: "auto", autoFullscreen: false, vibrate: true, autoPage: true, theme: "auto", alertVibrate: true };
   function loadPrefs() {
     try {
       var p = JSON.parse(window.localStorage.getItem(PREFS_KEY));
@@ -540,6 +540,7 @@
         SD.prefs.autoFullscreen = !!p.autoFullscreen;
         if (typeof p.vibrate === "boolean") SD.prefs.vibrate = p.vibrate;
         if (typeof p.autoPage === "boolean") SD.prefs.autoPage = p.autoPage;
+        if (typeof p.alertVibrate === "boolean") SD.prefs.alertVibrate = p.alertVibrate;
         if (p.theme === "escuro" || p.theme === "claro") SD.prefs.theme = p.theme;
       }
     } catch (e) {}
@@ -1683,7 +1684,8 @@
     var lv = needLevels(), pc = needPc(), ia = needIa() && SD.now() - iaAt > IA_EVERY - 1000;
     pollT = setTimeout(poll, needFast() ? 1000 : lv || pc ? 2000 : needNp() ? 3000 : 5000);
     if (SD.denied || !SD.cfg || document.hidden) return;
-    var qs = (lv ? "&levels=1" : "") + (pc ? "&pc=1" : "") + (ia ? "&ia=1" : "");
+    var qs = (lv ? "&levels=1" : "") + (pc ? "&pc=1" : "") + (ia ? "&ia=1" : "") +
+      (SD.alertId !== null && SD.alertId !== undefined ? "&since=" + SD.alertId : "");
     if (ia) iaAt = SD.now();
     SD.req("GET", "/api/state" + (qs ? "?" + qs.substring(1) : ""), null, function (ok, st, status, x) {
       if (!ok) { if (status === 403) SD.load(); return; }
@@ -1697,6 +1699,7 @@
       if (st.nowplaying !== undefined) SD.applyNowPlaying(st.nowplaying);
       if (st.pc) SD.applyPc(st.pc);
       if (st.ia) SD.applyIa(st.ia);
+      if (SD.applyAlerts) SD.applyAlerts(st.alerts, st.alert_id);
       if (SD.cfgV != null && st.v != null && String(st.v) !== String(SD.cfgV) && !G) SD.load();
       if (SD.info && SD.info.update && !!st.update !== !!SD.info.update.available) SD.loadInfo();
       if (st.app !== undefined) onApp(st.app);

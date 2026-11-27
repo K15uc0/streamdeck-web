@@ -190,6 +190,37 @@ async function stalePc(browser, base, token, errors) {
   await ctx.close();
 }
 
+/* avisos (2.12): o celular pergunta com since=<ultimo id>; um aviso novo vira
+   faixa no topo, e tocar nela abre a central de avisos */
+async function avisosFaixa(browser, base, token, errors) {
+  var ctx = await browser.newContext({ viewport: { width: 640, height: 288 } });
+  var page = await ctx.newPage();
+  watchConsole(page, errors, "avisos");
+  var ALERT = { id: 9000000000001, t: Math.floor(Date.now() / 1000), kind: "temp", level: "crit",
+    title: "CPU a 93 °C", text: "Acima do limite de 90 °C." };
+  var sinceSeen = false;
+  await page.route("**/api/state*", async function (route) {
+    var r = await route.fetch(), j = await r.json();
+    var m = /[?&]since=(\d+)/.exec(route.request().url());
+    j.alert_id = 9000000000000;
+    if (m) { sinceSeen = true; j.alert_id = ALERT.id; j.alerts = +m[1] < ALERT.id ? [ALERT] : []; }
+    await route.fulfill({ response: r, json: j });
+  });
+  await page.route("**/api/avisos*", async function (route) {
+    await route.fulfill({ json: { ok: true, alerts: [ALERT], alert_id: ALERT.id } });
+  });
+  await page.goto(base + "/?k=" + token);
+  await page.locator("#banner.show", { hasText: "CPU a 93" }).waitFor({ timeout: 15000 });
+  assert.ok(sinceSeen, "poll deveria mandar since=");
+  var box = await page.locator("#banner").boundingBox();
+  assert.ok(box.y >= 0 && box.y < 40 && box.x >= 0 && box.x + box.width <= 640, "faixa fora do topo: " + JSON.stringify(box));
+  await page.locator("#banner").click();
+  await page.locator("#sheetwrap.show").waitFor({ timeout: 5000 });
+  await page.locator(".av-row", { hasText: "CPU a 93" }).waitFor({ state: "visible", timeout: 5000 });
+  await page.waitForTimeout(400);
+  await ctx.close();
+}
+
 /* IPv4 da rede deste PC: pedidos por ele chegam como de outro aparelho (nao 127.0.0.1) */
 function lanIp() {
   var ifs = os.networkInterfaces();
@@ -342,6 +373,8 @@ async function main() {
     console.log("ok   grade propria por pagina");
     await stalePc(browser, base, token, errors);
     console.log("ok   pc velho");
+    await avisosFaixa(browser, base, token, errors);
+    console.log("ok   avisos (faixa e central)");
     var ip = lanIp();
     if (ip) {
       await aparelhos(browser, base, "http://" + ip + ":" + srv.port, token, data, errors);
