@@ -27,20 +27,21 @@ class Field(object):
     """Um campo do formulario de uma acao (chave dentro do dict da acao)."""
 
     def __init__(self, key, label, kind="text", required=False, default=None,
-                 placeholder=None, help=None, min=None, max=None, step=None, options=None):
+                 placeholder=None, help=None, min=None, max=None, step=None, options=None, when=None):
         if kind not in FIELD_KINDS:
             raise ValueError("tipo de campo desconhecido: %s" % kind)
         self.key, self.label, self.kind = key, label, kind
         self.required, self.default = required, default
         self.placeholder, self.help = placeholder, help
         self.min, self.max, self.step = min, max, step
+        self.when = when      # {"campo": valor}: o editor so mostra o campo nesse caso
         # options: [(valor, rotulo)] ou [{"value", "label"}]
         self.options = [o if isinstance(o, dict) else {"value": o[0], "label": o[1]}
                         for o in (options or [])]
 
     def schema(self):
         out = {"key": self.key, "label": self.label, "kind": self.kind}
-        for name in ("required", "default", "placeholder", "help", "min", "max", "step"):
+        for name in ("required", "default", "placeholder", "help", "min", "max", "step", "when"):
             v = getattr(self, name)
             if v is not None and v is not False:
                 out[name] = v

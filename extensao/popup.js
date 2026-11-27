@@ -15,7 +15,7 @@
     $("pareada").hidden = !s.paired;
     var e = $("estado");
     e.className = s.paired && s.online ? "ok" : "";
-    e.textContent = !s.paired ? "Não pareada" : s.online ? "Conectada ao Stream Deck (porta " + s.port + ")"
+    e.textContent = !s.paired ? "Não pareada" : s.online ? "Conectada (porta " + s.port + ")"
       : "Pareada; procurando o Stream Deck…";
     $("erro").textContent = (r && !r.ok && r.error) || s.error || "";
   }

@@ -65,7 +65,7 @@ class PareamentoTest(Base):
         self.assertNotIn("key", json.dumps(d))   # chave nunca sai para o Conectar
         with open(navegador.STATE_PATH, encoding="utf-8") as f:
             self.assertEqual(json.load(f)["ext_id"], EXT)
-        st, _, d = ext("GET", "/api/browser/hello", key=key)
+        st, _, d = ext("POST", "/api/browser/hello", key=key)
         self.assertTrue(d["paired"])
         call("POST", "/api/local/navegador", {"op": "unpair"})
         self.assertFalse(os.path.exists(navegador.STATE_PATH))
@@ -94,8 +94,8 @@ class PareamentoTest(Base):
         k1 = self.parear()
         k2 = self.parear()
         self.assertNotEqual(k1, k2)
-        self.assertEqual(ext("GET", "/api/browser/commands?wait=0", key=k1)[0], 401)
-        self.assertEqual(ext("GET", "/api/browser/commands?wait=0", key=k2)[0], 200)
+        self.assertEqual(ext("POST", "/api/browser/commands?wait=0", key=k1)[0], 401)
+        self.assertEqual(ext("POST", "/api/browser/commands?wait=0", key=k2)[0], 200)
 
 
 class OrigemTest(Base):
@@ -113,8 +113,9 @@ class OrigemTest(Base):
 
     def test_ip_remoto_recusado(self):
         key = self.parear()
-        for path, method in (("/api/browser/hello", "GET"), ("/api/browser/pair", "POST"),
-                             ("/api/browser/tabs", "POST"), ("/api/browser/commands", "GET")):
+        for path, method in (("/api/browser/hello", "POST"), ("/api/browser/pair", "POST"),
+                             ("/api/browser/tabs", "POST"), ("/api/browser/commands", "POST"),
+                             ("/api/browser/commands", "GET")):
             st, _, _ = pedir(method, path, ip=IP, body={"tabs": [], "code": "X"},
                              headers={"Origin": ORIGIN, "X-StreamDeck-Ext": key, "X-StreamDeck": "1"})
             self.assertEqual(st, 403, path)
@@ -125,8 +126,17 @@ class OrigemTest(Base):
             st, _, _ = call("GET", path, headers={"Origin": ORIGIN, "X-StreamDeck-Ext": key})
             self.assertEqual(st, 403, path)
 
+    def test_get_nunca_vale(self):
+        """O Chrome nao manda Origin no GET; o servidor so aceita POST."""
+        key = self.parear()
+        for path in ("/api/browser/hello", "/api/browser/commands"):
+            st, _, _ = ext("GET", path, key=key)
+            self.assertEqual(st, 404, path)
+            st, _, _ = ext("GET", path, key=key, origin=None)
+            self.assertEqual(st, 403, path)
+
     def test_hello_para_achar_a_porta(self):
-        st, _, d = ext("GET", "/api/browser/hello")
+        st, _, d = ext("POST", "/api/browser/hello")
         self.assertEqual(st, 200)
         self.assertEqual(d["app"], "streamdeck")
         self.assertFalse(d["paired"])
@@ -168,7 +178,7 @@ class AbasEComandosTest(Base):
         out = {}
 
         def poll():
-            out["r"] = ext("GET", "/api/browser/commands?wait=5", key=key)
+            out["r"] = ext("POST", "/api/browser/commands?wait=5", key=key)
         t = threading.Thread(target=poll)
         t.start()
         for _ in range(100):
@@ -186,11 +196,11 @@ class AbasEComandosTest(Base):
     def test_long_poll_vazio_e_limite(self):
         key = self.parear()
         t0 = time.time()
-        st, _, d = ext("GET", "/api/browser/commands?wait=0.2", key=key)
+        st, _, d = ext("POST", "/api/browser/commands?wait=0.2", key=key)
         self.assertEqual(d["commands"], [])
         self.assertGreaterEqual(time.time() - t0, 0.15)
         res = []
-        ths = [threading.Thread(target=lambda: res.append(ext("GET", "/api/browser/commands?wait=2", key=key)))
+        ths = [threading.Thread(target=lambda: res.append(ext("POST", "/api/browser/commands?wait=2", key=key)))
                for _ in range(2)]
         for th in ths:
             th.start()
@@ -199,7 +209,7 @@ class AbasEComandosTest(Base):
                 break
             time.sleep(0.02)
         t0 = time.time()
-        st, _, d = ext("GET", "/api/browser/commands?wait=2", key=key)   # terceiro: volta na hora
+        st, _, d = ext("POST", "/api/browser/commands?wait=2", key=key)   # terceiro: volta na hora
         self.assertTrue(d.get("busy"))
         self.assertLess(time.time() - t0, 1)
         # outros pedidos nao ficam presos atras dos long-polls

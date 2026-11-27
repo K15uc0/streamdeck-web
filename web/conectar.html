@@ -111,6 +111,14 @@
     padding: 7px 9px; outline: none; text-align: right; }
   .avlim input:focus { box-shadow: 0 0 0 2px #0a84ff; }
   .hdr .badge { text-transform: none; }
+  .paircode { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+  .paircode .code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 30px; font-weight: 700; letter-spacing: 6px;
+    background: #2c2c2e; border-radius: 10px; padding: 8px 16px; color: #fff; user-select: all; }
+  .paircode .s { font-size: 13px; color: rgba(235,235,245,0.6); line-height: 1.4; }
+  ol.steps { padding: 16px 16px 0; }
+  ol.steps li { padding-bottom: 14px; font-size: 15px; }
+  ol.steps code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13px; background: #2c2c2e; border-radius: 6px;
+    padding: 2px 6px; color: #fff; user-select: all; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } main { padding: 28px 16px 40px; } h1 { font-size: 28px; } }
 </style>
 </head>
@@ -185,6 +193,28 @@
     <div class="item"><span class="t"><b>Grok</b> · <span class="muted">indisponível por enquanto</span></span></div>
   </div>
   <p class="foot">Depois, escolha “Texto ao vivo” de <b>IAs</b> num bloco do editor. <b>Remover</b> restaura a linha de status que o Claude Code tinha antes.</p>
+
+  <div class="hdr">Navegador</div>
+  <div class="list" id="navCard">
+    <div class="item"><span class="t"><span class="dot old" id="navDot"></span><span id="navStatus">Verificando…</span>
+      <span class="s" id="navSub"></span></span></div>
+    <div class="paircode" id="navCode" style="display:none"><span class="code" id="navCodeV"></span>
+      <span class="s">Digite este código na extensão (ícone do Stream Deck na barra do navegador).<br><span id="navLeft"></span></span></div>
+    <div class="item btn"><button id="navPair" class="primary">Parear extensão</button></div>
+    <div class="item btn" id="navFolderRow"><button id="navFolder">Abrir pasta da extensão</button></div>
+    <div class="item btn" id="navUnpairRow" style="display:none"><button id="navUnpair" class="danger">Desparear</button></div>
+  </div>
+  <div class="list" style="margin-top:12px">
+    <ol class="steps">
+      <li>No Chrome, abra <code>chrome://extensions</code> (no Edge, <code>edge://extensions</code>).</li>
+      <li>Ligue o <b>Modo do desenvolvedor</b>.</li>
+      <li>Clique em <b>Carregar sem compactação</b> e escolha a pasta que abre em <b>Abrir pasta da extensão</b>.</li>
+      <li>Clique em <b>Parear extensão</b> aqui e digite o código no ícone do Stream Deck na barra do navegador.</li>
+    </ol>
+  </div>
+  <p class="foot">Com a extensão, o bloco <b>Navegador</b> mostra as abas no celular, troca e fecha abas e pausa o YouTube.
+    Ela só fala com este PC e não lê o conteúdo das páginas. Sem ela, os botões de navegador viram atalhos de teclado
+    (Ctrl+Tab, Alt+←, F5…) no navegador que estiver na frente.</p>
 
   <div class="hdr">Avisos no celular</div>
   <div class="list" id="avCard">
@@ -515,6 +545,47 @@ $("iaBtn").onclick = function () {
   }, function () { b.disabled = false; er.textContent = "Sem resposta do Stream Deck."; er.style.display = ""; });
 };
 loadIa();
+
+/* ---------------------------------------------------------- navegador --- */
+/* GET/POST /api/local/navegador -> {paired, connected, ext_id, last_seen, tabs, code, code_left, folder, folder_ok};
+   POST {op: pair|unpair|folder} */
+var navLeftT = null;
+function showNav(d) {
+  if (!d || d.ok === false) { $("navStatus").textContent = "indisponível"; return; }
+  $("navDot").className = "dot" + (d.connected ? "" : " old");
+  $("navStatus").textContent = d.connected ? "Extensão conectada · " + d.tabs + (d.tabs === 1 ? " aba" : " abas")
+    : d.paired ? "Extensão pareada, sem contato agora (o navegador está aberto?)" : "Extensão não pareada";
+  $("navSub").textContent = d.paired ? "Navegador pareado: " + d.ext_id : "Sem a extensão, os botões de navegador usam atalhos de teclado.";
+  $("navUnpairRow").style.display = d.paired ? "" : "none";
+  $("navFolderRow").style.display = d.folder_ok ? "" : "none";
+  $("navPair").textContent = d.paired ? "Parear de novo (outro navegador)" : "Parear extensão";
+  clearInterval(navLeftT);
+  if (d.code) {
+    $("navCode").style.display = "";
+    $("navCodeV").textContent = d.code.slice(0, 3) + " " + d.code.slice(3);
+    var end = Date.now() + d.code_left * 1000;
+    var tick = function () {
+      var s = Math.max(0, Math.round((end - Date.now()) / 1000));
+      $("navLeft").textContent = s ? "Vale por " + Math.floor(s / 60) + ":" + ("0" + s % 60).slice(-2) : "Código vencido";
+      if (!s) clearInterval(navLeftT);
+    };
+    tick(); navLeftT = setInterval(tick, 1000);
+  } else $("navCode").style.display = "none";
+}
+function loadNav() { api("/api/local/navegador").then(showNav, function () { showNav(null); }); }
+function navOp(op) {
+  return api("/api/local/navegador", { op: op }).then(function (r) {
+    if (!r.ok) alert("Não deu certo: " + (r.error || ""));
+    else showNav(r);
+  }, function () { alert("Sem resposta do Stream Deck."); });
+}
+$("navPair").onclick = function () { navOp("pair"); };
+$("navFolder").onclick = function () { navOp("folder"); };
+$("navUnpair").onclick = function () {
+  if (confirm("Desparear a extensão? Ela para de ver e controlar o navegador até parear de novo.")) navOp("unpair");
+};
+loadNav();
+setInterval(function () { if (!document.hidden) loadNav(); }, 5000);
 
 /* ------------------------------------------------------------- avisos --- */
 /* GET/POST /api/local/avisos -> {types:{ia,temp,cpu,obs,device,schedule,windows}, temp_limit,

@@ -243,7 +243,7 @@
         continue;
       }
       if (b.on && blank(b.on)) delete b.on;
-      if (b.kind === "fader" || b.kind === "monitor") { delete b.hold; delete b.double; delete b.confirm; delete b.lit; delete b.action; delete b.on; delete b.toggle; continue; }
+      if (b.kind === "fader" || b.kind === "monitor" || b.kind === "browser") { delete b.hold; delete b.double; delete b.confirm; delete b.lit; delete b.action; delete b.on; delete b.toggle; continue; }
       if (!b.confirm) delete b.confirm;
       if (!b.lit || /=$/.test(b.lit)) delete b.lit;
       for (var g = 0; g < GESTURES.length; g++) {
@@ -748,6 +748,7 @@
     if (rs && !L.image) { paintRichTile(t, W, H, size, pad, rs, fgc, light, icon, b); decorate(t, b, size, pad, opts); return t; }
     if (b.live) label = (richSample(b.live) ? richSample(b.live)[0] : liveText(b.live)) || label;
     if (b.kind === "monitor") { if (!icon) icon = "monitor"; if (!label) label = "Monitor"; }
+    if (b.kind === "browser") { if (!icon) icon = "globe"; if (!label) label = "Navegador"; }
     if (!icon && !label && b.kind === "folder") icon = "folder";
     if (L.image && label) el("div", "shade", null, t);
     if (icon && (!label || size < 66)) {
@@ -1282,12 +1283,13 @@
     renderPreview();
 
     /* tipo */
-    var kind = b.kind === "fader" ? "fader" : b.kind === "folder" ? "folder" : b.kind === "monitor" ? "monitor" : (b.toggle ? "toggle" : "button");
+    var kind = b.kind === "fader" ? "fader" : b.kind === "folder" ? "folder" : b.kind === "monitor" ? "monitor" : b.kind === "browser" ? "browser" : (b.toggle ? "toggle" : "button");
     var tf = field(box, "Tipo");
     var seg = el("div", "seg", null, tf);
     seg.id = "kind";
     var kinds = [["button", "Botão"], ["toggle", "Liga-desliga"], ["fader", "Fader"]];
     kinds.push(["monitor", "Monitor"]);
+    kinds.push(["browser", "Navegador"]);
     if (folder < 0) kinds.push(["folder", "Pasta"]);
     kinds.forEach(function (x) {
       var bt = el("button", kind === x[0] ? "on" : "", x[1], seg);
@@ -1316,6 +1318,11 @@
     if (kind === "monitor") {
       var mo = el("div", "folderbox", null, box);
       el("div", null, "Tocar abre a <b>tela de processos</b> no celular, com CPU, memória e GPU ao vivo e o que mais consome.", mo);
+    }
+    if (kind === "browser") {
+      var bo = el("div", "folderbox", null, box);
+      el("div", null, "Tocar abre as <b>abas do navegador</b> do PC no celular (ir para a aba, fechar), com rolar, pausar o YouTube, " +
+        "voltar, avançar e abrir site. A lista de abas precisa da extensão (Conectar &gt; Navegador); sem ela os botões viram atalhos de teclado.", bo);
     }
 
     if (kind === "button" || kind === "toggle") {
@@ -1363,7 +1370,7 @@
       fs.id = "faderTarget";
       FADERS.forEach(function (x) { opt(fs, x[0], x[1] + " (0–" + FADER_MAX[x[0]] + "%)", b.target || "master"); });
       fs.onchange = function () { edit(function (x) { x.target = fs.value; }); };
-    } else if (kind !== "folder" && kind !== "monitor") {
+    } else if (kind !== "folder" && kind !== "monitor" && kind !== "browser") {
       renderAction(box, b);
       renderConfirm(box, b);
       renderGestures(box, b);
@@ -1374,7 +1381,7 @@
     var acts = el("div", "acts", null, box);
     var test = el("button", "test", "Testar", acts);
     test.id = "test";
-    test.disabled = kind === "fader" || kind === "folder" || kind === "monitor" || !b.action || b.action.type === "none" || b.action.type === "page";
+    test.disabled = kind === "fader" || kind === "folder" || kind === "monitor" || kind === "browser" || !b.action || b.action.type === "none" || b.action.type === "page";
     test.title = "Executa a ação agora neste PC, sem salvar";
     test.onclick = function () { testAction(curBtn().action); };
     var clr = el("button", "clear", "Limpar", acts);
@@ -1622,11 +1629,11 @@
         for (p in x) if (x.hasOwnProperty(p)) delete x[p];
         for (p in keep) x[p] = keep[p];
         x.kind = "fader";
-      } else if (k === "monitor") {
+      } else if (k === "monitor" || k === "browser") {
         for (p in x) if (x.hasOwnProperty(p)) delete x[p];
         for (p in keep) x[p] = keep[p];
-        x.kind = "monitor";
-        if (!x.icon) x.icon = "monitor";
+        x.kind = k;
+        if (!x.icon) x.icon = k === "browser" ? "globe" : "monitor";
       } else if (k === "folder") {
         if (x.image) keep.image = x.image;
         keep.buttons = x.buttons || [];
@@ -1697,7 +1704,17 @@
   function renderFields(box, a, path, idp) {
     var sc = SD.actionMap[a.type];
     var fs = sc && sc.fields || [];
-    for (var i = 0; i < fs.length; i++) renderField(box, a, fs[i], path, idp);
+    for (var i = 0; i < fs.length; i++) if (showField(a, fs[i])) renderField(box, a, fs[i], path, idp);
+  }
+  /* campo com "when" ({campo: valor}) so aparece quando a acao tem esse valor */
+  function showField(a, f) {
+    if (!f.when) return true;
+    for (var k in f.when) if (f.when.hasOwnProperty(k)) {
+      var cur = a[k];
+      if (cur == null) { var fs = (SD.actionMap[a.type] || {}).fields || []; for (var i = 0; i < fs.length; i++) if (fs[i].key === k) cur = fs[i].default; }
+      if (cur !== f.when[k]) return false;
+    }
+    return true;
   }
   function setVal(path, key, v, light) {
     edit(function (x) {

@@ -3,7 +3,9 @@
    - Parear: codigo curto do Conectar -> chave longa (chrome.storage.local).
    - Abas: manda a lista (id, titulo, endereco, ativa, tocando) quando muda.
    - Comandos: long-poll em /api/browser/commands (ate 25 s).
-   Nao le o conteudo das paginas: chrome.scripting so roda no YouTube (pausar e rolar). */
+   Tudo POST: o Chrome so manda o Origin (chrome-extension://<id>) no POST, e o
+   servidor exige esse Origin. */
+/* Nao le o conteudo das paginas: chrome.scripting so roda no YouTube (pausar e rolar). */
 (function (root) {
   "use strict";
 
@@ -47,7 +49,7 @@
       function next() {
         if (i >= PORTS.length) return Promise.resolve(null);
         var port = PORTS[i++];
-        return call("GET", "/api/browser/hello", null, port).then(function (r) {
+        return call("POST", "/api/browser/hello", {}, port).then(function (r) {
           return r.status === 200 && r.data && r.data.app === "streamdeck" ? port : next();
         }, next);
       }
@@ -198,7 +200,7 @@
     function loop(my) {
       if (!st.running || my !== gen) return Promise.resolve();
       st.polling = true;
-      return call("GET", "/api/browser/commands?wait=" + WAIT).then(function (r) {
+      return call("POST", "/api/browser/commands?wait=" + WAIT, {}).then(function (r) {
         if (r.status === 401) return lost();
         if (r.status !== 200 || !r.data) { st.online = false; return sleep(5000); }
         var first = !st.online;

@@ -103,11 +103,12 @@ ROUTES = {
 }
 # so a extensao pareada (Origin chrome-extension://<id>, do proprio PC); ver navegador.py
 BROWSER_ROUTES = {
-    ("GET", "/api/browser/hello"): "ext_hello",
+    ("POST", "/api/browser/hello"): "ext_hello",
     ("POST", "/api/browser/pair"): "ext_pair",
     ("POST", "/api/browser/tabs"): "ext_tabs",
-    ("GET", "/api/browser/commands"): "ext_commands",
+    ("POST", "/api/browser/commands"): "ext_commands",
 }
+# tudo POST: o Chrome nao manda Origin no GET da extensao (e sempre manda no POST)
 DENY_BROWSER = "o navegador precisa de um bloco Navegador numa pagina liberada para este aparelho"
 # gesto do /api/press -> campo do botao com a acao
 PRESS_KINDS = {"tap": "action", "hold": "hold", "double": "double"}

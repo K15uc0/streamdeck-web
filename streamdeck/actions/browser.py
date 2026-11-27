@@ -32,8 +32,8 @@ def _validate(a):
              "qualquer janela; sem ela, vira atalho de teclado (Ctrl+Tab, Alt+←, F5…) no navegador que "
              "estiver na frente.",
         fields=[Field("op", "O que fazer", "select", required=True, default="tab_next", options=OPS),
-                Field("url", "Endereço (para Abrir site)", "text", placeholder="https://…"),
-                Field("dir", "Direção (para Rolar)", "select", default="down", options=DIRS)])
+                Field("url", "Endereço", "text", placeholder="https://…", when={"op": "open_url"}),
+                Field("dir", "Direção", "select", default="down", options=DIRS, when={"op": "scroll"})])
 def browser(a):
     how = navegador.execute(_cmd(a))
     print("  navegador: %s (%s)" % (a.get("op"), "extensao" if how == "ext" else "atalho"))

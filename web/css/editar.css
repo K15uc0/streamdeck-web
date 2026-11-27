@@ -552,4 +552,5 @@ html.light .tile:not(.light) .sbar { background: rgba(0,0,0,0.10); }
 /* 5 tipos (com Monitor): quebram em duas linhas em vez de estourar o painel */
 #kind { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 100%; }
 #kind button { grid-column: span 2; padding: 6px 4px; white-space: nowrap; text-align: center; }
-#kind button:nth-child(n+4) { grid-column: span 3; }
+/* 6 tipos: 3 + 3; 5 tipos (dentro de pasta): 3 + 2 */
+#kind button:nth-child(4):nth-last-child(2), #kind button:nth-child(5):last-child { grid-column: span 3; }
