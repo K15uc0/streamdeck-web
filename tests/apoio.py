@@ -16,6 +16,11 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURES = os.path.join(ROOT, "tests", "fixtures")
 
+# CI: se um teste travar, mostra onde (pilha de todas as threads) a cada N s
+if os.environ.get("SD_TEST_DUMP"):
+    import faulthandler
+    faulthandler.dump_traceback_later(int(os.environ["SD_TEST_DUMP"]), repeat=True)
+
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 

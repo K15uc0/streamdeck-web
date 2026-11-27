@@ -70,6 +70,9 @@ jobs:
           python-version: "3.12"
 
       - name: Testes Python (unittest)
+        timeout-minutes: 10
+        env:
+          SD_TEST_DUMP: "300"
         run: python -m unittest discover -s tests -v
 
       # bootloader pronto (mais rapido); o release.yml compila o bootloader
