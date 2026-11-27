@@ -149,8 +149,22 @@ class AbasEComandosTest(Base):
         self.assertNotIn("segredo", json.dumps(d))
         self.assertNotIn("watch", json.dumps(d))
 
+    def test_rolar_fora_do_youtube_vira_atalho(self):
+        key = self.parear()
+        ext("POST", "/api/browser/tabs", {"tabs": [{"id": 1, "url": "https://g1.globo.com/", "active": True,
+                                                    "current": True}]}, key=key)
+        st, _, d = call("POST", "/api/navegador", {"op": "scroll", "dir": "down"})
+        self.assertEqual(d["via"], "keys")
+        st, _, d = call("POST", "/api/navegador", {"op": "yt_toggle"})
+        self.assertEqual(d["via"], "keys")
+        st, _, d = call("POST", "/api/navegador", {"op": "reload"})
+        self.assertEqual(d["via"], "ext")
+        self.assertEqual(apoio.KEYS, [("keys", ["pagedown"]), ("keys", ["k"])])
+
     def test_long_poll_recebe_comando(self):
         key = self.parear()
+        ext("POST", "/api/browser/tabs", {"tabs": [{"id": 1, "url": "https://www.youtube.com/watch?v=1",
+                                                    "active": True, "current": True}]}, key=key)
         out = {}
 
         def poll():
@@ -275,6 +289,21 @@ class AtalhosTest(Base):
         self.parear()
         navegador.PONTE.seen = time.time() - navegador.ONLINE_S - 1
         self.assertEqual(self.run_op(op="reload"), [("keys", ["f5"])])
+
+
+class ExtensaoArquivosTest(unittest.TestCase):
+    def test_manifesto_minimo(self):
+        with open(os.path.join(apoio.ROOT, "extensao", "manifest.json"), encoding="utf-8") as f:
+            m = json.load(f)
+        self.assertEqual(m["manifest_version"], 3)
+        self.assertEqual(sorted(m["permissions"]), ["scripting", "storage", "tabs"])
+        self.assertEqual(m["host_permissions"], ["http://127.0.0.1/*", "*://*.youtube.com/*"])
+        self.assertNotIn("content_scripts", m)
+
+    def test_portas_iguais_as_do_programa(self):
+        with open(os.path.join(apoio.ROOT, "extensao", "ponte.js"), encoding="utf-8") as f:
+            src = f.read()
+        self.assertIn("var PORTS = [%s];" % ", ".join(str(p) for p in paths.PORTS), src)
 
 
 class AcaoEBlocoTest(Base):

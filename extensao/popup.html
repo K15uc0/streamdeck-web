@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Stream Deck</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header><img src="icones/icone-48.png" alt=""><div><h1>Stream Deck</h1><p id="estado">Carregando…</p></div></header>
+
+<section id="parear" hidden>
+  <p class="dica">No PC, abra o Stream Deck &gt; <b>Conectar</b> &gt; <b>Navegador</b> &gt; <b>Parear extensão</b> e digite o código aqui.</p>
+  <label for="codigo">Código</label>
+  <input id="codigo" maxlength="12" autocomplete="off" spellcheck="false" placeholder="ABC123">
+  <label for="porta">Porta</label>
+  <select id="porta">
+    <option value="">Automática</option>
+    <option>8765</option><option>8766</option><option>8767</option>
+  </select>
+  <button id="btnParear" class="primario">Parear</button>
+</section>
+
+<section id="pareada" hidden>
+  <p class="dica">O celular vê as abas deste navegador e pode trocar de aba, pausar o YouTube, voltar, avançar e recarregar. A extensão só fala com este PC (127.0.0.1) e não lê o conteúdo das páginas.</p>
+  <button id="btnDesparear" class="perigo">Desparear</button>
+</section>
+
+<p id="erro" role="alert"></p>
+<script src="popup.js"></script>
+</body>
+</html>

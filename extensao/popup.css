@@ -1,0 +1,25 @@
+:root { color-scheme: light dark; --fundo: #f2f2f7; --cartao: #fff; --texto: #000; --fraco: rgba(60,60,67,.6);
+  --linha: #c6c6c8; --azul: #007aff; --verde: #34c759; --vermelho: #ff3b30; }
+@media (prefers-color-scheme: dark) {
+  :root { --fundo: #1c1c1e; --cartao: #2c2c2e; --texto: #fff; --fraco: rgba(235,235,245,.6); --linha: #3a3a3c;
+    --azul: #0a84ff; --verde: #30d158; --vermelho: #ff453a; }
+}
+* { box-sizing: border-box; }
+body { width: 320px; margin: 0; padding: 16px; font: 14px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif;
+  background: var(--fundo); color: var(--texto); }
+header { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+header img { width: 40px; height: 40px; border-radius: 10px; }
+h1 { font-size: 17px; margin: 0; font-weight: 600; }
+#estado { margin: 2px 0 0; color: var(--fraco); font-size: 13px; }
+#estado.ok { color: var(--verde); }
+.dica { margin: 0 0 12px; color: var(--fraco); font-size: 13px; }
+label { display: block; font-size: 12px; color: var(--fraco); margin: 10px 0 4px; }
+input, select { width: 100%; height: 38px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--linha);
+  background: var(--cartao); color: var(--texto); font: inherit; }
+#codigo { font: 600 20px ui-monospace, Consolas, monospace; letter-spacing: 4px; text-transform: uppercase; text-align: center; }
+button { width: 100%; height: 40px; margin-top: 14px; border: 0; border-radius: 10px; font-size: 15px; font-weight: 600;
+  font-family: inherit; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+.primario { background: var(--azul); color: #fff; }
+.perigo { background: var(--cartao); color: var(--vermelho); }
+#erro { margin: 10px 0 0; color: var(--vermelho); font-size: 13px; min-height: 1em; }

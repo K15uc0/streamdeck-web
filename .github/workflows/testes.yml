@@ -43,9 +43,11 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Testes JavaScript (core.js)
+      - name: Testes JavaScript (core.js e extensao)
         if: matrix.python == '3.12'
-        run: node tests/js/flow.test.js
+        run: |
+          node tests/js/flow.test.js
+          node tests/js/extensao.test.js
 
       - name: Instalar Playwright (Chromium)
         if: matrix.python == '3.12'

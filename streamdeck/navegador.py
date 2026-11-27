@@ -9,6 +9,9 @@ Seguranca (ver tambem httpd.py, rotas /api/browser/*):
   morre). A extensao troca o codigo por uma chave longa, que vale so para o
   id daquela extensao. Comparacao em tempo constante. "Desparear" apaga a chave.
 - A extensao nao le paginas: so lista abas (titulo, endereco) e recebe comandos.
+  Ela so pode rodar script no YouTube (pausar e rolar); rolar em outros sites
+  e pausar sem aba do YouTube viram atalho de teclado.
+- Para o celular so vai o dominio da aba (nunca o endereco completo).
 """
 import collections
 import hmac
@@ -102,6 +105,7 @@ def _clean_tab(t):
             "title": (t.get("title") if isinstance(t.get("title"), str) else "")[:200],
             "host": _host(url[:2000])[:120] if url.startswith(("http://", "https://")) else "",
             "active": t.get("active") is True, "audible": t.get("audible") is True,
+            "current": t.get("current") is True,
             "yt": url.startswith(("https://www.youtube.com/", "https://m.youtube.com/", "https://youtube.com/",
                                   "https://music.youtube.com/"))}
 
@@ -247,6 +251,17 @@ class Ponte(object):
                 self.polls -= 1
                 self.seen = time.time()
 
+    def can(self, op):
+        """A extensao faz este comando? Rolar so no YouTube (unico site com
+        permissao de script); pausar so se houver aba do YouTube."""
+        if not self.connected():
+            return False
+        if op == "scroll":
+            return any(t["current"] and t["yt"] for t in self.tabs)
+        if op == "yt_toggle":
+            return any(t["yt"] for t in self.tabs)
+        return True
+
     def status(self):
         p = self._paired
         return {"paired": bool(p), "connected": self.connected(), "ext_id": p["ext_id"] if p else None,
@@ -299,7 +314,7 @@ def execute(cmd, ponte=None):
     Devolve "ext" ou "keys"."""
     ponte = ponte or PONTE
     cmd = check_cmd(cmd)
-    if ponte.connected():
+    if ponte.can(cmd["op"]):
         ponte.push(cmd)
         return "ext"
     return fallback(cmd)
